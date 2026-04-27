@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/login_page.dart';
+import 'package:rehab_ai/screens/signup_page.dart';
 
 class LandingPage extends StatelessWidget {
   const LandingPage({super.key});
@@ -96,7 +97,12 @@ class LandingPage extends StatelessWidget {
                   width: 180,
                   height: 50,
                   child: OutlinedButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const SignupPage()),
+                      );
+                    },
                     style: OutlinedButton.styleFrom(
                       foregroundColor: const Color(0xFF207866), // Dark green color
                       side: const BorderSide(color: Color(0xFF207866), width: 1.5),
