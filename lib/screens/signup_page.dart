@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:rehab_ai/screens/main_screen.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -284,8 +285,11 @@ class _SignupPageState extends State<SignupPage> {
                   // Optional: Automatically dismiss after a few seconds
                   Future.delayed(const Duration(seconds: 3), () {
                     if (Navigator.canPop(context)) {
-                      Navigator.pop(context);
-                      // TODO: Navigate to home screen here
+                      Navigator.pop(context); // Close the dialog
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => const MainScreen()),
+                      );
                     }
                   });
                 },
