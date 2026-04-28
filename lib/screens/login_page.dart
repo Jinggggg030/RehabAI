@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:rehab_ai/screens/signup_page.dart';
+import 'package:rehab_ai/screens/main_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class LoginPage extends StatefulWidget {
@@ -142,7 +143,84 @@ class _LoginPageState extends State<LoginPage> {
 
               // Login Button
               ElevatedButton(
-                onPressed: () {},
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (BuildContext context) {
+                      return Dialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        backgroundColor: Colors.white,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 100,
+                                height: 100,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFF6F8FB),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Center(
+                                  child: Text(
+                                    'profile picture',
+                                    textAlign: TextAlign.center,
+                                    style: GoogleFonts.readexPro(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 12,
+                                      color: Colors.black,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 30),
+                              Text(
+                                'Welcome Back,',
+                                style: GoogleFonts.readexPro(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF207866),
+                                ),
+                              ),
+                              const SizedBox(height: 8),
+                              Text(
+                                '[Username]',
+                                style: GoogleFonts.readexPro(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                ),
+                              ),
+                              const SizedBox(height: 40),
+                              Text(
+                                'You\'ll be sent to home shortly!',
+                                style: GoogleFonts.readexPro(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+
+                  // Optional: Automatically dismiss after a few seconds
+                  Future.delayed(const Duration(seconds: 3), () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context); // Close the dialog
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => const MainScreen()),
+                      );
+                    }
+                  });
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF207866),
                   foregroundColor: Colors.white,

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:rehab_ai/screens/main_screen.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -217,7 +218,81 @@ class _SignupPageState extends State<SignupPage> {
 
               // Sign Up Button
               ElevatedButton(
-                onPressed: () {},
+                onPressed: () {
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (BuildContext context) {
+                      return Dialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        backgroundColor: Colors.white,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                width: 80,
+                                height: 80,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFF6F8FB),
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Center(
+                                  child: Icon(
+                                    Icons.check,
+                                    color: Color(0xFF207866),
+                                    size: 40,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(height: 30),
+                              Text(
+                                'Success',
+                                style: GoogleFonts.readexPro(
+                                  fontSize: 22,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF207866),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Welcome [username] to\nour family!',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.readexPro(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black,
+                                ),
+                              ),
+                              const SizedBox(height: 40),
+                              Text(
+                                'You\'ll be sent to home shortly!',
+                                style: GoogleFonts.readexPro(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+
+                  // Optional: Automatically dismiss after a few seconds
+                  Future.delayed(const Duration(seconds: 3), () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context); // Close the dialog
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => const MainScreen()),
+                      );
+                    }
+                  });
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF207866),
                   foregroundColor: Colors.white,
