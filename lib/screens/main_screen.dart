@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/home_page.dart';
 import 'package:rehab_ai/screens/services_page.dart';
 import 'package:rehab_ai/screens/progress_page.dart';
+import 'package:rehab_ai/screens/profile_page.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -19,7 +20,7 @@ class _MainScreenState extends State<MainScreen> {
     const HomePage(),
     const ServicesPage(),
     const ProgressPage(),
-    const Center(child: Text('Profile Page Coming Soon')),
+    const ProfilePage(),
   ];
 
   void _onItemTapped(int index) {
@@ -70,7 +71,7 @@ class _MainScreenState extends State<MainScreen> {
             BottomNavigationBarItem(
               icon: Icon(Icons.person_outline),
               activeIcon: Icon(Icons.person),
-              label: 'Profile',
+              label: 'Account',
             ),
           ],
         ),
