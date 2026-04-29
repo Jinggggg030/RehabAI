@@ -1,0 +1,333 @@
+import 'package:flutter/material.dart';
+import 'package:google_fonts/google_fonts.dart';
+import 'package:rehab_ai/screens/main_screen.dart';
+
+class ProfileSetupPage extends StatefulWidget {
+  const ProfileSetupPage({super.key});
+
+  @override
+  State<ProfileSetupPage> createState() => _ProfileSetupPageState();
+}
+
+class _ProfileSetupPageState extends State<ProfileSetupPage> {
+  String _gender = 'Male';
+  String _hostel = 'Yes';
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: Colors.white,
+      body: SafeArea(
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Title
+              Text(
+                'Setting up profile',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.readexPro(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+              const SizedBox(height: 40),
+
+              // Contact Number
+              _buildLabel('Contact Number'),
+              const SizedBox(height: 8),
+              _buildTextField(
+                hintText: 'Enter your contact number',
+                icon: Icons.phone_outlined,
+                keyboardType: TextInputType.phone,
+              ),
+              const SizedBox(height: 24),
+
+              // Identity Number
+              _buildLabel('Identity Number'),
+              const SizedBox(height: 8),
+              _buildTextField(
+                hintText: 'Enter your identity number',
+                icon: Icons.person_outline,
+                keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 24),
+
+              // Date of Birth
+              _buildLabel('Date of Birth'),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      hintText: 'DD',
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildTextField(
+                      hintText: 'MM',
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    flex: 2,
+                    child: _buildTextField(
+                      hintText: 'YYYY',
+                      keyboardType: TextInputType.number,
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Gender
+              _buildLabel('Gender'),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _buildRadioButton(
+                    title: 'Male',
+                    value: 'Male',
+                    groupValue: _gender,
+                    onChanged: (value) => setState(() => _gender = value!),
+                  ),
+                  const SizedBox(width: 24),
+                  _buildRadioButton(
+                    title: 'Female',
+                    value: 'Female',
+                    groupValue: _gender,
+                    onChanged: (value) => setState(() => _gender = value!),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // UTeM Hostels
+              _buildLabel('Are you staying in UTeM Hostels?'),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  _buildRadioButton(
+                    title: 'Yes',
+                    value: 'Yes',
+                    groupValue: _hostel,
+                    onChanged: (value) => setState(() => _hostel = value!),
+                  ),
+                  const SizedBox(width: 24),
+                  _buildRadioButton(
+                    title: 'No',
+                    value: 'No',
+                    groupValue: _hostel,
+                    onChanged: (value) => setState(() => _hostel = value!),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
+
+              // Address Line 1
+              _buildLabel('Address Line 1'),
+              const SizedBox(height: 8),
+              _buildTextField(hintText: 'Address Line 1'),
+              const SizedBox(height: 24),
+
+              // Address Line 2
+              _buildLabel('Address Line 2'),
+              const SizedBox(height: 8),
+              _buildTextField(hintText: 'Address Line 2'),
+              const SizedBox(height: 24),
+
+              // Address Line 3
+              _buildLabel('Address Line 3'),
+              const SizedBox(height: 8),
+              _buildTextField(hintText: 'Address Line 3'),
+              const SizedBox(height: 48),
+
+              // Save Button
+              ElevatedButton(
+                onPressed: () {
+                  // Show Success Dialog
+                  showDialog(
+                    context: context,
+                    barrierDismissible: false,
+                    builder: (BuildContext context) {
+                      return Dialog(
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                        child: Container(
+                          padding: const EdgeInsets.all(32),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.all(16),
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFFF4F6F9), // Light grayish-blue circle
+                                  shape: BoxShape.circle,
+                                ),
+                                child: const Icon(
+                                  Icons.check,
+                                  color: Color(0xFF207866),
+                                  size: 40,
+                                ),
+                              ),
+                              const SizedBox(height: 24),
+                              Text(
+                                'You\'re all set!',
+                                style: GoogleFonts.readexPro(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: const Color(0xFF207866),
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                              Text(
+                                'Welcome [username] to\nour family!',
+                                textAlign: TextAlign.center,
+                                style: GoogleFonts.readexPro(
+                                  fontSize: 14,
+                                  color: Colors.black87,
+                                ),
+                              ),
+                              const SizedBox(height: 40),
+                              Text(
+                                'You\'ll be sent to home shortly!',
+                                style: GoogleFonts.readexPro(
+                                  fontSize: 12,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
+                  );
+
+                  // Navigate to MainScreen after 3 seconds
+                  Future.delayed(const Duration(seconds: 3), () {
+                    if (Navigator.canPop(context)) {
+                      Navigator.pop(context); // Close dialog
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (context) => const MainScreen()),
+                      );
+                    }
+                  });
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF207866), // Primary green
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30),
+                  ),
+                  elevation: 0,
+                ),
+                child: Text(
+                  'Save',
+                  style: GoogleFonts.readexPro(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildLabel(String text) {
+    return Text(
+      text,
+      style: GoogleFonts.readexPro(
+        fontSize: 14,
+        fontWeight: FontWeight.w600,
+        color: Colors.black87,
+      ),
+    );
+  }
+
+  Widget _buildTextField({
+    required String hintText,
+    IconData? icon,
+    TextInputType keyboardType = TextInputType.text,
+    TextAlign textAlign = TextAlign.start,
+  }) {
+    return Container(
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8F9FA), // Very light grey bg
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: Colors.grey.shade200),
+      ),
+      child: TextField(
+        keyboardType: keyboardType,
+        textAlign: textAlign,
+        style: GoogleFonts.readexPro(
+          fontSize: 14,
+          color: Colors.black87,
+        ),
+        decoration: InputDecoration(
+          hintText: hintText,
+          hintStyle: GoogleFonts.readexPro(
+            color: Colors.grey.shade400,
+            fontSize: 14,
+          ),
+          prefixIcon: icon != null
+              ? Icon(icon, color: Colors.grey.shade400, size: 20)
+              : null,
+          border: InputBorder.none,
+          contentPadding: EdgeInsets.symmetric(
+            horizontal: 16,
+            vertical: icon != null ? 16 : 18,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRadioButton({
+    required String title,
+    required String value,
+    required String groupValue,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return GestureDetector(
+      onTap: () => onChanged(value),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Radio<String>(
+            value: value,
+            groupValue: groupValue,
+            onChanged: onChanged,
+            activeColor: const Color(0xFF207866),
+            materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          Text(
+            title,
+            style: GoogleFonts.readexPro(
+              fontSize: 14,
+              color: Colors.black87,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
