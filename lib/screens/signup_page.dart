@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/main_screen.dart';
+import 'package:rehab_ai/screens/profile_setup_page.dart';
 
 class SignupPage extends StatefulWidget {
   const SignupPage({super.key});
@@ -248,31 +249,13 @@ class _SignupPageState extends State<SignupPage> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 30),
+                              const SizedBox(height: 24),
                               Text(
                                 'Success',
                                 style: GoogleFonts.readexPro(
                                   fontSize: 22,
                                   fontWeight: FontWeight.bold,
                                   color: const Color(0xFF207866),
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Welcome [username] to\nour family!',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.readexPro(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black,
-                                ),
-                              ),
-                              const SizedBox(height: 40),
-                              Text(
-                                'You\'ll be sent to home shortly!',
-                                style: GoogleFonts.readexPro(
-                                  fontSize: 12,
-                                  color: Colors.grey,
                                 ),
                               ),
                             ],
@@ -288,7 +271,7 @@ class _SignupPageState extends State<SignupPage> {
                       Navigator.pop(context); // Close the dialog
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (context) => const MainScreen()),
+                        MaterialPageRoute(builder: (context) => const ProfileSetupPage()),
                       );
                     }
                   });

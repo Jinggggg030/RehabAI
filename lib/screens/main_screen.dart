@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/home_page.dart';
+import 'package:rehab_ai/screens/services_page.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -15,7 +16,7 @@ class _MainScreenState extends State<MainScreen> {
   // List of screens for each tab
   final List<Widget> _screens = [
     const HomePage(),
-    const Center(child: Text('Services Page Coming Soon')),
+    const ServicesPage(),
     const Center(child: Text('Progress Page Coming Soon')),
     const Center(child: Text('Profile Page Coming Soon')),
   ];
