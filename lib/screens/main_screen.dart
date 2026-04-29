@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/home_page.dart';
 import 'package:rehab_ai/screens/services_page.dart';
+import 'package:rehab_ai/screens/progress_page.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -17,7 +18,7 @@ class _MainScreenState extends State<MainScreen> {
   final List<Widget> _screens = [
     const HomePage(),
     const ServicesPage(),
-    const Center(child: Text('Progress Page Coming Soon')),
+    const ProgressPage(),
     const Center(child: Text('Profile Page Coming Soon')),
   ];
 
