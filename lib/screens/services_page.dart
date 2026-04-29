@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:rehab_ai/screens/ai_advice_page.dart';
 
 class ServicesPage extends StatelessWidget {
   const ServicesPage({super.key});
@@ -57,7 +58,16 @@ class ServicesPage extends StatelessWidget {
               const SizedBox(height: 32),
 
               // Service Cards List
-              _buildServiceCard('AI Temporal Advice', 'description'),
+              _buildServiceCard(
+                'AI Temporal Advice',
+                'description',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const AIAdvicePage()),
+                  );
+                },
+              ),
               const SizedBox(height: 20),
               _buildServiceCard('Rehabilitation Exercises', 'description'),
               const SizedBox(height: 20),
@@ -72,9 +82,11 @@ class ServicesPage extends StatelessWidget {
     );
   }
 
-  Widget _buildServiceCard(String title, String description) {
-    return Container(
-      padding: const EdgeInsets.all(16),
+  Widget _buildServiceCard(String title, String description, {VoidCallback? onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
@@ -120,6 +132,6 @@ class ServicesPage extends StatelessWidget {
           ),
         ],
       ),
-    );
+    ));
   }
 }
