@@ -63,8 +63,15 @@ class _EditProfilePageState extends State<EditProfilePage> {
                   ],
                 ),
               ),
+              const SizedBox(height: 32),
+
+              // Form Container
               Container(
                 padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade400, width: 1),
+                  color: Colors.white,
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
