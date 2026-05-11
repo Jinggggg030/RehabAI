@@ -23,45 +23,46 @@ class _EditProfilePageState extends State<EditProfilePage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
+              SizedBox(
+                height: 48,
+                child: Stack(
+                  children: [
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withOpacity(0.05),
+                                blurRadius: 10,
+                                offset: const Offset(0, 2),
+                              ),
+                            ],
+                            border: Border.all(color: Colors.grey.shade100),
                           ),
-                        ],
-                        border: Border.all(color: Colors.grey.shade100),
+                          child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black54),
+                        ),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black54),
                     ),
-                  ),
-                  Text(
-                    'Edit Profile',
-                    style: GoogleFonts.readexPro(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF207866),
+                    Align(
+                      alignment: Alignment.center,
+                      child: Text(
+                        'Edit Profile',
+                        style: GoogleFonts.readexPro(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                          color: const Color(0xFF207866),
+                        ),
+                      ),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: () {},
-                    icon: const Icon(Icons.notifications_none, color: Color(0xFF207866)),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 32),
-
-              // Form Container
               Container(
                 padding: const EdgeInsets.all(20),
                 child: Column(

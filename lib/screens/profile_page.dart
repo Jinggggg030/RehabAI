@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/edit_profile_page.dart';
-
+import 'package:rehab_ai/screens/settings_page.dart';
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
 
@@ -16,11 +16,10 @@ class ProfilePage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const SizedBox(width: 40),
-                  Text(
+              SizedBox(
+                height: 48,
+                child: Center(
+                  child: Text(
                     'Account',
                     style: GoogleFonts.readexPro(
                       fontSize: 20,
@@ -28,11 +27,7 @@ class ProfilePage extends StatelessWidget {
                       color: const Color(0xFF207866),
                     ),
                   ),
-                  IconButton(
-                    onPressed: () {},
-                    icon: const Icon(Icons.notifications_none, color: Color(0xFF207866)),
-                  ),
-                ],
+                ),
               ),
               const SizedBox(height: 32),
 
@@ -141,14 +136,13 @@ class ProfilePage extends StatelessWidget {
               _buildActionBox(
                 title: 'Settings',
                 icon: Icons.settings_outlined,
-                onTap: () {},
-              ),
-              const SizedBox(height: 16),
-              _buildActionBox(
-                title: 'Log Out',
-                icon: Icons.logout_outlined,
                 onTap: () {
-                  // Handle logout
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const SettingsPage(),
+                    ),
+                  );
                 },
               ),
               const SizedBox(height: 40),
