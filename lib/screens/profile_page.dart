@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:rehab_ai/screens/edit_profile_page.dart';
 
 class ProfilePage extends StatelessWidget {
   const ProfilePage({super.key});
@@ -127,7 +128,14 @@ class ProfilePage extends StatelessWidget {
               _buildActionBox(
                 title: 'Edit Profile',
                 icon: Icons.edit_outlined,
-                onTap: () {},
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const EditProfilePage(),
+                    ),
+                  );
+                },
               ),
               const SizedBox(height: 16),
               _buildActionBox(
