@@ -128,7 +128,7 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                   // Assigned Tab
                   _buildExercisesList(),
                   // Explore Tab
-                  _buildExercisesList(),
+                  _buildExploreList(),
                 ],
               ),
             ),
@@ -269,6 +269,104 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                   decoration: const BoxDecoration(
                     color: Color(0xFF207866),
                     shape: BoxShape.circle,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildExploreList() {
+    return ListView.separated(
+      padding: const EdgeInsets.only(left: 24.0, right: 24.0, bottom: 24.0),
+      itemCount: 4,
+      separatorBuilder: (context, index) => const SizedBox(height: 16),
+      itemBuilder: (context, index) {
+        return _buildExploreCard();
+      },
+    );
+  }
+
+  Widget _buildExploreCard() {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 10,
+            spreadRadius: 1,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Video Preview Placeholder
+          Container(
+            width: double.infinity,
+            height: 140,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.black87, width: 1),
+            ),
+            child: Center(
+              child: Text(
+                'video preview',
+                style: GoogleFonts.readexPro(
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black87,
+                ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Exercise Name
+          Text(
+            '[Exercise Name]',
+            style: GoogleFonts.readexPro(
+              fontSize: 14,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 4),
+          // Details and Button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Text(
+                '[Details]',
+                style: GoogleFonts.readexPro(
+                  fontSize: 12,
+                  color: Colors.grey.shade400,
+                ),
+              ),
+              ElevatedButton(
+                onPressed: () {},
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF207866),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
+                child: Text(
+                  'Do it now!',
+                  style: GoogleFonts.readexPro(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
                   ),
                 ),
               ),
