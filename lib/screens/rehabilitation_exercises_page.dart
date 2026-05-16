@@ -97,25 +97,22 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
               ),
             ),
             
-            // Search Bar
+            // Filter Chips
             Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Container(
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.grey.shade300),
-                ),
-                child: TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search by name or body parts',
-                    hintStyle: GoogleFonts.readexPro(color: Colors.grey.shade400, fontSize: 14),
-                    prefixIcon: Icon(Icons.search, color: Colors.grey.shade400),
-                    suffixIcon: Icon(Icons.tune, color: Colors.grey.shade400),
-                    border: InputBorder.none,
-                    contentPadding: const EdgeInsets.symmetric(vertical: 14),
-                    isDense: true,
-                  ),
+              padding: const EdgeInsets.symmetric(vertical: 16.0),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.symmetric(horizontal: 24.0),
+                child: Row(
+                  children: [
+                    _buildFilterChip('discipline 1', isSelected: true),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('discipline 2', isSelected: false),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('discipline 3', isSelected: false),
+                    const SizedBox(width: 8),
+                    _buildFilterChip('discipline 4', isSelected: false),
+                  ],
                 ),
               ),
             ),
@@ -373,6 +370,35 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
             ],
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String text, {bool isSelected = false}) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
+          color: isSelected ? const Color(0xFF207866) : Colors.grey.shade200,
+          width: isSelected ? 1.5 : 1.0,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Text(
+        text,
+        style: GoogleFonts.readexPro(
+          fontSize: 12,
+          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          color: isSelected ? const Color(0xFF207866) : Colors.black87,
+        ),
       ),
     );
   }
