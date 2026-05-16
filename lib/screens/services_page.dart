@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:rehab_ai/screens/ai_advice_page.dart';
+import 'package:rehab_ai/screens/live_chat_page.dart';
 import 'package:rehab_ai/screens/my_appointments_page.dart';
 import 'package:rehab_ai/screens/rehabilitation_exercises_page.dart';
 class ServicesPage extends StatelessWidget {
@@ -60,12 +60,12 @@ class ServicesPage extends StatelessWidget {
 
               // Service Cards List
               _buildServiceCard(
-                'AI Temporal Advice',
+                'Live Chat',
                 'description',
                 onTap: () {
                   Navigator.push(
                     context,
-                    MaterialPageRoute(builder: (context) => const AIAdvicePage()),
+                    MaterialPageRoute(builder: (context) => const LiveChatPage()),
                   );
                 },
               ),
