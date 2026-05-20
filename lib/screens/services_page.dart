@@ -3,6 +3,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/live_chat_page.dart';
 import 'package:rehab_ai/screens/my_appointments_page.dart';
 import 'package:rehab_ai/screens/rehabilitation_exercises_page.dart';
+import 'package:rehab_ai/screens/equipment_rental_page.dart';
+
 class ServicesPage extends StatelessWidget {
   const ServicesPage({super.key});
 
@@ -92,7 +94,16 @@ class ServicesPage extends StatelessWidget {
                 },
               ),
               const SizedBox(height: 20),
-              _buildServiceCard('Equipment Rental', 'description'),
+              _buildServiceCard(
+                'Equipment Rental',
+                'description',
+                onTap: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(builder: (context) => const EquipmentRentalPage()),
+                  );
+                },
+              ),
               const SizedBox(height: 20),
               _buildServiceCard('Contact', 'description'),
               const SizedBox(height: 40),
