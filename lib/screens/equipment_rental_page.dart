@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:rehab_ai/screens/rental_status_page.dart';
 
 class EquipmentRentalPage extends StatelessWidget {
   const EquipmentRentalPage({super.key});
@@ -46,7 +47,12 @@ class EquipmentRentalPage extends StatelessWidget {
                     ),
                   ),
                   IconButton(
-                    onPressed: () {},
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(builder: (context) => const RentalStatusPage()),
+                      );
+                    },
                     icon: const Icon(Icons.list, color: Colors.black87),
                   ),
                 ],

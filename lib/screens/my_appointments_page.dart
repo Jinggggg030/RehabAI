@@ -83,9 +83,9 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
                 indicatorColor: const Color(0xFF207866),
                 indicatorWeight: 3,
                 labelColor: Colors.black87,
-                labelStyle: GoogleFonts.readexPro(fontWeight: FontWeight.bold, fontSize: 14),
+                labelStyle: GoogleFonts.readexPro(fontWeight: FontWeight.bold, fontSize: 16),
                 unselectedLabelColor: Colors.grey,
-                unselectedLabelStyle: GoogleFonts.readexPro(fontWeight: FontWeight.normal, fontSize: 14),
+                unselectedLabelStyle: GoogleFonts.readexPro(fontWeight: FontWeight.normal, fontSize: 15),
                 tabs: const [
                   Tab(text: 'Upcoming'),
                   Tab(text: 'Past'),
