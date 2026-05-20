@@ -92,6 +92,8 @@ class ServicesPage extends StatelessWidget {
                 },
               ),
               const SizedBox(height: 20),
+              _buildServiceCard('Equipment Rental', 'description'),
+              const SizedBox(height: 20),
               _buildServiceCard('Contact', 'description'),
               const SizedBox(height: 40),
             ],
