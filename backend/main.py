@@ -2,6 +2,10 @@ from fastapi import FastAPI, Depends
 from sqlalchemy.orm import Session
 from backend.database import engine, get_db
 from backend import models
+from fastapi.responses import StreamingResponse
+import cv2
+from backend.ai.pose_detector import PoseDetector
+from backend.ai.angle_calculator import calculate_angle
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -85,3 +89,41 @@ def get_all_live_chat_sessions(db: Session = Depends(get_db)):
 def get_all_chat_logs(db: Session = Depends(get_db)):
     logs = db.query(models.ChatLog).all()
     return {"chat_logs": logs}
+
+def generate_frames():
+    # 0 is usually the default built-in webcam
+    cap = cv2.VideoCapture(0)
+    detector = PoseDetector()
+
+    while True:
+        success, img = cap.read()
+        if not success:
+            break
+            
+        img = cv2.flip(img, 1)
+
+        # Feed the image into the AI to find the pose and draw the skeleton
+        img = detector.find_pose(img, draw=True)
+        
+        # Extract all the landmark coordinates
+        lm_list = detector.get_position(img)
+        
+        # Calculate the Right Arm (Elbow) Angle
+        if len(lm_list) != 0:
+            shoulder = lm_list[12][1:3]
+            elbow = lm_list[14][1:3]
+            wrist = lm_list[16][1:3]
+            
+            angle = calculate_angle(shoulder, elbow, wrist)
+            
+            cv2.putText(img, f"{int(angle)} deg", (elbow[0] + 15, elbow[1] - 15), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
+
+        ret, buffer = cv2.imencode('.jpg', img)
+        frame = buffer.tobytes()
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+@app.get("/video_feed")
+def video_feed():
+    return StreamingResponse(generate_frames(), media_type="multipart/x-mixed-replace; boundary=frame")

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'exercise_details_page.dart';
 
 class RehabilitationExercisesPage extends StatefulWidget {
   const RehabilitationExercisesPage({super.key});
@@ -218,7 +219,14 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                           ),
                         ),
                         ElevatedButton(
-                          onPressed: () {},
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const ExerciseDetailsPage(isAssigned: true),
+                              ),
+                            );
+                          },
                           style: ElevatedButton.styleFrom(
                             backgroundColor: const Color(0xFF207866),
                             foregroundColor: Colors.white,
@@ -230,7 +238,7 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                             ),
                           ),
                           child: Text(
-                            'Do it now!',
+                            'View Details',
                             style: GoogleFonts.readexPro(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
@@ -348,7 +356,14 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                 ),
               ),
               ElevatedButton(
-                onPressed: () {},
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (context) => const ExerciseDetailsPage(isAssigned: false),
+                    ),
+                  );
+                },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF207866),
                   foregroundColor: Colors.white,
@@ -360,7 +375,7 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                   ),
                 ),
                 child: Text(
-                  'Do it now!',
+                  'View Details',
                   style: GoogleFonts.readexPro(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
