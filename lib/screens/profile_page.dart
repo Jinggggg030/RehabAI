@@ -2,15 +2,73 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/edit_profile_page.dart';
 import 'package:rehab_ai/screens/settings_page.dart';
-class ProfilePage extends StatelessWidget {
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
+class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
 
   @override
+  State<ProfilePage> createState() => _ProfilePageState();
+}
+
+class _ProfilePageState extends State<ProfilePage> {
+  bool _isLoading = true;
+  Map<String, dynamic>? _profileData;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+      
+      final apiUrl = (dotenv.env['API_URL'] ?? 'http://127.0.0.1:8000').trim();
+      final response = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
+      
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['exists'] == true) {
+          setState(() {
+            _profileData = data;
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching profile: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final name = _profileData?['username'] ?? 'Not set';
+    final matricNo = _profileData?['matric_no'] ?? 'N/A';
+    final gender = _profileData?['gender'] ?? 'Not set';
+    final email = _profileData?['email'] ?? 'Not set';
+    final identityNumber = _profileData?['identity_number'] ?? 'Not set';
+    // We don't have birthdate directly returned, maybe format identity number or add dummy? Let's use N/A
+    final address = _profileData?['address'] ?? 'Not set';
+    final contactNumber = _profileData?['contact_number'] ?? 'Not set';
+
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       body: SafeArea(
-        child: SingleChildScrollView(
+        child: _isLoading 
+          ? const Center(child: CircularProgressIndicator(color: Color(0xFF207866))) 
+          : SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -50,6 +108,7 @@ class ProfilePage extends StatelessWidget {
                           ),
                         ],
                       ),
+                      child: const Icon(Icons.person, size: 60, color: Colors.grey),
                     ),
                     Positioned(
                       bottom: 0,
@@ -86,9 +145,8 @@ class ProfilePage extends StatelessWidget {
 
               // Public Info Box
               _buildInfoBox([
-                _buildInfoRow('Name', '[Name]'),
-                const SizedBox(height: 16),
-                _buildInfoRow('Matric Number', '[Matric Number]'),
+                _buildInfoRow('Name', name),
+                _buildInfoRow('Matric Number', matricNo, isLast: true),
               ]),
               const SizedBox(height: 32),
 
@@ -105,17 +163,11 @@ class ProfilePage extends StatelessWidget {
 
               // Private Info Box
               _buildInfoBox([
-                _buildInfoRow('Gender', '[Gender]'),
-                const SizedBox(height: 16),
-                _buildInfoRow('Email', '[Email]'),
-                const SizedBox(height: 16),
-                _buildInfoRow('Identity Number', '[I/C No]'),
-                const SizedBox(height: 16),
-                _buildInfoRow('Birthdate', '[Birthdate]'),
-                const SizedBox(height: 16),
-                _buildInfoRow('Address', '[Address]'),
-                const SizedBox(height: 16),
-                _buildInfoRow('Contact Number', '[Contact Number]'),
+                _buildInfoRow('Gender', gender),
+                _buildInfoRow('Email', email),
+                _buildInfoRow('Identity Number', identityNumber),
+                _buildInfoRow('Contact Number', contactNumber),
+                _buildInfoRow('Address', address, isLast: true),
               ]),
               const SizedBox(height: 24),
 
@@ -155,13 +207,13 @@ class ProfilePage extends StatelessWidget {
 
   Widget _buildInfoBox(List<Widget> children) {
     return Container(
-      padding: const EdgeInsets.all(20),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
         color: Colors.white,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
+            color: Colors.black.withOpacity(0.03),
             blurRadius: 10,
             spreadRadius: 1,
             offset: const Offset(0, 4),
@@ -169,30 +221,43 @@ class ProfilePage extends StatelessWidget {
         ],
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: children,
       ),
     );
   }
 
-  Widget _buildInfoRow(String label, String value) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+  Widget _buildInfoRow(String label, String value, {bool isLast = false}) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
+        const SizedBox(height: 16),
         Text(
           label,
           style: GoogleFonts.readexPro(
-            fontSize: 14,
-            color: Colors.black87,
+            fontSize: 12,
+            fontWeight: FontWeight.w600,
+            color: Colors.grey.shade500,
+            letterSpacing: 0.5,
           ),
         ),
+        const SizedBox(height: 4),
         Text(
           value,
           style: GoogleFonts.readexPro(
-            fontSize: 14,
-            fontWeight: FontWeight.bold,
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
             color: Colors.black87,
+            height: 1.4,
           ),
         ),
+        const SizedBox(height: 16),
+        if (!isLast)
+          Divider(
+            height: 1,
+            thickness: 1,
+            color: Colors.grey.shade100,
+          ),
       ],
     );
   }

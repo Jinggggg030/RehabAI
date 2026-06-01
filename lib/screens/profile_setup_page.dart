@@ -10,8 +10,87 @@ class ProfileSetupPage extends StatefulWidget {
 }
 
 class _ProfileSetupPageState extends State<ProfileSetupPage> {
+  final TextEditingController _contactController = TextEditingController();
+  final TextEditingController _identityController = TextEditingController();
+  final TextEditingController _dobDayController = TextEditingController();
+  final TextEditingController _dobMonthController = TextEditingController();
+  final TextEditingController _dobYearController = TextEditingController();
+  final TextEditingController _address1Controller = TextEditingController();
+  final TextEditingController _address2Controller = TextEditingController();
+  final TextEditingController _address3Controller = TextEditingController();
+
   String _gender = 'Male';
   String _hostel = 'Yes';
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _contactController.dispose();
+    _identityController.dispose();
+    _dobDayController.dispose();
+    _dobMonthController.dispose();
+    _dobYearController.dispose();
+    _address1Controller.dispose();
+    _address2Controller.dispose();
+    _address3Controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveProfile() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final supabaseId = Supabase.instance.client.auth.currentUser?.id;
+      if (supabaseId == null) {
+        throw Exception("User is not authenticated");
+      }
+
+      final address = [
+        _address1Controller.text.trim(),
+        _address2Controller.text.trim(),
+        _address3Controller.text.trim(),
+      ].where((e) => e.isNotEmpty).join(", ");
+
+      final apiUrl = (dotenv.env['API_URL'] ?? 'http://127.0.0.1:8000').trim();
+
+      final response = await http.post(
+        Uri.parse('$apiUrl/users/profile'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "supabase_id": supabaseId,
+          "username": widget.name,
+          "identity_number": _identityController.text.trim(),
+          "email": widget.email,
+          "gender": _gender,
+          "contact_number": _contactController.text.trim(),
+          "address": address,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+        );
+      } else {
+        throw Exception("Failed to save profile: \${response.body}");
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +131,16 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                 hintText: 'Enter your identity number',
                 icon: Icons.person_outline,
                 keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 24),
+
+              // Matric Number
+              _buildLabel('Matric Number'),
+              const SizedBox(height: 8),
+              _buildTextField(
+                controller: _matricController,
+                hintText: 'Enter your matric number (e.g. B032123456)',
+                icon: Icons.badge_outlined,
               ),
               const SizedBox(height: 24),
 
