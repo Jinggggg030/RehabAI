@@ -23,6 +23,7 @@ class ProfileSetupPage extends StatefulWidget {
 class _ProfileSetupPageState extends State<ProfileSetupPage> {
   final TextEditingController _contactController = TextEditingController();
   final TextEditingController _identityController = TextEditingController();
+  final TextEditingController _matricController = TextEditingController();
   final TextEditingController _dobDayController = TextEditingController();
   final TextEditingController _dobMonthController = TextEditingController();
   final TextEditingController _dobYearController = TextEditingController();
@@ -38,6 +39,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   void dispose() {
     _contactController.dispose();
     _identityController.dispose();
+    _matricController.dispose();
     _dobDayController.dispose();
     _dobMonthController.dispose();
     _dobYearController.dispose();
@@ -77,17 +79,89 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           "gender": _gender,
           "contact_number": _contactController.text.trim(),
           "address": address,
+          "matric_no": _matricController.text.trim(),
         }),
       );
 
       if (response.statusCode == 200) {
         if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainScreen()),
+        
+        // Show Success Dialog
+        showDialog(
+          context: context,
+          barrierDismissible: false,
+          builder: (BuildContext context) {
+            return Dialog(
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(20),
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(32),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: const BoxDecoration(
+                        color: Color(0xFFF4F6F9), // Light grayish-blue circle
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.check,
+                        color: Color(0xFF207866),
+                        size: 40,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    Text(
+                      'You\'re all set!',
+                      style: GoogleFonts.readexPro(
+                        fontSize: 24,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF207866),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Welcome ${widget.name} to\nour family!',
+                      textAlign: TextAlign.center,
+                      style: GoogleFonts.readexPro(
+                        fontSize: 14,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+                    Text(
+                      'You\'ll be sent to home shortly!',
+                      style: GoogleFonts.readexPro(
+                        fontSize: 12,
+                        color: Colors.grey,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
         );
+
+        // Navigate to MainScreen after 3 seconds
+        Future.delayed(const Duration(seconds: 3), () {
+          if (Navigator.canPop(context)) {
+            Navigator.pop(context); // Close dialog
+            Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const MainScreen()),
+            );
+          }
+        });
+
       } else {
-        throw Exception("Failed to save profile: \${response.body}");
+        throw Exception("Failed to save profile: ${response.body}");
       }
     } catch (e) {
       if (!mounted) return;
@@ -144,6 +218,16 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                 hintText: 'Enter your identity number',
                 icon: Icons.person_outline,
                 keyboardType: TextInputType.number,
+              ),
+              const SizedBox(height: 24),
+
+              // Matric Number
+              _buildLabel('Matric Number'),
+              const SizedBox(height: 8),
+              _buildTextField(
+                controller: _matricController,
+                hintText: 'Enter your matric number (e.g. B032123456)',
+                icon: Icons.badge_outlined,
               ),
               const SizedBox(height: 24),
 
@@ -230,19 +314,28 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               // Address Line 1
               _buildLabel('Address Line 1'),
               const SizedBox(height: 8),
-              _buildTextField(controller: _address1Controller, hintText: 'Address Line 1'),
+              _buildTextField(
+                controller: _address1Controller, 
+                hintText: 'Address Line 1'
+              ),
               const SizedBox(height: 24),
 
               // Address Line 2
               _buildLabel('Address Line 2'),
               const SizedBox(height: 8),
-              _buildTextField(controller: _address2Controller, hintText: 'Address Line 2'),
+              _buildTextField(
+                controller: _address2Controller, 
+                hintText: 'Address Line 2'
+              ),
               const SizedBox(height: 24),
 
               // Address Line 3
               _buildLabel('Address Line 3'),
               const SizedBox(height: 8),
-              _buildTextField(controller: _address3Controller, hintText: 'Address Line 3'),
+              _buildTextField(
+                controller: _address3Controller, 
+                hintText: 'Address Line 3'
+              ),
               const SizedBox(height: 48),
 
               // Save Button
