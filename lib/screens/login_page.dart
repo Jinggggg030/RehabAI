@@ -2,6 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:rehab_ai/screens/signup_page.dart';
 import 'package:rehab_ai/screens/main_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:rehab_ai/screens/profile_setup_page.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -11,7 +17,132 @@ class LoginPage extends StatefulWidget {
 }
 
 class _LoginPageState extends State<LoginPage> {
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _signIn() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final email = _emailController.text.trim();
+      final password = _passwordController.text;
+
+      if (email.isEmpty || password.isEmpty) {
+        throw Exception('Please fill in both email and password.');
+      }
+
+      final response = await Supabase.instance.client.auth.signInWithPassword(
+        email: email,
+        password: password,
+      );
+
+      if (response.user != null) {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
+
+  Future<void> _googleSignIn() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'] ?? 'YOUR_WEB_CLIENT_ID';
+      
+      final GoogleSignIn googleSignIn = GoogleSignIn(
+        serverClientId: webClientId,
+      );
+      final googleUser = await googleSignIn.signIn();
+      if (googleUser == null) {
+        throw Exception('Google Sign-In aborted.');
+      }
+      
+      final googleAuth = await googleUser.authentication;
+      final accessToken = googleAuth.accessToken;
+      final idToken = googleAuth.idToken;
+      
+      if (idToken == null) {
+        throw Exception('No ID Token found.');
+      }
+
+      final response = await Supabase.instance.client.auth.signInWithIdToken(
+        provider: OAuthProvider.google,
+        idToken: idToken,
+        accessToken: accessToken ?? '',
+      );
+      
+      final user = response.user;
+      if (user != null) {
+        final apiUrl = (dotenv.env['API_URL'] ?? 'http://127.0.0.1:8000').trim();
+        final checkResponse = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
+        
+        if (checkResponse.statusCode == 200) {
+          final data = jsonDecode(checkResponse.body);
+          if (!mounted) return;
+          if (data['exists'] == true) {
+             Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => const MainScreen()),
+            );
+          } else {
+             final name = user.userMetadata?['full_name'] ?? googleUser.displayName ?? '';
+             final email = user.email ?? googleUser.email;
+             Navigator.pushReplacement(
+              context,
+              MaterialPageRoute(builder: (context) => ProfileSetupPage(name: name, email: email)),
+            );
+          }
+        } else {
+          throw Exception('Failed to check profile');
+        }
+      }
+
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(e.toString().replaceAll('Exception: ', '')),
+          backgroundColor: Colors.red,
+        ),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,6 +201,8 @@ class _LoginPageState extends State<LoginPage> {
 
               // Email Field
               TextFormField(
+                controller: _emailController,
+                keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   hintText: 'Enter your email',
                   hintStyle: GoogleFonts.readexPro(color: Colors.grey, fontSize: 14),
@@ -89,6 +222,7 @@ class _LoginPageState extends State<LoginPage> {
 
               // Password Field
               TextFormField(
+                controller: _passwordController,
                 obscureText: _obscurePassword,
                 decoration: InputDecoration(
                   hintText: 'Enter your password',
@@ -143,84 +277,7 @@ class _LoginPageState extends State<LoginPage> {
 
               // Login Button
               ElevatedButton(
-                onPressed: () {
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (BuildContext context) {
-                      return Dialog(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(24),
-                        ),
-                        backgroundColor: Colors.white,
-                        child: Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                width: 100,
-                                height: 100,
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFF6F8FB),
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Center(
-                                  child: Text(
-                                    'profile picture',
-                                    textAlign: TextAlign.center,
-                                    style: GoogleFonts.readexPro(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 12,
-                                      color: Colors.black,
-                                    ),
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(height: 30),
-                              Text(
-                                'Welcome Back,',
-                                style: GoogleFonts.readexPro(
-                                  fontSize: 22,
-                                  fontWeight: FontWeight.bold,
-                                  color: const Color(0xFF207866),
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '[Username]',
-                                style: GoogleFonts.readexPro(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black,
-                                ),
-                              ),
-                              const SizedBox(height: 40),
-                              Text(
-                                'You\'ll be sent to home shortly!',
-                                style: GoogleFonts.readexPro(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-
-                  // Optional: Automatically dismiss after a few seconds
-                  Future.delayed(const Duration(seconds: 3), () {
-                    if (Navigator.canPop(context)) {
-                      Navigator.pop(context); // Close the dialog
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (context) => const MainScreen()),
-                      );
-                    }
-                  });
-                },
+                onPressed: _isLoading ? null : _signIn,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF207866),
                   foregroundColor: Colors.white,
@@ -230,13 +287,22 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   elevation: 0,
                 ),
-                child: Text(
-                  'Login',
-                  style: GoogleFonts.readexPro(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : Text(
+                        'Login',
+                        style: GoogleFonts.readexPro(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
               const SizedBox(height: 24),
 
@@ -283,7 +349,7 @@ class _LoginPageState extends State<LoginPage> {
 
               // Google Sign In
               OutlinedButton(
-                onPressed: () {},
+                onPressed: _isLoading ? null : _googleSignIn,
                 style: OutlinedButton.styleFrom(
                   padding: const EdgeInsets.symmetric(vertical: 14),
                   side: BorderSide(color: Colors.grey.shade300),
@@ -292,7 +358,16 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   foregroundColor: Colors.black87,
                 ),
-                child: Row(
+                child: _isLoading 
+                  ? const SizedBox(
+                      height: 20,
+                      width: 20,
+                      child: CircularProgressIndicator(
+                        color: Color(0xFF207866),
+                        strokeWidth: 2,
+                      ),
+                    )
+                  : Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     Image.asset(

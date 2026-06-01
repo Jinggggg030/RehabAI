@@ -1,5 +1,6 @@
-from fastapi import FastAPI, Depends
+from fastapi import FastAPI, Depends, HTTPException
 from sqlalchemy.orm import Session
+from pydantic import BaseModel
 from backend.database import engine, get_db
 from backend import models
 from fastapi.responses import StreamingResponse
@@ -14,6 +15,64 @@ app = FastAPI(title="Rehab AI Backend")
 @app.get("/")
 def read_root():
     return {"message": "Welcome to the Rehab AI API! Connected to Supabase Successfully."}
+
+class UserProfileCreate(BaseModel):
+    supabase_id: str
+    username: str
+    identity_number: str
+    email: str
+    gender: str
+    contact_number: str
+    address: str
+    matric_no: str | None = None
+
+@app.post("/users/profile")
+def create_user_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
+    existing_user = db.query(models.User).filter(models.User.supabase_id == profile.supabase_id).first()
+    if existing_user:
+        raise HTTPException(status_code=400, detail="User profile already exists")
+    
+    new_user = models.User(
+        supabase_id=profile.supabase_id,
+        username=profile.username,
+        identity_number=profile.identity_number,
+        email=profile.email,
+        gender=profile.gender,
+        contact_number=profile.contact_number,
+        address=profile.address,
+        role='S'
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+
+    new_student = models.Student(
+        student_id=new_user.user_id,
+        matric_no=profile.matric_no
+    )
+    db.add(new_student)
+    db.commit()
+    
+    return {"message": "Profile created successfully", "user_id": new_user.user_id}
+
+@app.get("/users/profile/{supabase_id}")
+def check_user_profile(supabase_id: str, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.supabase_id == supabase_id).first()
+    if user:
+        student = db.query(models.Student).filter(models.Student.student_id == user.user_id).first()
+        return {
+            "exists": True, 
+            "user_id": user.user_id, 
+            "role": user.role,
+            "username": user.username,
+            "email": user.email,
+            "identity_number": user.identity_number,
+            "gender": user.gender,
+            "contact_number": user.contact_number,
+            "address": user.address,
+            "matric_no": student.matric_no if student else None
+        }
+    return {"exists": False}
 
 @app.get("/users")
 def get_all_users(db: Session = Depends(get_db)):
