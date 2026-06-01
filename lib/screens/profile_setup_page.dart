@@ -1,17 +1,107 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/main_screen.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 
 class ProfileSetupPage extends StatefulWidget {
-  const ProfileSetupPage({super.key});
+  final String name;
+  final String email;
+
+  const ProfileSetupPage({
+    super.key,
+    required this.name,
+    required this.email,
+  });
 
   @override
   State<ProfileSetupPage> createState() => _ProfileSetupPageState();
 }
 
 class _ProfileSetupPageState extends State<ProfileSetupPage> {
+  final TextEditingController _contactController = TextEditingController();
+  final TextEditingController _identityController = TextEditingController();
+  final TextEditingController _dobDayController = TextEditingController();
+  final TextEditingController _dobMonthController = TextEditingController();
+  final TextEditingController _dobYearController = TextEditingController();
+  final TextEditingController _address1Controller = TextEditingController();
+  final TextEditingController _address2Controller = TextEditingController();
+  final TextEditingController _address3Controller = TextEditingController();
+
   String _gender = 'Male';
   String _hostel = 'Yes';
+  bool _isLoading = false;
+
+  @override
+  void dispose() {
+    _contactController.dispose();
+    _identityController.dispose();
+    _dobDayController.dispose();
+    _dobMonthController.dispose();
+    _dobYearController.dispose();
+    _address1Controller.dispose();
+    _address2Controller.dispose();
+    _address3Controller.dispose();
+    super.dispose();
+  }
+
+  Future<void> _saveProfile() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final supabaseId = Supabase.instance.client.auth.currentUser?.id;
+      if (supabaseId == null) {
+        throw Exception("User is not authenticated");
+      }
+
+      final address = [
+        _address1Controller.text.trim(),
+        _address2Controller.text.trim(),
+        _address3Controller.text.trim(),
+      ].where((e) => e.isNotEmpty).join(", ");
+
+      final apiUrl = (dotenv.env['API_URL'] ?? 'http://127.0.0.1:8000').trim();
+
+      final response = await http.post(
+        Uri.parse('$apiUrl/users/profile'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          "supabase_id": supabaseId,
+          "username": widget.name,
+          "identity_number": _identityController.text.trim(),
+          "email": widget.email,
+          "gender": _gender,
+          "contact_number": _contactController.text.trim(),
+          "address": address,
+        }),
+      );
+
+      if (response.statusCode == 200) {
+        if (!mounted) return;
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (context) => const MainScreen()),
+        );
+      } else {
+        throw Exception("Failed to save profile: \${response.body}");
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(e.toString()), backgroundColor: Colors.red),
+      );
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -39,6 +129,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               _buildLabel('Contact Number'),
               const SizedBox(height: 8),
               _buildTextField(
+                controller: _contactController,
                 hintText: 'Enter your contact number',
                 icon: Icons.phone_outlined,
                 keyboardType: TextInputType.phone,
@@ -49,6 +140,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               _buildLabel('Identity Number'),
               const SizedBox(height: 8),
               _buildTextField(
+                controller: _identityController,
                 hintText: 'Enter your identity number',
                 icon: Icons.person_outline,
                 keyboardType: TextInputType.number,
@@ -62,6 +154,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                 children: [
                   Expanded(
                     child: _buildTextField(
+                      controller: _dobDayController,
                       hintText: 'DD',
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
@@ -70,6 +163,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: _buildTextField(
+                      controller: _dobMonthController,
                       hintText: 'MM',
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
@@ -79,6 +173,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                   Expanded(
                     flex: 2,
                     child: _buildTextField(
+                      controller: _dobYearController,
                       hintText: 'YYYY',
                       keyboardType: TextInputType.number,
                       textAlign: TextAlign.center,
@@ -135,98 +230,24 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               // Address Line 1
               _buildLabel('Address Line 1'),
               const SizedBox(height: 8),
-              _buildTextField(hintText: 'Address Line 1'),
+              _buildTextField(controller: _address1Controller, hintText: 'Address Line 1'),
               const SizedBox(height: 24),
 
               // Address Line 2
               _buildLabel('Address Line 2'),
               const SizedBox(height: 8),
-              _buildTextField(hintText: 'Address Line 2'),
+              _buildTextField(controller: _address2Controller, hintText: 'Address Line 2'),
               const SizedBox(height: 24),
 
               // Address Line 3
               _buildLabel('Address Line 3'),
               const SizedBox(height: 8),
-              _buildTextField(hintText: 'Address Line 3'),
+              _buildTextField(controller: _address3Controller, hintText: 'Address Line 3'),
               const SizedBox(height: 48),
 
               // Save Button
               ElevatedButton(
-                onPressed: () {
-                  // Show Success Dialog
-                  showDialog(
-                    context: context,
-                    barrierDismissible: false,
-                    builder: (BuildContext context) {
-                      return Dialog(
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(20),
-                        ),
-                        child: Container(
-                          padding: const EdgeInsets.all(32),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: Column(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.all(16),
-                                decoration: const BoxDecoration(
-                                  color: Color(0xFFF4F6F9), // Light grayish-blue circle
-                                  shape: BoxShape.circle,
-                                ),
-                                child: const Icon(
-                                  Icons.check,
-                                  color: Color(0xFF207866),
-                                  size: 40,
-                                ),
-                              ),
-                              const SizedBox(height: 24),
-                              Text(
-                                'You\'re all set!',
-                                style: GoogleFonts.readexPro(
-                                  fontSize: 24,
-                                  fontWeight: FontWeight.bold,
-                                  color: const Color(0xFF207866),
-                                ),
-                              ),
-                              const SizedBox(height: 16),
-                              Text(
-                                'Welcome [username] to\nour family!',
-                                textAlign: TextAlign.center,
-                                style: GoogleFonts.readexPro(
-                                  fontSize: 14,
-                                  color: Colors.black87,
-                                ),
-                              ),
-                              const SizedBox(height: 40),
-                              Text(
-                                'You\'ll be sent to home shortly!',
-                                style: GoogleFonts.readexPro(
-                                  fontSize: 12,
-                                  color: Colors.grey,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                      );
-                    },
-                  );
-
-                  // Navigate to MainScreen after 3 seconds
-                  Future.delayed(const Duration(seconds: 3), () {
-                    if (Navigator.canPop(context)) {
-                      Navigator.pop(context); // Close dialog
-                      Navigator.pushReplacement(
-                        context,
-                        MaterialPageRoute(builder: (context) => const MainScreen()),
-                      );
-                    }
-                  });
-                },
+                onPressed: _isLoading ? null : _saveProfile,
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF207866), // Primary green
                   foregroundColor: Colors.white,
@@ -236,13 +257,22 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                   ),
                   elevation: 0,
                 ),
-                child: Text(
-                  'Save',
-                  style: GoogleFonts.readexPro(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Colors.white,
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : Text(
+                        'Save',
+                        style: GoogleFonts.readexPro(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
               ),
               const SizedBox(height: 24),
             ],
@@ -265,6 +295,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
 
   Widget _buildTextField({
     required String hintText,
+    TextEditingController? controller,
     IconData? icon,
     TextInputType keyboardType = TextInputType.text,
     TextAlign textAlign = TextAlign.start,
@@ -276,6 +307,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         border: Border.all(color: Colors.grey.shade200),
       ),
       child: TextField(
+        controller: controller,
         keyboardType: keyboardType,
         textAlign: textAlign,
         style: GoogleFonts.readexPro(

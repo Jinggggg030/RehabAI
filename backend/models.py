@@ -8,23 +8,24 @@ class User(Base):
     __tablename__ = "User"
 
     user_id = Column(Integer, primary_key=True)
-    username = Column(String(15), nullable=False)
-    identity_number = Column(String(12), nullable=False)
-    email = Column(String(50), nullable=False)
-    gender = Column(String(1), nullable=False) 
-    contact_number = Column(String(11), nullable=False)
+    supabase_id = Column(String(36), unique=True, nullable=True)
+    username = Column(String(50), nullable=False)
+    identity_number = Column(String(20), nullable=False)
+    email = Column(String(100), nullable=False)
+    gender = Column(String(10), nullable=False) 
+    contact_number = Column(String(20), nullable=False)
     address = Column(Text, nullable=True)
-    role = Column(String(1), nullable=False)
+    role = Column(String(1), nullable=False, default='S')
 
     __table_args__ = (
-        CheckConstraint("role IN ('S', 'P',)", name="check_valid_role"), 
+        CheckConstraint("role IN ('S', 'P')", name="check_valid_role"), 
     )
 
 class Student(Base):
     __tablename__ = "Student"
 
     student_id = Column(Integer, ForeignKey("User.user_id"), primary_key=True)
-    matric_no = Column(String(10), nullable=False)
+    matric_no = Column(String(15), nullable=True)
 
 class Physiotherapist(Base):
     __tablename__ = "Physiotherapist"
@@ -67,7 +68,7 @@ class RentalRecord(Base):
     return_status = Column(String(20), nullable=True)
     proof_of_status = Column(String(255), nullable=True)
 
-        __table_args__ = (
+    __table_args__ = (
         CheckConstraint("status IN ('Pending', 'Returned', 'Lost')", name="check_rental_status"),
         CheckConstraint("return_status IN ('Good', 'Damaged', 'Lost')", name="check_return_status"),
     )
