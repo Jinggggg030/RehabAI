@@ -24,6 +24,7 @@ class UserProfileCreate(BaseModel):
     gender: str
     contact_number: str
     address: str
+    matric_no: str | None = None
 
 @app.post("/users/profile")
 def create_user_profile(profile: UserProfileCreate, db: Session = Depends(get_db)):
@@ -47,7 +48,7 @@ def create_user_profile(profile: UserProfileCreate, db: Session = Depends(get_db
 
     new_student = models.Student(
         student_id=new_user.user_id,
-        matric_no=None
+        matric_no=profile.matric_no
     )
     db.add(new_student)
     db.commit()
@@ -58,7 +59,19 @@ def create_user_profile(profile: UserProfileCreate, db: Session = Depends(get_db
 def check_user_profile(supabase_id: str, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.supabase_id == supabase_id).first()
     if user:
-        return {"exists": True, "user_id": user.user_id, "role": user.role}
+        student = db.query(models.Student).filter(models.Student.student_id == user.user_id).first()
+        return {
+            "exists": True, 
+            "user_id": user.user_id, 
+            "role": user.role,
+            "username": user.username,
+            "email": user.email,
+            "identity_number": user.identity_number,
+            "gender": user.gender,
+            "contact_number": user.contact_number,
+            "address": user.address,
+            "matric_no": student.matric_no if student else None
+        }
     return {"exists": False}
 
 @app.get("/users")
