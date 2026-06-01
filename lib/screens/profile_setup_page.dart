@@ -147,6 +147,16 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               ),
               const SizedBox(height: 24),
 
+              // Matric Number
+              _buildLabel('Matric Number'),
+              const SizedBox(height: 8),
+              _buildTextField(
+                controller: _matricController,
+                hintText: 'Enter your matric number (e.g. B032123456)',
+                icon: Icons.badge_outlined,
+              ),
+              const SizedBox(height: 24),
+
               // Date of Birth
               _buildLabel('Date of Birth'),
               const SizedBox(height: 8),
