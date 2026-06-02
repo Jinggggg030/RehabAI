@@ -8,6 +8,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:rehab_ai/screens/profile_setup_page.dart';
+import 'package:rehab_ai/screens/physio_dashboard.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -48,11 +50,7 @@ class _LoginPageState extends State<LoginPage> {
       );
 
       if (response.user != null) {
-        if (!mounted) return;
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(builder: (context) => const MainScreen()),
-        );
+        await _routeUser(response.user!);
       }
     } catch (e) {
       if (!mounted) return;
@@ -80,7 +78,8 @@ class _LoginPageState extends State<LoginPage> {
       final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'] ?? 'YOUR_WEB_CLIENT_ID';
       
       final GoogleSignIn googleSignIn = GoogleSignIn(
-        serverClientId: webClientId,
+        clientId: webClientId,
+        serverClientId: kIsWeb ? null : webClientId,
       );
       final googleUser = await googleSignIn.signIn();
       if (googleUser == null) {
@@ -103,28 +102,9 @@ class _LoginPageState extends State<LoginPage> {
       
       final user = response.user;
       if (user != null) {
-        final apiUrl = (dotenv.env['API_URL'] ?? 'http://127.0.0.1:8000').trim();
-        final checkResponse = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
-        
-        if (checkResponse.statusCode == 200) {
-          final data = jsonDecode(checkResponse.body);
-          if (!mounted) return;
-          if (data['exists'] == true) {
-             Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const MainScreen()),
-            );
-          } else {
-             final name = user.userMetadata?['full_name'] ?? googleUser.displayName ?? '';
-             final email = user.email ?? googleUser.email;
-             Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => ProfileSetupPage(name: name, email: email)),
-            );
-          }
-        } else {
-          throw Exception('Failed to check profile');
-        }
+        final name = user.userMetadata?['full_name'] ?? googleUser.displayName ?? '';
+        final email = user.email ?? googleUser.email ?? '';
+        await _routeUser(user, isGoogle: true, name: name, email: email);
       }
 
     } catch (e) {
@@ -141,6 +121,40 @@ class _LoginPageState extends State<LoginPage> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _routeUser(User user, {bool isGoogle = false, String name = '', String email = ''}) async {
+    final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final checkResponse = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
+    
+    if (checkResponse.statusCode == 200) {
+      final data = jsonDecode(checkResponse.body);
+      if (!mounted) return;
+      if (data['exists'] == true) {
+        if (data['role'] == 'P') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const PhysioDashboard()),
+          );
+        } else {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const MainScreen()),
+          );
+        }
+      } else {
+        if (isGoogle) {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => ProfileSetupPage(name: name, email: email)),
+          );
+        } else {
+           throw Exception('User profile not found. Please sign up first.');
+        }
+      }
+    } else {
+      throw Exception('Failed to check profile');
     }
   }
 

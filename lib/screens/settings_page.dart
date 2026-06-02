@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:rehab_ai/screens/login_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -98,7 +100,16 @@ class _SettingsPageState extends State<SettingsPage> {
                   _buildNavigationTile(
                     icon: Icons.logout_outlined,
                     title: 'Logout',
-                    onTap: () {},
+                    onTap: () async {
+                      await Supabase.instance.client.auth.signOut();
+                      if (context.mounted) {
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute(builder: (context) => const LoginPage()),
+                          (route) => false,
+                        );
+                      }
+                    },
                   ),
                 ],
               ),

@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, CheckConstraint
+from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, CheckConstraint, JSON
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
 
@@ -147,15 +147,17 @@ class LiveChatSession(Base):
     __tablename__ = "Live_Chat_Session"
 
     session_id = Column(Integer, primary_key=True)
-    therapist_id = Column(Integer, ForeignKey("Physiotherapist.therapist_id"), nullable=False)
+    therapist_id = Column(Integer, ForeignKey("Physiotherapist.therapist_id"), nullable=True)
     student_id = Column(Integer, ForeignKey("Student.student_id"), nullable=False)
     
+    discipline = Column(String(100), nullable=True)
     subject = Column(String(100), nullable=False)
-    session_status = Column(String(10), default="Active")
+    session_status = Column(String(10), default="Triage")
+    triage_data = Column(JSON, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
-        CheckConstraint("session_status IN ('Active', 'Closed')", name="check_session_status"),
+        CheckConstraint("session_status IN ('Triage', 'Active', 'Emergency', 'Closed')", name="check_session_status"),
     )
 
 class ChatLog(Base):
@@ -163,6 +165,7 @@ class ChatLog(Base):
 
     chat_id = Column(Integer, primary_key=True)
     session_id = Column(Integer, ForeignKey("Live_Chat_Session.session_id"), nullable=False)
+    sender_id = Column(Integer, ForeignKey("User.user_id"), nullable=True)
     
     content = Column(Text, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)

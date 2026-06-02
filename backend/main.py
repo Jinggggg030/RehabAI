@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Depends, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from backend.database import engine, get_db
@@ -7,10 +8,19 @@ from fastapi.responses import StreamingResponse
 import cv2
 from backend.ai.pose_detector import PoseDetector
 from backend.ai.angle_calculator import calculate_angle
+from backend.ai.chatbot import chatbot_instance
 
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Rehab AI Backend")
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],  # Allows all origins
+    allow_credentials=False, # Must be False if origins is '*'
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 @app.get("/")
 def read_root():
@@ -186,3 +196,151 @@ def generate_frames():
 @app.get("/video_feed")
 def video_feed():
     return StreamingResponse(generate_frames(), media_type="multipart/x-mixed-replace; boundary=frame")
+
+class StartChatReq(BaseModel):
+    user_id: int
+    message: str
+
+def assign_physio(db: Session, session_id: int, discipline: str):
+    # Find physio with matching specialization
+    physio = db.query(models.Physiotherapist).filter(models.Physiotherapist.specialization.ilike(f"%{discipline}%")).first()
+    if not physio:
+        physio = db.query(models.Physiotherapist).first()
+        
+    if physio:
+        session = db.query(models.LiveChatSession).filter(models.LiveChatSession.session_id == session_id).first()
+        if session:
+            session.therapist_id = physio.therapist_id
+            db.commit()
+
+def check_posture_integration(db: Session, student_id: int, auto_reply: str) -> str:
+    # Phase 6: Link AI Posture feedback to the triage output
+    feedback = db.query(models.AIFeedback)\
+        .join(models.PrescribedExercise, models.AIFeedback.prescribed_exercise_id == models.PrescribedExercise.prescribed_exercise_id)\
+        .join(models.Prescription, models.PrescribedExercise.prescription_id == models.Prescription.prescription_id)\
+        .filter(models.Prescription.student_id == student_id)\
+        .order_by(models.AIFeedback.timestamp.desc())\
+        .first()
+    
+    if feedback and feedback.accuracy_score is not None and feedback.accuracy_score < 70:
+        auto_reply += "\n\n(AI Posture Alert: We noticed your recent exercise accuracy was low. This movement issue may be contributing to your current symptoms. Your therapist has been notified.)"
+    return auto_reply
+
+@app.post("/chat/start")
+def start_chat(req: StartChatReq, db: Session = Depends(get_db)):
+    # 1. Triage the message
+    updated_state, auto_reply, session_status = chatbot_instance.process_message(req.message, None)
+    
+    if session_status == "Active":
+        auto_reply = check_posture_integration(db, req.user_id, auto_reply)
+
+    # 2. Create the session
+    new_session = models.LiveChatSession(
+        student_id=req.user_id,
+        subject="Initial Triage",
+        discipline=updated_state.get("discipline"),
+        triage_data=updated_state,
+        session_status=session_status
+    )
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+    
+    # 3. Create the user's message log
+    user_log = models.ChatLog(
+        session_id=new_session.session_id,
+        sender_id=req.user_id,
+        content=req.message
+    )
+    db.add(user_log)
+    
+    # 4. Create the system's auto-reply log
+    system_log = models.ChatLog(
+        session_id=new_session.session_id,
+        sender_id=None,
+        content=auto_reply
+    )
+    db.add(system_log)
+    db.commit()
+    
+    # Phase 4: Assign physio
+    if session_status == "Active" and updated_state.get("discipline"):
+        assign_physio(db, new_session.session_id, updated_state.get("discipline"))
+    
+    return {
+        "session_id": new_session.session_id,
+        "discipline": updated_state.get("discipline"),
+        "auto_reply": auto_reply
+    }
+
+class SendMessageReq(BaseModel):
+    session_id: int
+    user_id: int
+    message: str
+
+@app.post("/chat/send")
+def send_message(req: SendMessageReq, db: Session = Depends(get_db)):
+    user_log = models.ChatLog(
+        session_id=req.session_id,
+        sender_id=req.user_id,
+        content=req.message
+    )
+    db.add(user_log)
+    db.commit()
+    
+    # Phase 1 & 2: Stateful Multi-turn triage
+    session = db.query(models.LiveChatSession).filter(models.LiveChatSession.session_id == req.session_id).first()
+    if session and session.session_status == "Triage":
+        updated_state, auto_reply, new_status = chatbot_instance.process_message(req.message, session.triage_data)
+        
+        if new_status == "Active":
+            auto_reply = check_posture_integration(db, req.user_id, auto_reply)
+
+        session.triage_data = updated_state
+        session.session_status = new_status
+        session.discipline = updated_state.get("discipline")
+        
+        system_log = models.ChatLog(
+            session_id=req.session_id,
+            sender_id=None,
+            content=auto_reply
+        )
+        db.add(system_log)
+        db.commit()
+        
+        # Phase 4: Assign physio
+        if new_status == "Active" and session.discipline:
+            assign_physio(db, session.session_id, session.discipline)
+            
+    return {"status": "success"}
+
+@app.get("/physio/chats/{physio_id}")
+def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
+    chats = db.query(
+        models.LiveChatSession.session_id,
+        models.LiveChatSession.subject,
+        models.LiveChatSession.discipline,
+        models.LiveChatSession.session_status,
+        models.LiveChatSession.triage_data,
+        models.LiveChatSession.created_at,
+        models.User.username.label("student_name")
+    ).join(
+        models.User, models.LiveChatSession.student_id == models.User.user_id
+    ).filter(
+        models.LiveChatSession.therapist_id == physio_id
+    ).order_by(
+        models.LiveChatSession.created_at.desc()
+    ).all()
+    
+    result = []
+    for chat in chats:
+        result.append({
+            "session_id": chat.session_id,
+            "subject": chat.subject,
+            "discipline": chat.discipline,
+            "session_status": chat.session_status,
+            "triage_data": chat.triage_data,
+            "created_at": chat.created_at,
+            "student_name": chat.student_name
+        })
+    return {"chats": result}

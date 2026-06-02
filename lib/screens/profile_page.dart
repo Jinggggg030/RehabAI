@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -32,7 +33,7 @@ class _ProfilePageState extends State<ProfilePage> {
         return;
       }
       
-      final apiUrl = (dotenv.env['API_URL'] ?? 'http://127.0.0.1:8000').trim();
+      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
       final response = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
       
       if (response.statusCode == 200) {
