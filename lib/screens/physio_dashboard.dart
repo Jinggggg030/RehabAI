@@ -360,8 +360,7 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
         ),
         Container(
           padding: const EdgeInsets.all(16),
-          color: Colors.white,
-          decoration: const BoxDecoration(border: Border(top: BorderSide(color: Colors.black12))),
+          decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.black12))),
           child: Row(
             children: [
               Expanded(
