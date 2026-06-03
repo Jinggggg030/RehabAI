@@ -76,33 +76,35 @@ class _LiveChatPageState extends State<LiveChatPage> {
     }
   }
 
-  void _subscribeToMessages() {
+  RealtimeChannel? _subscription;
+
+  Future<void> _subscribeToMessages() async {
     if (_sessionId == null) return;
 
-    _supabase
-        .from('Chat_Log')
-        .stream(primaryKey: ['chat_id'])
-        .eq('session_id', _sessionId!)
-        .order('timestamp', ascending: true)
-        .listen((List<Map<String, dynamic>> data) async {
-          
-      final user = _supabase.auth.currentUser;
-      if (user == null) return;
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
       
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final userRes = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
-      int? myUserId;
-      if (userRes.statusCode == 200) {
-        final userData = jsonDecode(userRes.body);
-        if (userData['exists'] == true) {
-          myUserId = userData['user_id'];
-        }
+    final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final userRes = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
+    int? myUserId;
+    if (userRes.statusCode == 200) {
+      final userData = jsonDecode(userRes.body);
+      if (userData['exists'] == true) {
+        myUserId = userData['user_id'];
       }
+    }
 
+    if (_subscription != null) {
+      await _supabase.removeChannel(_subscription!);
+    }
+
+    // 1. Fetch initial data via REST
+    try {
+      final res = await _supabase.from('Chat_Log').select().eq('session_id', _sessionId!).order('timestamp', ascending: true);
       if (mounted) {
         setState(() {
           _messages.clear();
-          for (var row in data) {
+          for (var row in List<dynamic>.from(res)) {
             _messages.add(ChatMessage(
               text: row['content'] ?? '',
               isUser: row['sender_id'] == myUserId,
@@ -111,7 +113,36 @@ class _LiveChatPageState extends State<LiveChatPage> {
         });
         _scrollToBottom();
       }
-    });
+    } catch (e) {
+      debugPrint("Error fetching messages: $e");
+    }
+
+    // 2. Subscribe to realtime updates
+    _subscription = _supabase.channel('public:Chat_Log:session_$_sessionId')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'Chat_Log',
+        filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'session_id', value: _sessionId!),
+        callback: (payload) {
+          final newMsg = payload.newRecord;
+          if (mounted) {
+            setState(() {
+              // Prevent duplicating the user's own message that was added optimistically
+              if (newMsg['sender_id'] == myUserId) {
+                if (_messages.isNotEmpty && _messages.last.isUser && _messages.last.text == newMsg['content']) {
+                  return;
+                }
+              }
+              _messages.add(ChatMessage(
+                text: newMsg['content'] ?? '',
+                isUser: newMsg['sender_id'] == myUserId,
+              ));
+            });
+            _scrollToBottom();
+          }
+        }
+      ).subscribe();
   }
 
   Future<void> _sendMessage() async {
@@ -143,7 +174,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
         });
         _scrollToBottom();
 
-        final apiUrl = (dotenv.env['API_URL'] ?? 'http://127.0.0.1:8000').trim();
+        final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
         final response = await http.post(
           Uri.parse('$apiUrl/chat/start'),
           headers: {'Content-Type': 'application/json'},
@@ -165,7 +196,13 @@ class _LiveChatPageState extends State<LiveChatPage> {
         }
       } else {
         // Active session exists, send message via FastAPI to bypass RLS
-        final apiUrl = (dotenv.env['API_URL'] ?? 'http://127.0.0.1:8000').trim();
+        setState(() {
+          _messages.add(ChatMessage(text: text, isUser: true));
+          _isTyping = true;
+        });
+        _scrollToBottom();
+
+        final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
         final response = await http.post(
           Uri.parse('$apiUrl/chat/send'),
           headers: {'Content-Type': 'application/json'},
@@ -177,7 +214,14 @@ class _LiveChatPageState extends State<LiveChatPage> {
         );
         
         if (response.statusCode != 200) {
-          throw Exception("Failed to send message via API");
+          setState(() {
+            _isTyping = false;
+            _messages.add(ChatMessage(text: "Failed to send message.", isUser: false));
+          });
+        } else {
+          setState(() {
+            _isTyping = false;
+          });
         }
       }
     } catch (e) {

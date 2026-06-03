@@ -5,6 +5,7 @@ from pydantic import BaseModel
 from backend.database import engine, get_db
 from backend import models
 from fastapi.responses import StreamingResponse
+from sqlalchemy.orm.attributes import flag_modified
 import cv2
 from backend.ai.pose_detector import PoseDetector
 from backend.ai.angle_calculator import calculate_angle
@@ -297,6 +298,7 @@ def send_message(req: SendMessageReq, db: Session = Depends(get_db)):
             auto_reply = check_posture_integration(db, req.user_id, auto_reply)
 
         session.triage_data = updated_state
+        flag_modified(session, "triage_data")
         session.session_status = new_status
         session.discipline = updated_state.get("discipline")
         
@@ -344,3 +346,88 @@ def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
             "student_name": chat.student_name
         })
     return {"chats": result}
+
+@app.get("/physio/patients/{physio_id}")
+def get_physio_patients(physio_id: int, db: Session = Depends(get_db)):
+    students = db.query(models.User.user_id, models.User.username, models.User.email).join(
+        models.Prescription, models.User.user_id == models.Prescription.student_id
+    ).filter(models.Prescription.therapist_id == physio_id).distinct().all()
+    
+    result = []
+    for s in students:
+        presc = db.query(models.Prescription).filter(
+            models.Prescription.student_id == s.user_id,
+            models.Prescription.therapist_id == physio_id,
+            models.Prescription.status == 'Active'
+        ).first()
+        
+        exercises = []
+        if presc:
+            pexs = db.query(models.PrescribedExercise, models.Exercise.name).join(
+                models.Exercise, models.PrescribedExercise.exercise_id == models.Exercise.exercise_id
+            ).filter(models.PrescribedExercise.prescription_id == presc.prescription_id).all()
+            for px, ename in pexs:
+                exercises.append({
+                    "id": px.prescribed_exercise_id,
+                    "name": ename,
+                    "assigned_sets": px.assigned_sets,
+                    "evaluation": px.evaluation
+                })
+                
+        result.append({
+            "student_id": s.user_id,
+            "student_name": s.username,
+            "email": s.email,
+            "active_prescription": presc.diagnosis if presc else None,
+            "exercises": exercises
+        })
+    return {"patients": result}
+
+@app.get("/physio/appointments/{physio_id}")
+def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
+    appointments = db.query(
+        models.Appointment, models.User.username
+    ).join(
+        models.User, models.Appointment.student_id == models.User.user_id
+    ).filter(
+        models.Appointment.therapist_id == physio_id
+    ).order_by(models.Appointment.schedule_time).all()
+    
+    result = []
+    for appt, username in appointments:
+        result.append({
+            "appointment_id": appt.appointment_id,
+            "student_name": username,
+            "schedule_time": appt.schedule_time,
+            "status": appt.status,
+            "evaluation": appt.evaluation
+        })
+    return {"appointments": result}
+
+@app.get("/physio/rentals/{physio_id}")
+def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
+    student_ids = db.query(models.Prescription.student_id).filter(
+        models.Prescription.therapist_id == physio_id
+    ).distinct().subquery()
+    
+    rentals = db.query(
+        models.RentalRecord, models.User.username, models.Equipment.name
+    ).join(
+        models.User, models.RentalRecord.student_id == models.User.user_id
+    ).join(
+        models.Equipment, models.RentalRecord.equipment_id == models.Equipment.equipment_id
+    ).filter(
+        models.RentalRecord.student_id.in_(student_ids)
+    ).order_by(models.RentalRecord.collection_date.desc()).all()
+    
+    result = []
+    for r, username, eq_name in rentals:
+        result.append({
+            "rental_record_id": r.rental_record_id,
+            "student_name": username,
+            "equipment_name": eq_name,
+            "collection_date": r.collection_date,
+            "status": r.status,
+            "return_status": r.return_status
+        })
+    return {"rentals": result}
