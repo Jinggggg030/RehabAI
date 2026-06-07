@@ -32,6 +32,8 @@ class Physiotherapist(Base):
 
     therapist_id = Column(Integer, ForeignKey("User.user_id"), primary_key=True)
     specialization = Column(String(30), nullable=False)
+    leave_start_date = Column(DateTime, nullable=True)
+    leave_end_date = Column(DateTime, nullable=True)
 
 class Category(Base):
     __tablename__ = "Category"

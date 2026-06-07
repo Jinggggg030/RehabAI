@@ -279,6 +279,16 @@ class SendMessageReq(BaseModel):
     user_id: int
     message: str
 
+
+class BookAppointmentReq(BaseModel):
+    student_id: int
+    therapist_id: int
+    schedule_time: datetime
+
+class CancelAppointmentReq(BaseModel):
+    reason_id: int
+    other_reason: Optional[str] = None
+
 @app.post("/chat/send")
 def send_message(req: SendMessageReq, db: Session = Depends(get_db)):
     user_log = models.ChatLog(
@@ -431,3 +441,196 @@ def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
             "return_status": r.return_status
         })
     return {"rentals": result}
+
+
+@app.get("/appointments/available_physios/{student_id}")
+def get_available_physios(student_id: int, db: Session = Depends(get_db)):
+    # 1. Try to find the assigned physiotherapist via active prescription
+    presc = db.query(models.Prescription).filter(
+        models.Prescription.student_id == student_id,
+        models.Prescription.status == 'Active'
+    ).first()
+    
+    if presc:
+        physio = db.query(models.User, models.Physiotherapist).join(
+            models.Physiotherapist, models.User.user_id == models.Physiotherapist.therapist_id
+        ).filter(models.User.user_id == presc.therapist_id).first()
+        if physio:
+            u, p = physio
+            return {"physios": [{"therapist_id": u.user_id, "name": u.username, "specialization": p.specialization, "recommended": True, "leave_start_date": p.leave_start_date.isoformat() if p.leave_start_date else None, "leave_end_date": p.leave_end_date.isoformat() if p.leave_end_date else None}]}
+            
+    # 2. Try to find via recent Live Chat session
+    session = db.query(models.LiveChatSession).filter(
+        models.LiveChatSession.student_id == student_id,
+        models.LiveChatSession.therapist_id.isnot(None)
+    ).order_by(models.LiveChatSession.created_at.desc()).first()
+    
+    if session:
+        physio = db.query(models.User, models.Physiotherapist).join(
+            models.Physiotherapist, models.User.user_id == models.Physiotherapist.therapist_id
+        ).filter(models.User.user_id == session.therapist_id).first()
+        if physio:
+            u, p = physio
+            return {"physios": [{"therapist_id": u.user_id, "name": u.username, "specialization": p.specialization, "recommended": True, "leave_start_date": p.leave_start_date.isoformat() if p.leave_start_date else None, "leave_end_date": p.leave_end_date.isoformat() if p.leave_end_date else None}]}
+            
+    # 3. Fallback: Return all physios
+    all_physios = db.query(models.User, models.Physiotherapist).join(
+        models.Physiotherapist, models.User.user_id == models.Physiotherapist.therapist_id
+    ).all()
+    
+    result = []
+    for u, p in all_physios:
+        result.append({"therapist_id": u.user_id, "name": u.username, "specialization": p.specialization, "recommended": False, "leave_start_date": p.leave_start_date.isoformat() if p.leave_start_date else None, "leave_end_date": p.leave_end_date.isoformat() if p.leave_end_date else None})
+    return {"physios": result}
+
+@app.get("/appointments/student/{student_id}")
+def get_student_appointments(student_id: int, db: Session = Depends(get_db)):
+    appointments = db.query(
+        models.Appointment, models.User.username, models.Physiotherapist.specialization
+    ).join(
+        models.User, models.Appointment.therapist_id == models.User.user_id
+    ).join(
+        models.Physiotherapist, models.Appointment.therapist_id == models.Physiotherapist.therapist_id
+    ).filter(
+        models.Appointment.student_id == student_id
+    ).order_by(models.Appointment.schedule_time.desc()).all()
+    
+    result = []
+    for appt, physio_name, spec in appointments:
+        reason_desc = None
+        if appt.reason_id:
+            reason = db.query(models.CancellationReason).filter(models.CancellationReason.reason_id == appt.reason_id).first()
+            if reason:
+                reason_desc = reason.description
+                
+        result.append({
+            "appointment_id": appt.appointment_id,
+            "physiotherapist_name": physio_name,
+            "specialization": spec,
+            "schedule_time": appt.schedule_time,
+            "status": appt.status,
+            "evaluation": appt.evaluation,
+            "cancellation_reason": reason_desc
+        })
+    return {"appointments": result}
+
+@app.get("/appointments/cancellation_reasons")
+def get_cancellation_reasons(db: Session = Depends(get_db)):
+    reasons = db.query(models.CancellationReason).all()
+    return {"reasons": [{"reason_id": r.reason_id, "description": r.description} for r in reasons]}
+
+
+class BookAppointmentReq(BaseModel):
+    student_id: int
+    therapist_id: int
+    schedule_time: str
+
+class CancelAppointmentReq(BaseModel):
+    reason_id: int
+    other_reason: str | None = None
+
+class ApplyLeaveReq(BaseModel):
+    start_date: str
+    end_date: str
+    cover_colleague_id: int
+
+class TransferAppointmentReq(BaseModel):
+    new_therapist_id: int
+
+@app.post("/appointments/book")
+def book_appointment(req: BookAppointmentReq, db: Session = Depends(get_db)):
+    appt = models.Appointment(
+        student_id=req.student_id,
+        therapist_id=req.therapist_id,
+        schedule_time=req.schedule_time,
+        status="Scheduled"
+    )
+    db.add(appt)
+    db.commit()
+    db.refresh(appt)
+    return {"status": "success", "appointment_id": appt.appointment_id}
+
+@app.put("/appointments/{appointment_id}/cancel")
+def cancel_appointment(appointment_id: int, req: CancelAppointmentReq, db: Session = Depends(get_db)):
+    appt = db.query(models.Appointment).filter(models.Appointment.appointment_id == appointment_id).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+        
+    appt.status = "Cancelled"
+    appt.reason_id = req.reason_id
+    
+    # If other reason is provided, we might want to store it in evaluation or a separate field.
+    # We will just append it to evaluation for now since there's no other_reason field in Appointment.
+    if req.other_reason:
+        appt.evaluation = f"Cancellation Note: {req.other_reason}"
+        
+    db.commit()
+    return {"status": "success"}
+
+
+@app.get("/physiotherapists/colleagues/{therapist_id}")
+def get_physio_colleagues(therapist_id: int, db: Session = Depends(get_db)):
+    # Find the current physiotherapist's specialization
+    current_physio = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == therapist_id).first()
+    if not current_physio:
+        raise HTTPException(status_code=404, detail="Physiotherapist not found")
+        
+    spec = current_physio.specialization
+    
+    # Find all other physiotherapists with the same specialization
+    colleagues = db.query(models.User, models.Physiotherapist).join(
+        models.Physiotherapist, models.User.user_id == models.Physiotherapist.therapist_id
+    ).filter(
+        models.Physiotherapist.specialization == spec,
+        models.Physiotherapist.therapist_id != therapist_id
+    ).all()
+    
+    result = []
+    for u, p in colleagues:
+        result.append({
+            "therapist_id": u.user_id,
+            "name": u.username,
+            "specialization": p.specialization
+        })
+    return {"colleagues": result}
+
+@app.put("/appointments/{appointment_id}/transfer")
+def transfer_appointment(appointment_id: int, req: TransferAppointmentReq, db: Session = Depends(get_db)):
+    appt = db.query(models.Appointment).filter(models.Appointment.appointment_id == appointment_id).first()
+    if not appt:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+        
+    # verify new therapist exists
+    new_therapist = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == req.new_therapist_id).first()
+    if not new_therapist:
+        raise HTTPException(status_code=404, detail="New Physiotherapist not found")
+        
+    appt.therapist_id = req.new_therapist_id
+    db.commit()
+    return {"status": "success"}
+
+@app.put("/physio/leave/{physio_id}")
+def apply_leave(physio_id: int, req: ApplyLeaveReq, db: Session = Depends(get_db)):
+    from datetime import datetime
+    physio = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == physio_id).first()
+    if not physio:
+        raise HTTPException(status_code=404, detail="Physiotherapist not found")
+        
+    start_dt = datetime.fromisoformat(req.start_date.replace('Z', '+00:00'))
+    end_dt = datetime.fromisoformat(req.end_date.replace('Z', '+00:00'))
+    
+    physio.leave_start_date = start_dt
+    physio.leave_end_date = end_dt
+    
+    appointments = db.query(models.Appointment).filter(
+        models.Appointment.therapist_id == physio_id,
+        models.Appointment.status == "Scheduled",
+        models.Appointment.schedule_time >= start_dt,
+        models.Appointment.schedule_time <= end_dt
+    ).all()
+    
+    for appt in appointments:
+        appt.therapist_id = req.cover_colleague_id
+        
+    db.commit()
+    return {"status": "success", "transferred_count": len(appointments)}
