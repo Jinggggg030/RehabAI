@@ -1,3 +1,4 @@
+from typing import Optional, List
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -108,7 +109,26 @@ def get_all_categories(db: Session = Depends(get_db)):
 @app.get("/equipment")
 def get_all_equipment(db: Session = Depends(get_db)):
     equipment = db.query(models.Equipment).all()
-    return {"equipment": equipment}
+    eq_cats = db.query(models.Equipment_Category).all()
+    
+    eq_cat_map = {}
+    for ec in eq_cats:
+        if ec.equipment_id not in eq_cat_map:
+            eq_cat_map[ec.equipment_id] = []
+        eq_cat_map[ec.equipment_id].append(ec.category_id)
+        
+    result = []
+    for eq in equipment:
+        result.append({
+            "equipment_id": eq.equipment_id,
+            "name": eq.name,
+            "description": eq.description,
+            "stock": eq.stock,
+            "image": eq.image,
+            "category_ids": eq_cat_map.get(eq.equipment_id, [])
+        })
+        
+    return {"equipment": result}
 
 @app.get("/rental_reasons")
 def get_all_rental_reasons(db: Session = Depends(get_db)):
@@ -416,18 +436,12 @@ def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
 
 @app.get("/physio/rentals/{physio_id}")
 def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
-    student_ids = db.query(models.Prescription.student_id).filter(
-        models.Prescription.therapist_id == physio_id
-    ).distinct().subquery()
-    
     rentals = db.query(
         models.RentalRecord, models.User.username, models.Equipment.name
     ).join(
         models.User, models.RentalRecord.student_id == models.User.user_id
     ).join(
         models.Equipment, models.RentalRecord.equipment_id == models.Equipment.equipment_id
-    ).filter(
-        models.RentalRecord.student_id.in_(student_ids)
     ).order_by(models.RentalRecord.collection_date.desc()).all()
     
     result = []
@@ -441,6 +455,38 @@ def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
             "return_status": r.return_status
         })
     return {"rentals": result}
+
+
+@app.post("/physio/rentals/{rental_id}/approve")
+def approve_rental(rental_id: int, db: Session = Depends(get_db)):
+    rental = db.query(models.RentalRecord).filter(models.RentalRecord.rental_record_id == rental_id).first()
+    if not rental:
+        raise HTTPException(status_code=404, detail="Rental not found")
+    if rental.status != "Pending":
+        raise HTTPException(status_code=400, detail="Only pending rentals can be approved")
+    
+    # Check equipment stock
+    equipment = db.query(models.Equipment).filter(models.Equipment.equipment_id == rental.equipment_id).first()
+    if not equipment or equipment.stock < 1:
+        raise HTTPException(status_code=400, detail="Equipment out of stock")
+    
+    rental.status = "Approved"
+    equipment.stock -= 1
+    db.commit()
+    return {"status": "success", "message": "Rental approved"}
+
+
+@app.post("/physio/rentals/{rental_id}/reject")
+def reject_rental(rental_id: int, db: Session = Depends(get_db)):
+    rental = db.query(models.RentalRecord).filter(models.RentalRecord.rental_record_id == rental_id).first()
+    if not rental:
+        raise HTTPException(status_code=404, detail="Rental not found")
+    if rental.status != "Pending":
+        raise HTTPException(status_code=400, detail="Only pending rentals can be rejected")
+    
+    rental.status = "Rejected"
+    db.commit()
+    return {"status": "success", "message": "Rental rejected"}
 
 
 @app.get("/appointments/available_physios/{student_id}")
@@ -536,6 +582,13 @@ class ApplyLeaveReq(BaseModel):
 
 class TransferAppointmentReq(BaseModel):
     new_therapist_id: int
+
+class RentalRequest(BaseModel):
+    student_id: int
+    equipment_id: int
+    rental_reason_id: int
+    custom_reason: Optional[str] = None
+    rental_duration: int
 
 @app.post("/appointments/book")
 def book_appointment(req: BookAppointmentReq, db: Session = Depends(get_db)):
@@ -634,3 +687,46 @@ def apply_leave(physio_id: int, req: ApplyLeaveReq, db: Session = Depends(get_db
         
     db.commit()
     return {"status": "success", "transferred_count": len(appointments)}
+
+@app.post("/rentals/request")
+def request_rental(req: RentalRequest, db: Session = Depends(get_db)):
+    from datetime import datetime
+    new_rental = models.RentalRecord(
+        student_id=req.student_id,
+        equipment_id=req.equipment_id,
+        rental_reason_id=req.rental_reason_id,
+        custom_reason=req.custom_reason,
+        rental_duration=req.rental_duration,
+        collection_date=datetime.utcnow(),
+        status="Pending"
+    )
+    db.add(new_rental)
+    db.commit()
+    db.refresh(new_rental)
+    return {"status": "success", "rental_record_id": new_rental.rental_record_id}
+
+@app.get("/rentals/student/{student_id}")
+def get_student_rentals(student_id: int, db: Session = Depends(get_db)):
+    rentals = db.query(
+        models.RentalRecord, models.Equipment.name, models.RentalReason.description
+    ).join(
+        models.Equipment, models.RentalRecord.equipment_id == models.Equipment.equipment_id
+    ).join(
+        models.RentalReason, models.RentalRecord.rental_reason_id == models.RentalReason.rental_reason_id
+    ).filter(
+        models.RentalRecord.student_id == student_id
+    ).order_by(models.RentalRecord.collection_date.desc()).all()
+    
+    result = []
+    for r, eq_name, reason_desc in rentals:
+        result.append({
+            "rental_record_id": r.rental_record_id,
+            "equipment_name": eq_name,
+            "reason_description": reason_desc,
+            "custom_reason": r.custom_reason,
+            "collection_date": r.collection_date,
+            "return_date": r.return_date,
+            "status": r.status,
+            "return_status": r.return_status
+        })
+    return {"rentals": result}

@@ -862,33 +862,114 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
     }
   }
 
+  Future<void> _updateRentalStatus(int rentalId, String action) async {
+    try {
+      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final res = await http.post(Uri.parse('$apiUrl/physio/rentals/$rentalId/$action'));
+      if (res.statusCode == 200) {
+        _fetchRentals();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Rental $action successful!'), backgroundColor: Colors.green),
+          );
+        }
+      } else {
+        final errorMsg = jsonDecode(res.body)['detail'] ?? 'Failed to $action rental';
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
+          );
+        }
+      }
+    } catch (e) {
+      debugPrint("Error updating rental: $e");
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_rentals.isEmpty) return const Center(child: Text("No equipment rentals found."));
 
-    return SingleChildScrollView(
+    return ListView.builder(
       padding: const EdgeInsets.all(24),
-      child: DataTable(
-        headingRowColor: WidgetStateProperty.all(Colors.blue[50]),
-        columns: const [
-          DataColumn(label: Text('Patient')),
-          DataColumn(label: Text('Equipment')),
-          DataColumn(label: Text('Collection Date')),
-          DataColumn(label: Text('Status')),
-          DataColumn(label: Text('Return Status')),
-        ],
-        rows: _rentals.map((r) {
-          final date = DateTime.tryParse(r['collection_date'] ?? '')?.toLocal().toString().split(' ')[0] ?? 'Unknown';
-          return DataRow(cells: [
-            DataCell(Text(r['student_name'] ?? 'Unknown')),
-            DataCell(Text(r['equipment_name'] ?? 'Unknown')),
-            DataCell(Text(date)),
-            DataCell(Chip(label: Text(r['status'] ?? ''), backgroundColor: r['status'] == 'Pending' ? Colors.orange[100] : Colors.green[100])),
-            DataCell(Text(r['return_status'] ?? 'N/A')),
-          ]);
-        }).toList(),
-      ),
+      itemCount: _rentals.length,
+      itemBuilder: (context, index) {
+        final r = _rentals[index];
+        final date = DateTime.tryParse(r['collection_date'] ?? '')?.toLocal().toString().split(' ')[0] ?? 'Unknown';
+        final isPending = r['status'] == 'Pending';
+        final isApproved = r['status'] == 'Approved';
+
+        return Card(
+          elevation: 2,
+          margin: const EdgeInsets.only(bottom: 16),
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 24,
+                  backgroundColor: Colors.teal.shade100,
+                  child: const Icon(Icons.fitness_center, color: Colors.teal),
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("${r['student_name']} - ${r['equipment_name']}", style: GoogleFonts.readexPro(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                          const SizedBox(width: 4),
+                          Text("Collection: $date", style: GoogleFonts.readexPro(fontSize: 14, color: Colors.grey.shade700)),
+                        ],
+                      ),
+                      if (r['return_status'] != null && r['return_status'] != 'N/A') ...[
+                        const SizedBox(height: 4),
+                        Text("Return: ${r['return_status']}", style: GoogleFonts.readexPro(fontSize: 12, color: Colors.grey.shade600)),
+                      ]
+                    ],
+                  ),
+                ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Chip(
+                      label: Text(r['status'] ?? '', style: TextStyle(color: isPending ? Colors.orange.shade900 : (isApproved ? Colors.green.shade900 : Colors.red.shade900), fontWeight: FontWeight.bold)),
+                      backgroundColor: isPending ? Colors.orange.shade50 : (isApproved ? Colors.green.shade50 : Colors.red.shade50),
+                      side: BorderSide.none,
+                    ),
+                    if (isPending) ...[
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          OutlinedButton.icon(
+                            onPressed: () => _updateRentalStatus(r['rental_record_id'], 'approve'),
+                            icon: const Icon(Icons.check, size: 16),
+                            label: const Text("Approve"),
+                            style: OutlinedButton.styleFrom(foregroundColor: Colors.green.shade700, side: BorderSide(color: Colors.green.shade200), padding: const EdgeInsets.symmetric(horizontal: 8)),
+                          ),
+                          const SizedBox(width: 8),
+                          OutlinedButton.icon(
+                            onPressed: () => _updateRentalStatus(r['rental_record_id'], 'reject'),
+                            icon: const Icon(Icons.close, size: 16),
+                            label: const Text("Reject"),
+                            style: OutlinedButton.styleFrom(foregroundColor: Colors.red.shade700, side: BorderSide(color: Colors.red.shade200), padding: const EdgeInsets.symmetric(horizontal: 8)),
+                          ),
+                        ],
+                      )
+                    ]
+                  ],
+                )
+              ],
+            ),
+          ),
+        );
+      },
     );
   }
 }

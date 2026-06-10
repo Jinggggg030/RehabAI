@@ -1,9 +1,86 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/rental_status_page.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter/foundation.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
-class EquipmentRentalPage extends StatelessWidget {
+class EquipmentRentalPage extends StatefulWidget {
   const EquipmentRentalPage({super.key});
+
+  @override
+  State<EquipmentRentalPage> createState() => _EquipmentRentalPageState();
+}
+
+class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
+  final _supabase = Supabase.instance.client;
+  bool _isLoading = true;
+  int? _myUserId;
+
+  List<dynamic> _equipmentList = [];
+  List<dynamic> _categories = [];
+  List<dynamic> _rentalReasons = [];
+  
+  Set<dynamic> _selectedCategoryIds = {};
+  final ScrollController _scrollController = ScrollController();
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _initData();
+  }
+
+  Future<void> _initData() async {
+    setState(() => _isLoading = true);
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) return;
+      
+      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final userRes = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
+      
+      if (userRes.statusCode == 200) {
+        final userData = jsonDecode(userRes.body);
+        if (userData['exists'] == true) {
+          _myUserId = userData['user_id'];
+          
+          final eqRes = await http.get(Uri.parse('$apiUrl/equipment'));
+          final catRes = await http.get(Uri.parse('$apiUrl/categories'));
+          final reasonRes = await http.get(Uri.parse('$apiUrl/rental_reasons'));
+          
+          if (eqRes.statusCode == 200) {
+            _equipmentList = jsonDecode(eqRes.body)['equipment'];
+          }
+          if (catRes.statusCode == 200) {
+            _categories = jsonDecode(catRes.body)['categories'];
+          }
+          if (reasonRes.statusCode == 200) {
+            _rentalReasons = jsonDecode(reasonRes.body)['rental_reasons'];
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint("Init Data Error: $e");
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  List<dynamic> get _filteredEquipment {
+    if (_selectedCategoryIds.isEmpty) return _equipmentList;
+    return _equipmentList.where((eq) {
+      final List<dynamic> catIds = eq['category_ids'] ?? [];
+      return _selectedCategoryIds.every((id) => catIds.contains(id));
+    }).toList();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -80,60 +157,75 @@ class EquipmentRentalPage extends StatelessWidget {
               const SizedBox(height: 24),
 
               // Body content
-              Expanded(
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Sidebar (Categories)
-                    Container(
-                      width: 100,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFF86B9B0).withOpacity(0.8), // light teal
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.only(left: 4.0, bottom: 12.0),
-                            child: Text(
-                              'Categories',
-                              style: GoogleFonts.readexPro(
-                                fontSize: 11,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.black87,
+              if (_isLoading)
+                const Expanded(child: Center(child: CircularProgressIndicator()))
+              else
+                Expanded(
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Sidebar (Categories)
+                      Container(
+                        width: 100,
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF86B9B0).withOpacity(0.8), // light teal
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.only(left: 4.0, bottom: 12.0),
+                              child: Text(
+                                'Categories',
+                                style: GoogleFonts.readexPro(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.black87,
+                                ),
                               ),
                             ),
-                          ),
-                          const _CategoryCheckbox(title: 'Musculoskeletal/\nOrthopedic'),
-                          const _CategoryCheckbox(title: 'Sports'),
-                          const _CategoryCheckbox(title: 'Ergonomic'),
-                          const _CategoryCheckbox(title: 'Neurological'),
-                          const _CategoryCheckbox(title: 'Cardiorespiratory'),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-
-                    // Grid of Items
-                    Expanded(
-                      child: GridView.builder(
-                        itemCount: 10, // 6 items from the image
-                        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                          crossAxisCount: 2,
-                          crossAxisSpacing: 12,
-                          mainAxisSpacing: 12,
-                          childAspectRatio: 0.65,
+                            ..._categories.map((cat) => _CategoryCheckbox(
+                              title: cat['description'],
+                              isChecked: _selectedCategoryIds.contains(cat['category_id']),
+                              onChanged: (val) {
+                                setState(() {
+                                  if (val == true) {
+                                    _selectedCategoryIds.add(cat['category_id']);
+                                  } else {
+                                    _selectedCategoryIds.remove(cat['category_id']);
+                                  }
+                                });
+                                if (_scrollController.hasClients) {
+                                  _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
+                                }
+                              },
+                            )),
+                          ],
                         ),
-                        itemBuilder: (context, index) {
-                          return _buildEquipmentCard(context);
-                        },
                       ),
-                    ),
-                  ],
+                      const SizedBox(width: 16),
+
+                      // Grid of Items
+                      Expanded(
+                        child: GridView.builder(
+                          controller: _scrollController,
+                          itemCount: _filteredEquipment.length,
+                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                            crossAxisCount: 2,
+                            crossAxisSpacing: 12,
+                            mainAxisSpacing: 12,
+                            childAspectRatio: 0.65,
+                          ),
+                          itemBuilder: (context, index) {
+                            return _buildEquipmentCard(context, _filteredEquipment[index]);
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
         ),
@@ -141,7 +233,8 @@ class EquipmentRentalPage extends StatelessWidget {
     );
   }
 
-  Widget _buildEquipmentCard(BuildContext context) {
+  Widget _buildEquipmentCard(BuildContext context, dynamic equipment) {
+    int stock = equipment['stock'] ?? 0;
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
@@ -165,26 +258,37 @@ class EquipmentRentalPage extends StatelessWidget {
                 color: Colors.white,
                 border: Border.all(color: Colors.black87, width: 0.5),
               ),
+              child: equipment['image'] != null && equipment['image'].toString().isNotEmpty
+                  ? Image.network(
+                      equipment['image'], 
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
+                    )
+                  : const Icon(Icons.image, color: Colors.grey),
             ),
           ),
           const SizedBox(height: 8),
           Text(
-            '[Equipment Name]',
+            equipment['name'] ?? '',
             textAlign: TextAlign.center,
             style: GoogleFonts.readexPro(
               fontSize: 10,
               fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 4),
           Text(
-            '[description]',
+            equipment['description'] ?? '',
             textAlign: TextAlign.center,
             style: GoogleFonts.readexPro(
               fontSize: 9,
               color: Colors.grey.shade500,
             ),
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
           const SizedBox(height: 8),
           Row(
@@ -192,18 +296,18 @@ class EquipmentRentalPage extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'Instock',
+                'Instock: $stock',
                 style: GoogleFonts.readexPro(
                   fontSize: 8,
                   color: Colors.grey.shade400,
                 ),
               ),
               GestureDetector(
-                onTap: () => _showRentalDialog(context),
+                onTap: stock > 0 ? () => _showRentalDialog(context, equipment) : null,
                 child: Container(
                   padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF207866),
+                    color: stock > 0 ? const Color(0xFF207866) : Colors.grey,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -223,139 +327,230 @@ class EquipmentRentalPage extends StatelessWidget {
     );
   }
 
-  void _showRentalDialog(BuildContext context) {
+  void _showRentalDialog(BuildContext context, dynamic equipment) {
+    int? selectedReasonId;
+    int selectedDuration = 7; // Default 7 days
+    bool isSubmitting = false;
+    TextEditingController customReasonController = TextEditingController();
+
     showDialog(
       context: context,
       builder: (BuildContext context) {
-        return Dialog(
-          backgroundColor: Colors.white,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                // Close button
-                Align(
-                  alignment: Alignment.topRight,
-                  child: GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.close, size: 20, color: Colors.black54),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                
-                // Image Placeholder
-                Center(
-                  child: Container(
-                    width: 150,
-                    height: 150,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      border: Border.all(color: Colors.black87),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                
-                // Equipment Name
-                Text(
-                  '[Equipment name]',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.readexPro(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.black87,
-                  ),
-                ),
-                const SizedBox(height: 24),
-                
-                // Dropdowns
-                _buildDialogDropdownRow('Physiotherapy Session:'),
-                const SizedBox(height: 16),
-                _buildDialogDropdownRow('Reason for Rental:'),
-                const SizedBox(height: 16),
-                _buildDialogDropdownRow('Rental Duration:'),
-                
-                const SizedBox(height: 32),
-                
-                // Request Rental Button
-                Center(
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF207866),
-                      foregroundColor: Colors.white,
-                      padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(6),
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Dialog(
+              backgroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(20.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    // Close button
+                    Align(
+                      alignment: Alignment.topRight,
+                      child: GestureDetector(
+                        onTap: () => Navigator.pop(context),
+                        child: const Icon(Icons.close, size: 20, color: Colors.black54),
                       ),
-                      minimumSize: Size.zero,
-                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                     ),
-                    child: Text(
-                      'Request Rental',
+                    const SizedBox(height: 8),
+                    
+                    // Image Placeholder
+                    Center(
+                      child: Container(
+                        width: 150,
+                        height: 150,
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          border: Border.all(color: Colors.black87),
+                        ),
+                        child: equipment['image'] != null && equipment['image'].toString().isNotEmpty
+                            ? Image.network(
+                                equipment['image'], 
+                                fit: BoxFit.contain,
+                                errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, size: 50, color: Colors.grey),
+                              )
+                            : const Icon(Icons.image, size: 50, color: Colors.grey),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Equipment Name
+                    Text(
+                      equipment['name'] ?? '',
+                      textAlign: TextAlign.center,
                       style: GoogleFonts.readexPro(
-                        fontSize: 12,
+                        fontSize: 16,
                         fontWeight: FontWeight.bold,
+                        color: Colors.black87,
                       ),
                     ),
-                  ),
+                    const SizedBox(height: 24),
+                    
+                    // Dropdowns
+                    _buildReasonDropdown(selectedReasonId, (val) {
+                      setModalState(() => selectedReasonId = val);
+                    }),
+                    if (selectedReasonId != null)
+                      Builder(
+                        builder: (context) {
+                          final selectedReason = _rentalReasons.firstWhere((r) => r['rental_reason_id'] == selectedReasonId, orElse: () => null);
+                          if (selectedReason != null && selectedReason['description'] == 'Other (Please specify)') {
+                            return Padding(
+                              padding: const EdgeInsets.only(top: 16.0),
+                              child: TextField(
+                                controller: customReasonController,
+                                decoration: InputDecoration(
+                                  hintText: 'Please specify your reason',
+                                  hintStyle: GoogleFonts.readexPro(fontSize: 11, color: Colors.grey),
+                                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                                ),
+                                style: GoogleFonts.readexPro(fontSize: 12),
+                                maxLines: 2,
+                              ),
+                            );
+                          }
+                          return const SizedBox.shrink();
+                        }
+                      ),
+                    const SizedBox(height: 16),
+                    _buildDurationDropdown(selectedDuration, (val) {
+                      if (val != null) setModalState(() => selectedDuration = val);
+                    }),
+                    
+                    const SizedBox(height: 32),
+                    
+                    // Request Rental Button
+                    Center(
+                      child: ElevatedButton(
+                        onPressed: (selectedReasonId == null || isSubmitting) ? null : () async {
+                          setModalState(() => isSubmitting = true);
+                          try {
+                            final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+                            final res = await http.post(
+                              Uri.parse('$apiUrl/rentals/request'),
+                              headers: {'Content-Type': 'application/json'},
+                              body: jsonEncode({
+                                'student_id': _myUserId,
+                                'equipment_id': equipment['equipment_id'],
+                                'rental_reason_id': selectedReasonId,
+                                'custom_reason': customReasonController.text.trim().isEmpty ? null : customReasonController.text.trim(),
+                                'rental_duration': selectedDuration,
+                              }),
+                            );
+                            if (res.statusCode == 200) {
+                              if (context.mounted) Navigator.pop(context);
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Rental requested successfully!'), backgroundColor: Colors.green),
+                                );
+                              }
+                            }
+                          } catch (e) {
+                            debugPrint("Error renting: $e");
+                          } finally {
+                            if (context.mounted) setModalState(() => isSubmitting = false);
+                          }
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF207866),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        child: isSubmitting ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) : Text(
+                          'Request Rental',
+                          style: GoogleFonts.readexPro(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
-              ],
-            ),
-          ),
+              ),
+            );
+          }
         );
       },
     );
   }
 
-  Widget _buildDialogDropdownRow(String label) {
+  Widget _buildReasonDropdown(int? selectedValue, ValueChanged<int?> onChanged) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
         Text(
-          label,
+          'Reason for Rental:',
           style: GoogleFonts.readexPro(
             fontSize: 11,
             fontWeight: FontWeight.bold,
             color: Colors.black87,
           ),
         ),
-        Row(
-          children: [
-            Text(
-              'List',
-              style: GoogleFonts.readexPro(
-                fontSize: 11,
-                color: Colors.black87,
-              ),
-            ),
-            const SizedBox(width: 4),
-            const Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.black54),
-          ],
+        DropdownButtonHideUnderline(
+          child: DropdownButton<int>(
+            hint: Text('Select Reason', style: GoogleFonts.readexPro(fontSize: 11)),
+            value: selectedValue,
+            items: _rentalReasons.map<DropdownMenuItem<int>>((r) {
+              return DropdownMenuItem<int>(
+                value: r['rental_reason_id'],
+                child: Text(r['description'], style: GoogleFonts.readexPro(fontSize: 11)),
+              );
+            }).toList(),
+            onChanged: onChanged,
+            icon: const Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.black54),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDurationDropdown(int selectedValue, ValueChanged<int?> onChanged) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          'Rental Duration:',
+          style: GoogleFonts.readexPro(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: Colors.black87,
+          ),
+        ),
+        DropdownButtonHideUnderline(
+          child: DropdownButton<int>(
+            value: selectedValue,
+            items: const [
+              DropdownMenuItem(value: 7, child: Text('7 Days', style: TextStyle(fontSize: 11))),
+              DropdownMenuItem(value: 14, child: Text('14 Days', style: TextStyle(fontSize: 11))),
+              DropdownMenuItem(value: 30, child: Text('30 Days', style: TextStyle(fontSize: 11))),
+            ],
+            onChanged: onChanged,
+            icon: const Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.black54),
+          ),
         ),
       ],
     );
   }
 }
 
-class _CategoryCheckbox extends StatefulWidget {
+class _CategoryCheckbox extends StatelessWidget {
   final String title;
+  final bool isChecked;
+  final ValueChanged<bool?> onChanged;
 
-  const _CategoryCheckbox({required this.title});
-
-  @override
-  State<_CategoryCheckbox> createState() => _CategoryCheckboxState();
-}
-
-class _CategoryCheckboxState extends State<_CategoryCheckbox> {
-  bool _isChecked = false;
+  const _CategoryCheckbox({required this.title, required this.isChecked, required this.onChanged});
 
   @override
   Widget build(BuildContext context) {
@@ -368,14 +563,10 @@ class _CategoryCheckboxState extends State<_CategoryCheckbox> {
             width: 16,
             height: 16,
             child: Checkbox(
-              value: _isChecked,
-              onChanged: (value) {
-                setState(() {
-                  _isChecked = value ?? false;
-                });
-              },
-              fillColor: MaterialStateProperty.resolveWith((states) {
-                if (states.contains(MaterialState.selected)) {
+              value: isChecked,
+              onChanged: onChanged,
+              fillColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.selected)) {
                   return const Color(0xFF207866); // Dark teal
                 }
                 return Colors.white;
@@ -390,7 +581,7 @@ class _CategoryCheckboxState extends State<_CategoryCheckbox> {
             child: Padding(
               padding: const EdgeInsets.only(top: 2.0),
               child: Text(
-                widget.title,
+                title,
                 style: GoogleFonts.readexPro(
                   fontSize: 9,
                   color: Colors.black87,

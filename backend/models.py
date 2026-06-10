@@ -45,10 +45,16 @@ class Equipment(Base):
     __tablename__ = "Equipment"
 
     equipment_id = Column(Integer, primary_key=True)
-    category_id = Column(Integer, ForeignKey("Category.category_id"), nullable=False)
     name = Column(String(50), nullable=False)
     description = Column(Text, nullable=True)
     stock = Column(Integer, nullable=False, default=0)
+    image = Column(String(255), nullable=True)
+
+class Equipment_Category(Base):
+    __tablename__ = "Equipment_Category"
+
+    equipment_id = Column(Integer, ForeignKey("Equipment.equipment_id"), nullable=False, primary_key=True)
+    category_id = Column(Integer, ForeignKey("Category.category_id"), nullable=False, primary_key=True)
 
 class RentalReason(Base):
     __tablename__ = "Rental_Reason"
@@ -63,6 +69,7 @@ class RentalRecord(Base):
     student_id = Column(Integer, ForeignKey("Student.student_id"), nullable=False)
     equipment_id = Column(Integer, ForeignKey("Equipment.equipment_id"), nullable=False)
     rental_reason_id = Column(Integer, ForeignKey("Rental_Reason.rental_reason_id"), nullable=False)
+    custom_reason = Column(String(255), nullable=True)
     collection_date = Column(DateTime, nullable=False)
     return_date = Column(DateTime, nullable=True)
     status = Column(String(20), default="Pending")
@@ -71,7 +78,7 @@ class RentalRecord(Base):
     proof_of_status = Column(String(255), nullable=True)
 
     __table_args__ = (
-        CheckConstraint("status IN ('Pending', 'Returned', 'Lost')", name="check_rental_status"),
+        CheckConstraint("status IN ('Pending', 'Approved', 'Active', 'Returned', 'Lost', 'Rejected')", name="check_rental_status"),
         CheckConstraint("return_status IN ('Good', 'Damaged', 'Lost')", name="check_return_status"),
     )
 
