@@ -377,6 +377,15 @@ def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
         })
     return {"chats": result}
 
+@app.put("/physio/chats/{session_id}/close")
+def close_chat(session_id: int, db: Session = Depends(get_db)):
+    chat = db.query(models.LiveChatSession).filter(models.LiveChatSession.session_id == session_id).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Chat not found")
+    chat.session_status = "Closed"
+    db.commit()
+    return {"status": "success", "message": "Chat closed successfully"}
+
 @app.get("/physio/patients/{physio_id}")
 def get_physio_patients(physio_id: int, db: Session = Depends(get_db)):
     students = db.query(models.User.user_id, models.User.username, models.User.email).join(

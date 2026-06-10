@@ -18,6 +18,10 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
   int? _myUserId;
   int _selectedIndex = 0;
   
+  List<int> _assignedSessionIds = [];
+  Set<String> _unreadChats = {};
+  RealtimeChannel? _globalNotificationSub;
+  
   @override
   void initState() {
     super.initState();
@@ -37,8 +41,55 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
         setState(() {
           _myUserId = userData['user_id'];
         });
+        _fetchAssignedSessions();
+        _setupGlobalNotifications();
       }
     }
+  }
+
+  Future<void> _fetchAssignedSessions() async {
+    try {
+      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final res = await http.get(Uri.parse('$apiUrl/physio/chats/$_myUserId'));
+      if (res.statusCode == 200) {
+        final data = jsonDecode(res.body);
+        setState(() {
+          _assignedSessionIds = (data['chats'] as List).map((c) => c['session_id'] as int).toList();
+        });
+      }
+    } catch(e) {}
+  }
+
+  void _setupGlobalNotifications() {
+    _globalNotificationSub = _supabase.channel('public:Chat_Log:notifications_global')
+      .onPostgresChanges(event: PostgresChangeEvent.insert, schema: 'public', table: 'Chat_Log',
+        callback: (payload) {
+          final newRecord = payload.newRecord;
+          if (newRecord['sender_id'] != _myUserId) {
+            final sessionId = newRecord['session_id'] as int;
+            if (_assignedSessionIds.contains(sessionId)) {
+              setState(() {
+                _unreadChats.add(sessionId.toString());
+              });
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("New message received from patient!"),
+                    duration: Duration(seconds: 3),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            }
+          }
+        }
+      ).subscribe();
+  }
+
+  @override
+  void dispose() {
+    if (_globalNotificationSub != null) _supabase.removeChannel(_globalNotificationSub!);
+    super.dispose();
   }
 
   @override
@@ -73,23 +124,29 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
             backgroundColor: Colors.white,
             selectedIconTheme: IconThemeData(color: Colors.blue[800]),
             selectedLabelTextStyle: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold),
-            destinations: const [
+            destinations: [
               NavigationRailDestination(
-                icon: Icon(Icons.chat_bubble_outline),
-                selectedIcon: Icon(Icons.chat_bubble),
-                label: Text('Live Chat'),
+                icon: Badge(
+                  isLabelVisible: _unreadChats.isNotEmpty,
+                  child: const Icon(Icons.chat_bubble_outline),
+                ),
+                selectedIcon: Badge(
+                  isLabelVisible: _unreadChats.isNotEmpty,
+                  child: const Icon(Icons.chat_bubble),
+                ),
+                label: const Text('Live Chat'),
               ),
-              NavigationRailDestination(
+              const NavigationRailDestination(
                 icon: Icon(Icons.trending_up),
                 selectedIcon: Icon(Icons.trending_up, size: 28),
                 label: Text('Progress'),
               ),
-              NavigationRailDestination(
+              const NavigationRailDestination(
                 icon: Icon(Icons.calendar_today_outlined),
                 selectedIcon: Icon(Icons.calendar_today),
                 label: Text('Appointments'),
               ),
-              NavigationRailDestination(
+              const NavigationRailDestination(
                 icon: Icon(Icons.medical_services_outlined),
                 selectedIcon: Icon(Icons.medical_services),
                 label: Text('Rentals'),
@@ -112,7 +169,15 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
     }
     switch (_selectedIndex) {
       case 0:
-        return PhysioLiveChatTab(myUserId: _myUserId!);
+        return PhysioLiveChatTab(
+          myUserId: _myUserId!, 
+          unreadChats: _unreadChats, 
+          onChatRead: (sessionId) {
+            setState(() {
+              _unreadChats.remove(sessionId);
+            });
+          }
+        );
       case 1:
         return PhysioPatientsTab(myUserId: _myUserId!);
       case 2:
@@ -130,13 +195,17 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
 // ---------------------------------------------------------------------------
 class PhysioLiveChatTab extends StatefulWidget {
   final int myUserId;
-  const PhysioLiveChatTab({super.key, required this.myUserId});
+  final Set<String> unreadChats;
+  final Function(String) onChatRead;
+
+  const PhysioLiveChatTab({super.key, required this.myUserId, required this.unreadChats, required this.onChatRead});
 
   @override
   State<PhysioLiveChatTab> createState() => _PhysioLiveChatTabState();
 }
 
 class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
+  final _supabase = Supabase.instance.client;
   List<dynamic> _chats = [];
   bool _isLoading = true;
   Map<String, dynamic>? _selectedChat;
@@ -153,9 +222,15 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
       final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
       final res = await http.get(Uri.parse('$apiUrl/physio/chats/${widget.myUserId}'));
       if (res.statusCode == 200) {
+        
         final data = jsonDecode(res.body);
         setState(() {
           _chats = data['chats'] ?? [];
+          // Update selected chat if it was modified
+          if (_selectedChat != null) {
+            final updated = _chats.where((c) => c['session_id'] == _selectedChat!['session_id']).toList();
+            if (updated.isNotEmpty) _selectedChat = updated.first;
+          }
         });
       }
     } catch (e) {
@@ -166,7 +241,15 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
   }
 
   @override
+  void dispose() {
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final activeChats = _chats.where((c) => c['session_status'] != 'Closed').toList();
+    final pastChats = _chats.where((c) => c['session_status'] == 'Closed').toList();
+
     return Row(
       children: [
         // Left Sidebar: Chat List
@@ -194,23 +277,59 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
                   ? const Center(child: CircularProgressIndicator())
                   : _chats.isEmpty
                     ? const Center(child: Text("No patients assigned yet.", style: TextStyle(color: Colors.grey)))
-                    : ListView.builder(
-                        itemCount: _chats.length,
-                        itemBuilder: (context, index) {
-                          final chat = _chats[index];
-                          final isSelected = _selectedChat?['session_id'] == chat['session_id'];
-                          return ListTile(
-                            selected: isSelected,
-                            selectedTileColor: Colors.blue[50],
-                            leading: CircleAvatar(
-                              backgroundColor: Colors.blue[100],
-                              child: const Icon(Icons.person, color: Colors.blue),
+                    : ListView(
+                        children: [
+                          if (activeChats.isNotEmpty)
+                            const Padding(
+                              padding: EdgeInsets.all(8.0),
+                              child: Text("ACTIVE CHATS", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
                             ),
-                            title: Text(chat['student_name'] ?? 'Unknown Patient', style: const TextStyle(fontWeight: FontWeight.bold)),
-                            subtitle: Text("${chat['discipline']} • ${chat['session_status']}"),
-                            onTap: () => setState(() => _selectedChat = chat),
-                          );
-                        },
+                          ...activeChats.map((chat) {
+                            final isSelected = _selectedChat?['session_id'] == chat['session_id'];
+                            return ListTile(
+                              selected: isSelected,
+                              selectedTileColor: Colors.blue[50],
+                              leading: CircleAvatar(
+                                backgroundColor: Colors.blue[100],
+                                child: const Icon(Icons.person, color: Colors.blue),
+                              ),
+                              title: Text(chat['student_name'] ?? 'Unknown Patient', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              subtitle: Text("${chat['discipline']}"),
+                              trailing: widget.unreadChats.contains(chat['session_id'].toString())
+                                  ? Container(
+                                      width: 12,
+                                      height: 12,
+                                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                    )
+                                  : null,
+                              onTap: () {
+                                setState(() {
+                                  _selectedChat = chat;
+                                });
+                                widget.onChatRead(chat['session_id'].toString());
+                              },
+                            );
+                          }),
+                          if (pastChats.isNotEmpty)
+                            const Padding(
+                              padding: EdgeInsets.fromLTRB(8, 16, 8, 8),
+                              child: Text("PAST CONVERSATIONS", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                            ),
+                          ...pastChats.map((chat) {
+                            final isSelected = _selectedChat?['session_id'] == chat['session_id'];
+                            return ListTile(
+                              selected: isSelected,
+                              selectedTileColor: Colors.grey[200],
+                              leading: CircleAvatar(
+                                backgroundColor: Colors.grey[300],
+                                child: const Icon(Icons.person, color: Colors.grey),
+                              ),
+                              title: Text(chat['student_name'] ?? 'Unknown Patient', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
+                              subtitle: const Text("Closed", style: TextStyle(color: Colors.grey)),
+                              onTap: () => setState(() => _selectedChat = chat),
+                            );
+                          }),
+                        ],
                       ),
               ),
             ],
@@ -234,6 +353,8 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
                   sessionId: _selectedChat!['session_id'],
                   myUserId: widget.myUserId,
                   triageData: _selectedChat!['triage_data'],
+                  isClosed: _selectedChat!['session_status'] == 'Closed',
+                  onChatClosed: _fetchChats,
                 ),
         ),
       ],
@@ -241,13 +362,14 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
   }
 }
 
-// (The Chat Interface widget from before)
 class PhysioChatInterface extends StatefulWidget {
   final int sessionId;
   final int myUserId;
   final dynamic triageData;
+  final bool isClosed;
+  final VoidCallback onChatClosed;
 
-  const PhysioChatInterface({super.key, required this.sessionId, required this.myUserId, required this.triageData});
+  const PhysioChatInterface({super.key, required this.sessionId, required this.myUserId, required this.triageData, required this.isClosed, required this.onChatClosed});
 
   @override
   State<PhysioChatInterface> createState() => _PhysioChatInterfaceState();
@@ -256,9 +378,22 @@ class PhysioChatInterface extends StatefulWidget {
 class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
   final _supabase = Supabase.instance.client;
   final TextEditingController _messageController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   List<dynamic> _messages = [];
   RealtimeChannel? _subscription;
   bool _isLoading = true;
+  
+  void _scrollToBottom() {
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
 
   @override
   void initState() {
@@ -281,6 +416,7 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
     try {
       final res = await _supabase.from('Chat_Log').select().eq('session_id', widget.sessionId).order('timestamp', ascending: true);
       setState(() => _messages = List<dynamic>.from(res));
+      _scrollToBottom();
     } catch (e) {
       debugPrint("Error loading messages: $e");
     } finally {
@@ -291,29 +427,62 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
         .onPostgresChanges(event: PostgresChangeEvent.insert, schema: 'public', table: 'Chat_Log', filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'session_id', value: widget.sessionId),
           callback: (payload) {
             setState(() => _messages.add(payload.newRecord));
+            _scrollToBottom();
           },
         ).subscribe();
   }
 
   Future<void> _sendMessage() async {
+    if (widget.isClosed) return;
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
     _messageController.clear();
     try {
+      
       final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
       await http.post(
         Uri.parse('$apiUrl/chat/send'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({"session_id": widget.sessionId, "user_id": widget.myUserId, "message": text}),
       );
+      _scrollToBottom();
     } catch (e) {
       debugPrint("Error sending message: $e");
+    }
+  }
+
+  Future<void> _endChat() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("End Conversation?"),
+        content: const Text("Are you sure you want to close this chat? You will not be able to send any more messages."),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), child: const Text("End Chat")),
+        ],
+      )
+    );
+
+    if (confirm != true) return;
+
+    try {
+      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final res = await http.put(Uri.parse('$apiUrl/physio/chats/${widget.sessionId}/close'));
+      if (res.statusCode == 200) {
+        widget.onChatClosed(); // Refresh the list
+      } else {
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to end chat")));
+      }
+    } catch (e) {
+      debugPrint("Error ending chat: $e");
     }
   }
 
   @override
   void dispose() {
     _messageController.dispose();
+    _scrollController.dispose();
     if (_subscription != null) _supabase.removeChannel(_subscription!);
     super.dispose();
   }
@@ -322,6 +491,26 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
   Widget build(BuildContext context) {
     return Column(
       children: [
+        // Chat Header
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          decoration: const BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Colors.black12))),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text("Conversation", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              if (!widget.isClosed)
+                OutlinedButton.icon(
+                  onPressed: _endChat,
+                  icon: const Icon(Icons.close, size: 18),
+                  label: const Text("End Chat"),
+                  style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
+                )
+              else
+                Chip(label: const Text("Closed", style: TextStyle(color: Colors.white)), backgroundColor: Colors.grey[600]),
+            ],
+          ),
+        ),
         if (widget.triageData != null)
           Container(
             padding: const EdgeInsets.all(16),
@@ -339,6 +528,7 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
         Expanded(
           child: _isLoading ? const Center(child: CircularProgressIndicator())
             : ListView.builder(
+                controller: _scrollController,
                 padding: const EdgeInsets.all(16),
                 itemCount: _messages.length,
                 itemBuilder: (context, index) {
@@ -358,23 +548,32 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
                 },
               ),
         ),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.black12))),
-          child: Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _messageController,
-                  decoration: InputDecoration(hintText: "Type a message...", border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
-                  onSubmitted: (_) => _sendMessage(),
+        if (!widget.isClosed)
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.black12))),
+            child: Row(
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _messageController,
+                    decoration: InputDecoration(hintText: "Type a message...", border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+                    onSubmitted: (_) => _sendMessage(),
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              FloatingActionButton(onPressed: _sendMessage, backgroundColor: Colors.blue[800], elevation: 0, child: const Icon(Icons.send, color: Colors.white)),
-            ],
+                const SizedBox(width: 8),
+                FloatingActionButton(onPressed: _sendMessage, backgroundColor: Colors.blue[800], elevation: 0, child: const Icon(Icons.send, color: Colors.white)),
+              ],
+            ),
+          )
+        else
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: Colors.grey[200],
+            width: double.infinity,
+            alignment: Alignment.center,
+            child: const Text("This conversation has ended.", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
           ),
-        ),
       ],
     );
   }
