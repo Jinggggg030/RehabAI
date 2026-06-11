@@ -497,6 +497,19 @@ def approve_rental(rental_id: int, db: Session = Depends(get_db)):
     return {"status": "success", "message": "Rental approved"}
 
 
+
+@app.post("/physio/rentals/{rental_id}/active")
+def mark_rental_active(rental_id: int, db: Session = Depends(get_db)):
+    rental = db.query(models.RentalRecord).filter(models.RentalRecord.rental_record_id == rental_id).first()
+    if not rental:
+        raise HTTPException(status_code=404, detail="Rental not found")
+    if rental.status != "Approved":
+        raise HTTPException(status_code=400, detail="Only approved rentals can be marked as taken")
+    
+    rental.status = "Active"
+    db.commit()
+    return {"status": "success", "message": "Rental marked as active"}
+
 @app.post("/physio/rentals/{rental_id}/reject")
 def reject_rental(rental_id: int, db: Session = Depends(get_db)):
     rental = db.query(models.RentalRecord).filter(models.RentalRecord.rental_record_id == rental_id).first()

@@ -149,11 +149,11 @@ class _RentalStatusPageState extends State<RentalStatusPage> with SingleTickerPr
                     controller: _tabController,
                     children: [
                       _buildRentalList(
-                        rentals: _rentals.where((r) => r['status'] == 'Pending' || r['status'] == 'Rejected').toList(),
+                        rentals: _rentals.where((r) => r['status'] == 'Pending' || r['status'] == 'Approved' || r['status'] == 'Rejected').toList(),
                         isRequest: true
                       ),
                       _buildRentalList(
-                        rentals: _rentals.where((r) => r['status'] == 'Active' || r['status'] == 'Approved').toList(),
+                        rentals: _rentals.where((r) => r['status'] == 'Active').toList(),
                         isPending: true
                       ),
                       _buildRentalList(

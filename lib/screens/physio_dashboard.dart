@@ -1187,6 +1187,14 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
                           ),
                         ],
                       )
+                    ] else if (isApproved) ...[
+                      const SizedBox(height: 8),
+                      OutlinedButton.icon(
+                        onPressed: () => _updateRentalStatus(r['rental_record_id'], 'active'),
+                        icon: const Icon(Icons.handshake, size: 16),
+                        label: const Text("Mark as Taken"),
+                        style: OutlinedButton.styleFrom(foregroundColor: Colors.blue.shade700, side: BorderSide(color: Colors.blue.shade200), padding: const EdgeInsets.symmetric(horizontal: 8)),
+                      ),
                     ]
                   ],
                 )
