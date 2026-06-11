@@ -36,6 +36,7 @@ class UserProfileCreate(BaseModel):
     gender: str
     contact_number: str
     address: str
+    accommodation_type: str | None = None
     matric_no: str | None = None
 
 @app.post("/users/profile")
@@ -52,6 +53,7 @@ def create_user_profile(profile: UserProfileCreate, db: Session = Depends(get_db
         gender=profile.gender,
         contact_number=profile.contact_number,
         address=profile.address,
+        accommodation_type=profile.accommodation_type,
         role='S'
     )
     db.add(new_user)
@@ -82,6 +84,7 @@ def check_user_profile(supabase_id: str, db: Session = Depends(get_db)):
             "gender": user.gender,
             "contact_number": user.contact_number,
             "address": user.address,
+            "accommodation_type": user.accommodation_type,
             "matric_no": student.matric_no if student else None
         }
     return {"exists": False}
@@ -460,6 +463,8 @@ def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
             "student_name": username,
             "equipment_name": eq_name,
             "collection_date": r.collection_date,
+            "collection_method": r.collection_method,
+            "delivery_address": r.delivery_address,
             "status": r.status,
             "return_status": r.return_status
         })
@@ -592,12 +597,17 @@ class ApplyLeaveReq(BaseModel):
 class TransferAppointmentReq(BaseModel):
     new_therapist_id: int
 
+from datetime import datetime
+
 class RentalRequest(BaseModel):
     student_id: int
     equipment_id: int
     rental_reason_id: int
     custom_reason: Optional[str] = None
     rental_duration: int
+    collection_method: str
+    delivery_address: Optional[str] = None
+    collection_date: datetime
 
 @app.post("/appointments/book")
 def book_appointment(req: BookAppointmentReq, db: Session = Depends(get_db)):
@@ -699,14 +709,15 @@ def apply_leave(physio_id: int, req: ApplyLeaveReq, db: Session = Depends(get_db
 
 @app.post("/rentals/request")
 def request_rental(req: RentalRequest, db: Session = Depends(get_db)):
-    from datetime import datetime
     new_rental = models.RentalRecord(
         student_id=req.student_id,
         equipment_id=req.equipment_id,
         rental_reason_id=req.rental_reason_id,
         custom_reason=req.custom_reason,
         rental_duration=req.rental_duration,
-        collection_date=datetime.utcnow(),
+        collection_method=req.collection_method,
+        delivery_address=req.delivery_address,
+        collection_date=req.collection_date,
         status="Pending"
     )
     db.add(new_rental)

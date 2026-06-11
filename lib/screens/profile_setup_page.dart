@@ -80,6 +80,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           "gender": _gender,
           "contact_number": _contactController.text.trim(),
           "address": address,
+          "accommodation_type": _hostel == 'Yes' ? 'Hostel' : 'Outside',
           "matric_no": _matricController.text.trim(),
         }),
       );
@@ -219,6 +220,31 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                 hintText: 'Enter your identity number',
                 icon: Icons.person_outline,
                 keyboardType: TextInputType.number,
+                onChanged: (val) {
+                  String cleanVal = val.replaceAll('-', '');
+                  if (cleanVal.length >= 6) {
+                    setState(() {
+                      final yy = cleanVal.substring(0, 2);
+                      final mm = cleanVal.substring(2, 4);
+                      final dd = cleanVal.substring(4, 6);
+                      
+                      int year = int.tryParse(yy) ?? 0;
+                      if (year > 30) {
+                        _dobYearController.text = '19$yy';
+                      } else {
+                        _dobYearController.text = '20$yy';
+                      }
+                      _dobMonthController.text = mm;
+                      _dobDayController.text = dd;
+                    });
+                  } else {
+                    setState(() {
+                      _dobYearController.text = '';
+                      _dobMonthController.text = '';
+                      _dobDayController.text = '';
+                    });
+                  }
+                }
               ),
               const SizedBox(height: 24),
 
@@ -312,6 +338,31 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               ),
               const SizedBox(height: 24),
 
+              // Specific Hostel selection
+              if (_hostel == 'Yes') ...[
+                _buildLabel('Select Hostel'),
+                const SizedBox(height: 8),
+                DropdownButtonFormField<String>(
+                  decoration: InputDecoration(
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                  items: ['Lekir', 'Lekiu', 'Jebat', 'Kasturi', 'Al Jazari', 'Lestari Blok A', 'Lestari Blok B']
+                      .map((h) => DropdownMenuItem(value: h, child: Text(h))).toList(),
+                  onChanged: (val) {
+                    if (val != null) {
+                      setState(() {
+                        _address1Controller.text = val;
+                        _address2Controller.text = '76100 Durian Tunggal';
+                        _address3Controller.text = 'Malacca';
+                      });
+                    }
+                  },
+                  hint: const Text('Select your hostel'),
+                ),
+                const SizedBox(height: 24),
+              ],
+
               // Address Line 1
               _buildLabel('Address Line 1'),
               const SizedBox(height: 8),
@@ -393,6 +444,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     IconData? icon,
     TextInputType keyboardType = TextInputType.text,
     TextAlign textAlign = TextAlign.start,
+    ValueChanged<String>? onChanged,
   }) {
     return Container(
       decoration: BoxDecoration(
@@ -404,6 +456,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         controller: controller,
         keyboardType: keyboardType,
         textAlign: textAlign,
+        onChanged: onChanged,
         style: GoogleFonts.readexPro(
           fontSize: 14,
           color: Colors.black87,
