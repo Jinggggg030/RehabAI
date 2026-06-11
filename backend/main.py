@@ -449,15 +449,21 @@ def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
 @app.get("/physio/rentals/{physio_id}")
 def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
     rentals = db.query(
-        models.RentalRecord, models.User.username, models.Equipment.name
+        models.RentalRecord, models.User.username, models.Equipment.name, models.RentalReason.description
     ).join(
         models.User, models.RentalRecord.student_id == models.User.user_id
     ).join(
         models.Equipment, models.RentalRecord.equipment_id == models.Equipment.equipment_id
+    ).outerjoin(
+        models.RentalReason, models.RentalRecord.rental_reason_id == models.RentalReason.rental_reason_id
     ).order_by(models.RentalRecord.collection_date.desc()).all()
     
     result = []
-    for r, username, eq_name in rentals:
+    for r, username, eq_name, reason_desc in rentals:
+        final_reason = reason_desc if reason_desc else "No reason provided"
+        if r.custom_reason:
+            final_reason = f"{final_reason}: {r.custom_reason}"
+            
         result.append({
             "rental_record_id": r.rental_record_id,
             "student_name": username,
@@ -466,7 +472,8 @@ def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
             "collection_method": r.collection_method,
             "delivery_address": r.delivery_address,
             "status": r.status,
-            "return_status": r.return_status
+            "return_status": r.return_status,
+            "reason": final_reason
         })
     return {"rentals": result}
 

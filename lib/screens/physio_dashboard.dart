@@ -1095,7 +1095,12 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
       itemCount: _rentals.length,
       itemBuilder: (context, index) {
         final r = _rentals[index];
-        final date = DateTime.tryParse(r['collection_date'] ?? '')?.toLocal().toString().split(' ')[0] ?? 'Unknown';
+        String date = 'Unknown';
+        final parsedDate = DateTime.tryParse(r['collection_date'] ?? '')?.toLocal();
+        if (parsedDate != null) {
+          final timeStr = TimeOfDay.fromDateTime(parsedDate).format(context);
+          date = '${parsedDate.day}/${parsedDate.month}/${parsedDate.year} $timeStr';
+        }
         final isPending = r['status'] == 'Pending';
         final isApproved = r['status'] == 'Approved';
 
@@ -1121,11 +1126,32 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                          Icon(r['collection_method'] == 'Delivery' ? Icons.local_shipping : Icons.store, size: 14, color: Colors.grey),
                           const SizedBox(width: 4),
-                          Text("Collection: $date", style: GoogleFonts.readexPro(fontSize: 14, color: Colors.grey.shade700)),
+                          Text("${r['collection_method'] ?? 'Self-Pickup'}: $date", style: GoogleFonts.readexPro(fontSize: 14, color: Colors.grey.shade700)),
                         ],
                       ),
+                      if (r['collection_method'] == 'Delivery' && r['delivery_address'] != null) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          children: [
+                            const Icon(Icons.location_on, size: 14, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Expanded(child: Text("${r['delivery_address']}", style: GoogleFonts.readexPro(fontSize: 14, color: Colors.grey.shade700), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                          ],
+                        ),
+                      ],
+                      if (r['reason'] != null && r['reason'].toString().isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Icon(Icons.info_outline, size: 14, color: Colors.grey),
+                            const SizedBox(width: 4),
+                            Expanded(child: Text("Reason: ${r['reason']}", style: GoogleFonts.readexPro(fontSize: 13, color: Colors.grey.shade700, fontStyle: FontStyle.italic), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                          ],
+                        ),
+                      ],
                       if (r['return_status'] != null && r['return_status'] != 'N/A') ...[
                         const SizedBox(height: 4),
                         Text("Return: ${r['return_status']}", style: GoogleFonts.readexPro(fontSize: 12, color: Colors.grey.shade600)),

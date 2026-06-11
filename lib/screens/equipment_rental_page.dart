@@ -18,6 +18,8 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
   final _supabase = Supabase.instance.client;
   bool _isLoading = true;
   int? _myUserId;
+  String? _accommodationType;
+  String? _userAddress;
 
   List<dynamic> _equipmentList = [];
   List<dynamic> _categories = [];
@@ -51,6 +53,8 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
         final userData = jsonDecode(userRes.body);
         if (userData['exists'] == true) {
           _myUserId = userData['user_id'];
+          _accommodationType = userData['accommodation_type'];
+          _userAddress = userData['address'];
           
           final eqRes = await http.get(Uri.parse('$apiUrl/equipment'));
           final catRes = await http.get(Uri.parse('$apiUrl/categories'));
@@ -332,6 +336,10 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
     int selectedDuration = 7; // Default 7 days
     bool isSubmitting = false;
     TextEditingController customReasonController = TextEditingController();
+    String collectionMethod = _accommodationType == 'Hostel' ? 'Delivery' : 'Self-Pickup';
+    TextEditingController deliveryAddressController = TextEditingController(text: _userAddress ?? '');
+    DateTime? collectionDate;
+    TimeOfDay? collectionTime;
 
     showDialog(
       context: context,
@@ -422,16 +430,132 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                     _buildDurationDropdown(selectedDuration, (val) {
                       if (val != null) setModalState(() => selectedDuration = val);
                     }),
+                    const SizedBox(height: 16),
+                    
+                    // Collection Date Picker
+                    Row(
+                      children: [
+                        Expanded(
+                          flex: 3,
+                          child: GestureDetector(
+                            onTap: () async {
+                              final picked = await showDatePicker(
+                                context: context,
+                                initialDate: DateTime.now().add(const Duration(days: 1)),
+                                firstDate: DateTime.now(),
+                                lastDate: DateTime.now().add(const Duration(days: 30)),
+                              );
+                              if (picked != null) {
+                                setModalState(() => collectionDate = picked);
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.black26),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    collectionDate == null 
+                                      ? 'Select Date' 
+                                      : '${collectionDate!.day}/${collectionDate!.month}/${collectionDate!.year}',
+                                    style: GoogleFonts.readexPro(fontSize: 12, color: collectionDate == null ? Colors.grey[600] : Colors.black87),
+                                  ),
+                                  const Icon(Icons.calendar_today, size: 16, color: Colors.grey),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          flex: 2,
+                          child: GestureDetector(
+                            onTap: () async {
+                              final pickedTime = await showTimePicker(
+                                context: context,
+                                initialTime: TimeOfDay.now(),
+                              );
+                              if (pickedTime != null) {
+                                setModalState(() => collectionTime = pickedTime);
+                              }
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                              decoration: BoxDecoration(
+                                border: Border.all(color: Colors.black26),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                children: [
+                                  Text(
+                                    collectionTime == null 
+                                      ? 'Time' 
+                                      : collectionTime!.format(context),
+                                    style: GoogleFonts.readexPro(fontSize: 12, color: collectionTime == null ? Colors.grey[600] : Colors.black87),
+                                  ),
+                                  const Icon(Icons.access_time, size: 16, color: Colors.grey),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    
+                    // Collection Method
+                    DropdownButtonFormField<String>(
+                      value: collectionMethod,
+                      decoration: InputDecoration(
+                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.black26)),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      ),
+                      style: GoogleFonts.readexPro(fontSize: 12, color: Colors.black87),
+                      items: [
+                        const DropdownMenuItem(value: 'Self-Pickup', child: Text('Self-Pickup at Clinic')),
+                        if (_accommodationType == 'Hostel') 
+                          const DropdownMenuItem(value: 'Delivery', child: Text('Delivery to Hostel')),
+                      ],
+                      onChanged: _accommodationType == 'Hostel' ? (val) {
+                        if (val != null) setModalState(() => collectionMethod = val);
+                      } : null,
+                      disabledHint: const Text('Self-Pickup at Clinic (Outside Accommodation)'),
+                    ),
+                    
+                    if (collectionMethod == 'Delivery') ...[
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: deliveryAddressController,
+                        onChanged: (_) => setModalState((){}), // trigger rebuild to enable/disable button
+                        decoration: InputDecoration(
+                          hintText: 'Enter Hostel Room/Address',
+                          hintStyle: GoogleFonts.readexPro(fontSize: 11, color: Colors.grey),
+                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                        ),
+                        style: GoogleFonts.readexPro(fontSize: 12),
+                        maxLines: 2,
+                      ),
+                    ],
                     
                     const SizedBox(height: 32),
                     
                     // Request Rental Button
                     Center(
                       child: ElevatedButton(
-                        onPressed: (selectedReasonId == null || isSubmitting) ? null : () async {
+                        onPressed: (selectedReasonId == null || collectionDate == null || collectionTime == null || (collectionMethod == 'Delivery' && deliveryAddressController.text.trim().isEmpty) || isSubmitting) ? null : () async {
                           setModalState(() => isSubmitting = true);
                           try {
                             final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+                            
+                            DateTime finalDate = collectionDate!;
+                            finalDate = DateTime(finalDate.year, finalDate.month, finalDate.day, collectionTime!.hour, collectionTime!.minute);
+                            
                             final res = await http.post(
                               Uri.parse('$apiUrl/rentals/request'),
                               headers: {'Content-Type': 'application/json'},
@@ -441,6 +565,9 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                                 'rental_reason_id': selectedReasonId,
                                 'custom_reason': customReasonController.text.trim().isEmpty ? null : customReasonController.text.trim(),
                                 'rental_duration': selectedDuration,
+                                'collection_method': collectionMethod,
+                                'delivery_address': collectionMethod == 'Delivery' ? deliveryAddressController.text.trim() : null,
+                                'collection_date': finalDate.toIso8601String(),
                               }),
                             );
                             if (res.statusCode == 200) {
