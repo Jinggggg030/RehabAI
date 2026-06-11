@@ -15,6 +15,7 @@ class User(Base):
     gender = Column(String(10), nullable=False) 
     contact_number = Column(String(20), nullable=False)
     address = Column(Text, nullable=True)
+    accommodation_type = Column(String(50), nullable=True)
     role = Column(String(1), nullable=False, default='S')
 
     __table_args__ = (
@@ -70,6 +71,8 @@ class RentalRecord(Base):
     equipment_id = Column(Integer, ForeignKey("Equipment.equipment_id"), nullable=False)
     rental_reason_id = Column(Integer, ForeignKey("Rental_Reason.rental_reason_id"), nullable=False)
     custom_reason = Column(String(255), nullable=True)
+    collection_method = Column(String(50), default="Self-Pickup")
+    delivery_address = Column(String(255), nullable=True)
     collection_date = Column(DateTime, nullable=False)
     return_date = Column(DateTime, nullable=True)
     status = Column(String(20), default="Pending")
