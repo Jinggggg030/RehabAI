@@ -859,11 +859,11 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
             builder: (BuildContext dialogContext) {
               return StatefulBuilder(builder: (context, setDialogState) {
                 return AlertDialog(
-                  title: const Text("Apply Emergency Leave"),
+                  title: const Text("Set Unavailable Dates"),
                   content: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text("Leave Period: ${picked.start.toLocal().toString().split(' ')[0]} to ${picked.end.toLocal().toString().split(' ')[0]}"),
+                      Text("Unavailable Period: ${picked.start.toLocal().toString().split(' ')[0]} to ${picked.end.toLocal().toString().split(' ')[0]}"),
                       const SizedBox(height: 16),
                       const Text("Select a covering colleague:"),
                       const SizedBox(height: 8),
@@ -906,7 +906,7 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                             if (mounted) Navigator.pop(dialogContext);
                             _fetchAppointments();
                             if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Leave applied & appointments transferred!")));
+                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Unavailable dates set & appointments transferred!")));
                             }
                           }
                         } catch (e) {
@@ -914,7 +914,7 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                         }
                       },
                       style: ElevatedButton.styleFrom(backgroundColor: Colors.red[800], foregroundColor: Colors.white),
-                      child: const Text("Confirm Leave"),
+                      child: const Text("Confirm"),
                     ),
                   ],
                 );
@@ -944,8 +944,8 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
               Text("Appointments", style: GoogleFonts.readexPro(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue.shade900)),
               ElevatedButton.icon(
                 onPressed: _showApplyLeaveDialog,
-                icon: const Icon(Icons.time_to_leave, size: 18),
-                label: const Text("Apply Leave"),
+                icon: const Icon(Icons.event_busy, size: 18),
+                label: const Text("Set Unavailable Dates"),
                 style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade50, foregroundColor: Colors.red.shade900, elevation: 0, side: BorderSide(color: Colors.red.shade200)),
               )
             ],
