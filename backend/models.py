@@ -131,6 +131,7 @@ class Exercise(Base):
     description = Column(Text, nullable=True)
     discipline = Column(String(50), nullable=True)
     reference_joint_angle = Column(Float, nullable=True)
+    video_url = Column(String(255), nullable=True)
 
 class PrescribedExercise(Base):
     __tablename__ = "Prescribed_Exercise"

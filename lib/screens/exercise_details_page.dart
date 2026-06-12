@@ -1,10 +1,60 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:video_player/video_player.dart';
+import 'package:chewie/chewie.dart';
 import 'during_exercise_page.dart';
 
-class ExerciseDetailsPage extends StatelessWidget {
+class ExerciseDetailsPage extends StatefulWidget {
   final bool isAssigned;
-  const ExerciseDetailsPage({super.key, required this.isAssigned});
+  final Map<String, dynamic> exercise;
+  
+  const ExerciseDetailsPage({
+    super.key, 
+    required this.isAssigned,
+    required this.exercise,
+  });
+
+  @override
+  State<ExerciseDetailsPage> createState() => _ExerciseDetailsPageState();
+}
+
+class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
+  late VideoPlayerController _videoPlayerController;
+  ChewieController? _chewieController;
+
+  @override
+  void initState() {
+    super.initState();
+    _initializePlayer();
+  }
+
+  Future<void> _initializePlayer() async {
+    final videoUrl = widget.exercise['video_url'];
+    if (videoUrl != null && videoUrl.isNotEmpty) {
+      _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+      await _videoPlayerController.initialize();
+      _chewieController = ChewieController(
+        videoPlayerController: _videoPlayerController,
+        autoPlay: false,
+        looping: false,
+        aspectRatio: _videoPlayerController.value.aspectRatio,
+        materialProgressColors: ChewieProgressColors(
+          playedColor: const Color(0xFF207866),
+          handleColor: const Color(0xFF207866),
+          backgroundColor: Colors.grey.shade300,
+          bufferedColor: Colors.grey.shade500,
+        ),
+      );
+      if (mounted) setState(() {});
+    }
+  }
+
+  @override
+  void dispose() {
+    _videoPlayerController.dispose();
+    _chewieController?.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -45,7 +95,7 @@ class ExerciseDetailsPage extends StatelessWidget {
                     Align(
                       alignment: Alignment.center,
                       child: Text(
-                        'Exercise Name',
+                        widget.exercise['name'] ?? 'Exercise Details',
                         style: GoogleFonts.readexPro(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
@@ -70,24 +120,28 @@ class ExerciseDetailsPage extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Video Placeholder
+                      // Video Player
                       Padding(
                         padding: const EdgeInsets.all(8.0),
                         child: Container(
                           height: 300,
                           decoration: BoxDecoration(
-                            color: Colors.grey.shade700,
+                            color: Colors.black,
                             borderRadius: BorderRadius.circular(8),
                           ),
-                          child: Center(
-                            child: Text(
-                              '[exercise preview video]',
-                              style: GoogleFonts.readexPro(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: _chewieController != null &&
+                                    _chewieController!.videoPlayerController.value.isInitialized
+                                ? Chewie(controller: _chewieController!)
+                                : Center(
+                                    child: widget.exercise['video_url'] == null 
+                                    ? Text(
+                                        'No video available',
+                                        style: GoogleFonts.readexPro(color: Colors.white),
+                                      )
+                                    : const CircularProgressIndicator(color: Color(0xFF207866)),
+                                  ),
                           ),
                         ),
                       ),
@@ -97,59 +151,65 @@ class ExerciseDetailsPage extends StatelessWidget {
                         padding: const EdgeInsets.all(16.0),
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
-                          children: isAssigned 
-                            ? [
-                                _buildInfoRow('Injury part:', '[part]'),
-                                const SizedBox(height: 12),
-                                _buildInfoRow('Assigned date:', '[date]'),
-                                const SizedBox(height: 12),
-                                _buildInfoRow('Total sets:', '[sets]'),
-                                const SizedBox(height: 12),
-                                _buildInfoRow('Duration per set:', '[duration]'),
-                                const SizedBox(height: 12),
-                                _buildInfoRow('Precautions:', '[description]'),
-                              ]
-                            : [
-                                _buildInfoRow('Target Muscle:', '[muscle group]'),
-                                const SizedBox(height: 12),
-                                _buildInfoRow('Difficulty:', '[level]'),
-                                const SizedBox(height: 12),
-                                _buildInfoRow('Equipment needed:', '[equipment]'),
-                                const SizedBox(height: 12),
-                                _buildInfoRow('Instructions:', '[general steps]'),
-                              ],
-                        ),
-                      ),
-
-                      // Start Button
-                      Padding(
-                        padding: const EdgeInsets.only(left: 48.0, right: 48.0, bottom: 24.0, top: 12.0),
-                        child: ElevatedButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (context) => const DuringExercisePage(),
+                          children: [
+                            Text(
+                              'Discipline: ${widget.exercise['discipline'] ?? 'General'}',
+                              style: GoogleFonts.readexPro(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: const Color(0xFF207866),
                               ),
-                            );
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF207866),
-                            foregroundColor: Colors.white,
-                            padding: const EdgeInsets.symmetric(vertical: 16),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
                             ),
-                            elevation: 0,
-                          ),
-                          child: Text(
-                            isAssigned ? 'START' : 'Try it out',
-                            style: GoogleFonts.readexPro(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1.0,
+                            const SizedBox(height: 16),
+                            Text(
+                              'Description & Instructions',
+                              style: GoogleFonts.readexPro(
+                                fontSize: 14,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.black87,
+                              ),
                             ),
-                          ),
+                            const SizedBox(height: 8),
+                            Text(
+                              widget.exercise['description'] ?? 'No description available.',
+                              style: GoogleFonts.readexPro(
+                                fontSize: 14,
+                                color: Colors.black54,
+                                height: 1.5,
+                              ),
+                            ),
+                            if (widget.isAssigned) ...[
+                              const SizedBox(height: 24),
+                              const Divider(),
+                              const SizedBox(height: 16),
+                              // Button to start live exercise
+                              ElevatedButton(
+                                onPressed: () {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const DuringExercisePage(),
+                                    ),
+                                  );
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: const Color(0xFF207866),
+                                  foregroundColor: Colors.white,
+                                  minimumSize: const Size(double.infinity, 50),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Start Live Tracking',
+                                  style: GoogleFonts.readexPro(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ],
                         ),
                       ),
                     ],
@@ -159,31 +219,6 @@ class ExerciseDetailsPage extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-
-  Widget _buildInfoRow(String title, String value) {
-    return RichText(
-      text: TextSpan(
-        children: [
-          TextSpan(
-            text: '$title ',
-            style: GoogleFonts.readexPro(
-              fontWeight: FontWeight.bold,
-              color: Colors.black87,
-              fontSize: 14,
-            ),
-          ),
-          TextSpan(
-            text: value,
-            style: GoogleFonts.readexPro(
-              fontWeight: FontWeight.normal,
-              color: Colors.black87,
-              fontSize: 14,
-            ),
-          ),
-        ],
       ),
     );
   }

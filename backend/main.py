@@ -161,11 +161,50 @@ def get_all_prescriptions(db: Session = Depends(get_db)):
 @app.get("/exercises")
 def get_all_exercises(db: Session = Depends(get_db)):
     exercises = db.query(models.Exercise).all()
-    return {"exercises": exercises}
+    result = []
+    for ex in exercises:
+        result.append({
+            "exercise_id": ex.exercise_id,
+            "name": ex.name,
+            "description": ex.description,
+            "discipline": ex.discipline,
+            "reference_joint_angle": ex.reference_joint_angle,
+            "video_url": ex.video_url
+        })
+    return {"exercises": result}
+
+@app.get("/students/{student_id}/prescribed_exercises")
+def get_prescribed_exercises(student_id: int, db: Session = Depends(get_db)):
+    active_prescription = db.query(models.Prescription).filter(
+        models.Prescription.student_id == student_id,
+        models.Prescription.status == 'Active'
+    ).first()
+    
+    if not active_prescription:
+        return {"exercises": []}
+        
+    prescribed = db.query(models.PrescribedExercise).filter(
+        models.PrescribedExercise.prescription_id == active_prescription.prescription_id
+    ).all()
+    
+    result = []
+    for pe in prescribed:
+        ex = db.query(models.Exercise).filter(models.Exercise.exercise_id == pe.exercise_id).first()
+        if ex:
+            result.append({
+                "exercise_id": ex.exercise_id,
+                "name": ex.name,
+                "description": ex.description,
+                "discipline": ex.discipline,
+                "reference_joint_angle": ex.reference_joint_angle,
+                "video_url": ex.video_url,
+                "prescribed_exercise_id": pe.prescribed_exercise_id
+            })
+    return {"exercises": result}
 
 @app.get("/prescribed_exercises")
 def get_all_prescribed_exercises(db: Session = Depends(get_db)):
-    prescribed = db.query(models.Prescribed_Exercise).all()
+    prescribed = db.query(models.PrescribedExercise).all()
     return {"prescribed_exercises": prescribed}
 
 @app.get("/ai_feedback")
