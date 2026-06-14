@@ -408,6 +408,14 @@ def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
     
     result = []
     for chat in chats:
+        last_msg = db.query(models.ChatLog).filter(
+            models.ChatLog.session_id == chat.session_id
+        ).order_by(models.ChatLog.timestamp.desc()).first()
+        
+        has_unread = False
+        if last_msg and last_msg.sender_id is not None and last_msg.sender_id != physio_id:
+            has_unread = True
+            
         result.append({
             "session_id": chat.session_id,
             "subject": chat.subject,
@@ -415,7 +423,8 @@ def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
             "session_status": chat.session_status,
             "triage_data": chat.triage_data,
             "created_at": chat.created_at,
-            "student_name": chat.student_name
+            "student_name": chat.student_name,
+            "has_unread": has_unread
         })
     return {"chats": result}
 

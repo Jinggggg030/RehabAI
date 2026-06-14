@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -55,6 +56,12 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
         final data = jsonDecode(res.body);
         setState(() {
           _assignedSessionIds = (data['chats'] as List).map((c) => c['session_id'] as int).toList();
+          _unreadChats.clear();
+          for (var c in data['chats']) {
+            if (c['has_unread'] == true) {
+              _unreadChats.add(c['session_id'].toString());
+            }
+          }
         });
       }
     } catch(e) {}
@@ -83,7 +90,28 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
             }
           }
         }
-      ).subscribe();
+      )
+      .onPostgresChanges(event: PostgresChangeEvent.update, schema: 'public', table: 'Live_Chat_Session',
+        callback: (payload) {
+          final newRecord = payload.newRecord;
+          if (newRecord['therapist_id'] == _myUserId && newRecord['session_status'] == 'Active') {
+            final sessionId = newRecord['session_id'] as int;
+            if (!_assignedSessionIds.contains(sessionId)) {
+              _fetchAssignedSessions(); // Fetch again to update assignments and unread status
+              if (mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text("New chat assigned to you!"),
+                    duration: Duration(seconds: 3),
+                    behavior: SnackBarBehavior.floating,
+                  ),
+                );
+              }
+            }
+          }
+        }
+      )
+      .subscribe();
   }
 
   @override
@@ -209,39 +237,43 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
   List<dynamic> _chats = [];
   bool _isLoading = true;
   Map<String, dynamic>? _selectedChat;
+  Timer? _refreshTimer;
 
   @override
   void initState() {
     super.initState();
     _fetchChats();
+    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchChats(isBackground: true));
   }
 
-  Future<void> _fetchChats() async {
-    setState(() => _isLoading = true);
+  Future<void> _fetchChats({bool isBackground = false}) async {
+    if (!isBackground) setState(() => _isLoading = true);
     try {
       final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
       final res = await http.get(Uri.parse('$apiUrl/physio/chats/${widget.myUserId}'));
       if (res.statusCode == 200) {
-        
         final data = jsonDecode(res.body);
-        setState(() {
-          _chats = data['chats'] ?? [];
-          // Update selected chat if it was modified
-          if (_selectedChat != null) {
-            final updated = _chats.where((c) => c['session_id'] == _selectedChat!['session_id']).toList();
-            if (updated.isNotEmpty) _selectedChat = updated.first;
-          }
-        });
+        if (mounted) {
+          setState(() {
+            _chats = data['chats'] ?? [];
+            // Update selected chat if it was modified
+            if (_selectedChat != null) {
+              final updated = _chats.where((c) => c['session_id'] == _selectedChat!['session_id']).toList();
+              if (updated.isNotEmpty) _selectedChat = updated.first;
+            }
+          });
+        }
       }
     } catch (e) {
       debugPrint("Error fetching chats: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (!isBackground && mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   void dispose() {
+    _refreshTimer?.cancel();
     super.dispose();
   }
 

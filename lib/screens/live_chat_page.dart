@@ -28,6 +28,8 @@ class _LiveChatPageState extends State<LiveChatPage> {
     ChatMessage(text: "Hello! I'm your Rehab AI assistant. How can I help you with your therapy today?", isUser: false),
   ];
   bool _isTyping = false;
+  bool _isChatEnded = false;
+  RealtimeChannel? _sessionSubscription;
 
   int? _sessionId;
   final SupabaseClient _supabase = Supabase.instance.client;
@@ -97,6 +99,9 @@ class _LiveChatPageState extends State<LiveChatPage> {
     if (_subscription != null) {
       await _supabase.removeChannel(_subscription!);
     }
+    if (_sessionSubscription != null) {
+      await _supabase.removeChannel(_sessionSubscription!);
+    }
 
     // 1. Fetch initial data via REST
     try {
@@ -105,8 +110,13 @@ class _LiveChatPageState extends State<LiveChatPage> {
         setState(() {
           _messages.clear();
           for (var row in List<dynamic>.from(res)) {
+            final textContent = row['content'] ?? '';
+            if (textContent == '[SYSTEM: CHAT_CLOSED]') {
+              _isChatEnded = true;
+              continue;
+            }
             _messages.add(ChatMessage(
-              text: row['content'] ?? '',
+              text: textContent,
               isUser: row['sender_id'] == myUserId,
             ));
           }
@@ -126,20 +136,44 @@ class _LiveChatPageState extends State<LiveChatPage> {
         filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'session_id', value: _sessionId!),
         callback: (payload) {
           final newMsg = payload.newRecord;
+          final textContent = newMsg['content'] ?? '';
           if (mounted) {
             setState(() {
+              if (textContent == '[SYSTEM: CHAT_CLOSED]') {
+                _isChatEnded = true;
+                return;
+              }
               // Prevent duplicating the user's own message that was added optimistically
               if (newMsg['sender_id'] == myUserId) {
-                if (_messages.isNotEmpty && _messages.last.isUser && _messages.last.text == newMsg['content']) {
+                if (_messages.isNotEmpty && _messages.last.isUser && _messages.last.text == textContent) {
                   return;
                 }
               }
               _messages.add(ChatMessage(
-                text: newMsg['content'] ?? '',
+                text: textContent,
                 isUser: newMsg['sender_id'] == myUserId,
               ));
             });
             _scrollToBottom();
+          }
+        }
+      ).subscribe();
+
+    // 3. Subscribe to session status updates
+    _sessionSubscription = _supabase.channel('public:Live_Chat_Session:session_$_sessionId')
+      .onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'Live_Chat_Session',
+        filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'session_id', value: _sessionId!),
+        callback: (payload) {
+          if (mounted) {
+            final updatedRecord = payload.newRecord;
+            if (updatedRecord['session_status'] == 'Ended') {
+              setState(() {
+                _isChatEnded = true;
+              });
+            }
           }
         }
       ).subscribe();
@@ -248,6 +282,8 @@ class _LiveChatPageState extends State<LiveChatPage> {
   
   @override
   void dispose() {
+    _subscription?.unsubscribe();
+    _sessionSubscription?.unsubscribe();
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -334,9 +370,21 @@ class _LiveChatPageState extends State<LiveChatPage> {
                     ),
 
                     // Bottom Input Area
-                    Padding(
-                      padding: const EdgeInsets.all(16.0),
-                      child: Column(
+                    if (_isChatEnded)
+                      Padding(
+                        padding: const EdgeInsets.all(24.0),
+                        child: Text(
+                          "This chat session has ended.",
+                          style: GoogleFonts.readexPro(
+                            color: Colors.grey.shade600,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                      )
+                    else
+                      Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
                         children: [
                           // Quick Replies (Optional)
                           SingleChildScrollView(
