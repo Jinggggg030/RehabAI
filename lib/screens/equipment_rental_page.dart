@@ -336,8 +336,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
     int selectedDuration = 7; // Default 7 days
     bool isSubmitting = false;
     TextEditingController customReasonController = TextEditingController();
-    String collectionMethod = _accommodationType == 'Hostel' ? 'Delivery' : 'Self-Pickup';
-    TextEditingController deliveryAddressController = TextEditingController(text: _userAddress ?? '');
+    String collectionMethod = 'Self-Pickup';
     DateTime? collectionDate;
     TimeOfDay? collectionTime;
 
@@ -509,46 +508,26 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                     const SizedBox(height: 16),
                     
                     // Collection Method
-                    DropdownButtonFormField<String>(
-                      value: collectionMethod,
-                      decoration: InputDecoration(
-                        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8), borderSide: const BorderSide(color: Colors.black26)),
-                        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.black26),
+                        borderRadius: BorderRadius.circular(8),
+                        color: Colors.grey.shade50,
                       ),
-                      style: GoogleFonts.readexPro(fontSize: 12, color: Colors.black87),
-                      items: [
-                        const DropdownMenuItem(value: 'Self-Pickup', child: Text('Self-Pickup at Clinic')),
-                        if (_accommodationType == 'Hostel') 
-                          const DropdownMenuItem(value: 'Delivery', child: Text('Delivery to Hostel')),
-                      ],
-                      onChanged: _accommodationType == 'Hostel' ? (val) {
-                        if (val != null) setModalState(() => collectionMethod = val);
-                      } : null,
-                      disabledHint: const Text('Self-Pickup at Clinic (Outside Accommodation)'),
+                      child: Text(
+                        'Self-Pickup at Clinic',
+                        style: GoogleFonts.readexPro(fontSize: 14, color: Colors.black54),
+                      ),
                     ),
-                    
-                    if (collectionMethod == 'Delivery') ...[
-                      const SizedBox(height: 16),
-                      TextField(
-                        controller: deliveryAddressController,
-                        onChanged: (_) => setModalState((){}), // trigger rebuild to enable/disable button
-                        decoration: InputDecoration(
-                          hintText: 'Enter Hostel Room/Address',
-                          hintStyle: GoogleFonts.readexPro(fontSize: 11, color: Colors.grey),
-                          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                        ),
-                        style: GoogleFonts.readexPro(fontSize: 12),
-                        maxLines: 2,
-                      ),
-                    ],
                     
                     const SizedBox(height: 32),
                     
                     // Request Rental Button
                     Center(
                       child: ElevatedButton(
-                        onPressed: (selectedReasonId == null || collectionDate == null || collectionTime == null || (collectionMethod == 'Delivery' && deliveryAddressController.text.trim().isEmpty) || isSubmitting) ? null : () async {
+                        onPressed: (selectedReasonId == null || collectionDate == null || collectionTime == null || false || isSubmitting) ? null : () async {
                           setModalState(() => isSubmitting = true);
                           try {
                             final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
@@ -565,8 +544,8 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                                 'rental_reason_id': selectedReasonId,
                                 'custom_reason': customReasonController.text.trim().isEmpty ? null : customReasonController.text.trim(),
                                 'rental_duration': selectedDuration,
-                                'collection_method': collectionMethod,
-                                'delivery_address': collectionMethod == 'Delivery' ? deliveryAddressController.text.trim() : null,
+                                'collection_method': 'Self-Pickup',
+                                'delivery_address': null,
                                 'collection_date': finalDate.toIso8601String(),
                               }),
                             );
