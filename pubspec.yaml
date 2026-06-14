@@ -45,6 +45,7 @@ dependencies:
   table_calendar: ^3.2.0
   video_player: ^2.11.1
   chewie: ^1.14.1
+  url_launcher: ^6.3.2
 
 dependency_overrides:
   http: ^1.0.0
