@@ -111,33 +111,49 @@ class RehabChatbot:
         if not current_state["severity"]:
             return current_state, f"System: How severe is the issue on a scale of 1 to 10? (Or describe it as mild, moderate, or severe)", "Triage"
 
-        # Phase 3: All information gathered, perform Categorization Scoring
-        scores = {cat: 0 for cat in self.categories.keys()}
-        full_text = " ".join(current_state["history"])
-        
-        for cat, patterns in self.categories.items():
-            for pat in patterns:
-                matches = re.findall(pat, full_text)
-                scores[cat] += len(matches)
-                
-        # Find highest score
-        best_discipline = max(scores, key=scores.get)
-        
-        # If no scores, default to Musculoskeletal
-        if scores[best_discipline] == 0:
-            best_discipline = "Musculoskeletal"
+        # Phase 3: All information gathered, check for confirmation
+        if not current_state.get("confirmed"):
+            scores = {cat: 0 for cat in self.categories.keys()}
+            full_text = " ".join(current_state["history"])
             
-        current_state["discipline"] = best_discipline
-        
-        # Final Assignment Message (Routing to Phase 4)
-        final_msg = (
-            f"System: Triage complete. \n"
-            f"- Area: {current_state['pain_area']}\n"
-            f"- Severity: {current_state['severity']}\n"
-            f"- Duration: {current_state['duration']}\n\n"
-            f"Based on your symptoms, we are assigning you to a **{best_discipline}** physiotherapist. Please wait while we connect you."
-        )
-        
-        return current_state, final_msg, "Active"
+            for cat, patterns in self.categories.items():
+                for pat in patterns:
+                    matches = re.findall(pat, full_text)
+                    scores[cat] += len(matches)
+                    
+            best_discipline = max(scores, key=scores.get)
+            if scores[best_discipline] == 0:
+                best_discipline = "Musculoskeletal"
+                
+            current_state["discipline"] = best_discipline
+            
+            # Ask for confirmation
+            if msg_lower in ['yes', 'yeah', 'yep', 'correct', 'right', 'ok']:
+                current_state["confirmed"] = True
+                final_msg = (
+                    f"System: Thank you for confirming. "
+                    f"Based on your symptoms, we are assigning you to a **{best_discipline}** physiotherapist. Please wait while we connect you."
+                )
+                return current_state, final_msg, "Active"
+            elif msg_lower in ['no', 'nope', 'incorrect', 'wrong']:
+                # Reset extraction
+                current_state["pain_area"] = None
+                current_state["severity"] = None
+                current_state["duration"] = None
+                current_state["history"] = []
+                return current_state, "System: Let's try again. Which specific body part is affected?", "Triage"
+            else:
+                # If first time reaching here, or user typed something else
+                final_msg = (
+                    f"System: Triage complete. Here is my assessment:\n"
+                    f"- Area: {current_state['pain_area']}\n"
+                    f"- Severity: {current_state['severity']}\n"
+                    f"- Duration: {current_state['duration']}\n\n"
+                    f"Is this correct? (Please reply 'Yes' to confirm or 'No' to restart)"
+                )
+                # Keep status as Triage until confirmed
+                return current_state, final_msg, "Triage"
+        else:
+            return current_state, "System: You are already connected. Please wait for the physiotherapist.", "Active"
 
 chatbot_instance = RehabChatbot()
