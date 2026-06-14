@@ -1,159 +1,109 @@
-import re
+import os
 import json
+import google.generativeai as genai
+from dotenv import load_dotenv
+
+load_dotenv()
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+
+if GEMINI_API_KEY:
+    genai.configure(api_key=GEMINI_API_KEY)
 
 class RehabChatbot:
     def __init__(self):
-        # Phase 5: Emergency Keywords
-        self.emergency_keywords = [
-            r'\b(cannot breathe|can\'t breathe|shortness of breath|not breathing)\b',
-            r'\b(chest pain|heart attack|stroke)\b',
-            r'\b(paralysed|paralyzed|paralysis)\b',
-            r'\b(lost consciousness|passed out|faint|fainted)\b',
-            r'\b(emergency|urgent|ambulance)\b'
-        ]
+        self.system_prompt = """You are a professional Physiotherapy Triage Assistant for the Rehab AI clinic.
+Your job is to chat with the patient and collect 3 pieces of information:
+1. Pain Area (e.g. Lower back, Right shoulder, Knee)
+2. Severity (On a scale of 1-10 or Mild/Moderate/Severe)
+3. Duration (How long they have had the pain)
 
-        # Phase 3 Categories (for Scoring)
-        self.categories = {
-            "Musculoskeletal": [
-                r'\b(shoulder|arm|elbow|wrist|hand|knee|ankle|foot|bone|fracture|joint|muscle|back|neck|spine)\b',
-                r'\b(sprain|strain|ache|aching|hurt|pain|stiff)\b'
-            ],
-            "Neurological": [
-                r'\b(stroke|paralysis|nerve|brain|spinal cord|balance|dizzy|parkinson|multiple sclerosis|numbness|tingling|twitch)\b'
-            ],
-            "Cardiopulmonary": [
-                r'\b(breathing|lung|asthma|chest|coughing|copd|heart)\b'
-            ],
-            "Sports": [
-                r'\b(sports|running|athlete|athletic|torn|acl|meniscus|game|match|gym|workout)\b'
-            ],
-            "Geriatric": [
-                r'\b(elderly|old|aging|fall|arthritis|osteoporosis|weakness|mobility|senior)\b'
-            ],
-            "Pediatric": [
-                r'\b(child|baby|kid|infant|toddler|cerebral palsy|development|growth)\b'
-            ],
-            "Pelvic Floor": [
-                r'\b(pelvic|pregnancy|bladder|incontinence|postpartum|women)\b'
-            ]
-        }
+CRITICAL INSTRUCTIONS:
+- You MUST respond in valid JSON format ONLY. Do not include markdown code blocks (```json) or any other text outside the JSON object.
+- The JSON object must have exactly these keys:
+  - "response_message": (string) Your natural language reply to the patient. Ask exactly ONE question at a time.
+  - "pain_area": (string or null) The pain area if you have figured it out.
+  - "severity": (string or null) The severity if you have figured it out.
+  - "duration": (string or null) The duration if you have figured it out.
+  - "is_triage_complete": (boolean) Set to true ONLY if you have successfully collected ALL 3 pieces of information AND the user has explicitly confirmed that your summary of their symptoms is correct.
+  - "is_emergency": (boolean) Set to true immediately if the user mentions anything life-threatening (e.g., heart attack, stroke, chest pain, inability to breathe, paralysis, extreme trauma).
+  - "discipline": (string or null) If is_triage_complete is true, classify the issue into one of these exact strings: "Musculoskeletal", "Neurological", "Cardiopulmonary", "Sports", "Geriatric", "Pediatric", or "Pelvic Floor".
 
-        # Extraction logic patterns
-        self.severity_patterns = {
-            "High": r'\b(severe|unbearable|extremely|very bad|10|9|8|sharp|extreme)\b',
-            "Moderate": r'\b(moderate|some|a bit|7|6|5|4|dull|annoying)\b',
-            "Low": r'\b(mild|low|little|1|2|3|slight)\b'
-        }
-        
-        self.duration_patterns = {
-            "Acute": r'\b(today|yesterday|suddenly|just now|days|week)\b',
-            "Sub-acute": r'\b(weeks|month|a while)\b',
-            "Chronic": r'\b(months|years|long time|always|forever)\b'
+Be empathetic, brief, and clear. 
+If you have collected Area, Severity, and Duration, your next response_message MUST summarize their symptoms and ask "Is this correct?". 
+If they say yes, set is_triage_complete to true and provide a comforting closing message in response_message saying they will be connected to a physiotherapist.
+"""
+        self.generation_config = {
+            "temperature": 0.2,
+            "response_mime_type": "application/json",
         }
 
     def process_message(self, user_message: str, current_state: dict) -> tuple[dict, str, str]:
-        """
-        Takes the user message and the current triage_data (dict).
-        Returns updated_state (dict), response_message (str), and session_status (str: 'Triage', 'Active', 'Emergency').
-        """
+        if not GEMINI_API_KEY:
+            return current_state, "System: Gemini API Key is missing. Please contact administration.", "Triage"
+
         if not current_state:
             current_state = {
                 "pain_area": None,
                 "severity": None,
                 "duration": None,
                 "discipline": None,
-                "history": [] # stores all user messages for final scoring
+                "history": [],
+                "confirmed": False
             }
         
-        msg_lower = user_message.lower()
-        current_state["history"].append(msg_lower)
-
-        # Phase 5: Check for Emergency
-        for pattern in self.emergency_keywords:
-            if re.search(pattern, msg_lower):
-                return current_state, "System: Your symptoms may require urgent medical attention. Please contact emergency services or visit the nearest healthcare facility immediately.", "Emergency"
-
-        # Phase 1: Extract Data
-        # Extract pain area (by checking all body part words)
-        if not current_state["pain_area"]:
-            for cat, patterns in self.categories.items():
-                for pat in patterns:
-                    match = re.search(pat, msg_lower)
-                    if match:
-                        current_state["pain_area"] = match.group(0).title()
-                        break
-                if current_state["pain_area"]:
-                    break
-
-        if not current_state["severity"]:
-            for sev, pattern in self.severity_patterns.items():
-                if re.search(pattern, msg_lower):
-                    current_state["severity"] = sev
-                    break
-                    
-            # Check for generic pain words without severity modifier
-            if not current_state["severity"] and re.search(r'\b(pain|hurt)\b', msg_lower):
-                pass # Still unknown, need to ask
-
-        if not current_state["duration"]:
-            for dur, pattern in self.duration_patterns.items():
-                if re.search(pattern, msg_lower):
-                    current_state["duration"] = dur
-                    break
-
-        # Phase 2: Clarification Questions (Ask one at a time)
-        if not current_state["pain_area"]:
-            return current_state, "System: I understand you are seeking help. Which specific body part is affected? (e.g., Neck, Shoulder, Back, Knee, Ankle)", "Triage"
-        
-        if not current_state["duration"]:
-            return current_state, f"System: How long have you experienced this {current_state['pain_area'].lower()} issue? (e.g., less than a week, a few weeks, or more than a month)", "Triage"
-            
-        if not current_state["severity"]:
-            return current_state, f"System: How severe is the issue on a scale of 1 to 10? (Or describe it as mild, moderate, or severe)", "Triage"
-
-        # Phase 3: All information gathered, check for confirmation
-        if not current_state.get("confirmed"):
-            scores = {cat: 0 for cat in self.categories.keys()}
-            full_text = " ".join(current_state["history"])
-            
-            for cat, patterns in self.categories.items():
-                for pat in patterns:
-                    matches = re.findall(pat, full_text)
-                    scores[cat] += len(matches)
-                    
-            best_discipline = max(scores, key=scores.get)
-            if scores[best_discipline] == 0:
-                best_discipline = "Musculoskeletal"
-                
-            current_state["discipline"] = best_discipline
-            
-            # Ask for confirmation
-            if msg_lower in ['yes', 'yeah', 'yep', 'correct', 'right', 'ok']:
-                current_state["confirmed"] = True
-                final_msg = (
-                    f"System: Thank you for confirming. "
-                    f"Based on your symptoms, we are assigning you to a **{best_discipline}** physiotherapist. Please wait while we connect you."
-                )
-                return current_state, final_msg, "Active"
-            elif msg_lower in ['no', 'nope', 'incorrect', 'wrong']:
-                # Reset extraction
-                current_state["pain_area"] = None
-                current_state["severity"] = None
-                current_state["duration"] = None
-                current_state["history"] = []
-                return current_state, "System: Let's try again. Which specific body part is affected?", "Triage"
+        # Convert old history format if necessary
+        new_history = []
+        for msg in current_state.get("history", []):
+            if isinstance(msg, str):
+                new_history.append({"role": "user", "content": msg})
             else:
-                # If first time reaching here, or user typed something else
-                final_msg = (
-                    f"System: Triage complete. Here is my assessment:\n"
-                    f"- Area: {current_state['pain_area']}\n"
-                    f"- Severity: {current_state['severity']}\n"
-                    f"- Duration: {current_state['duration']}\n\n"
-                    f"Is this correct? (Please reply 'Yes' to confirm or 'No' to restart)"
-                )
-                # Keep status as Triage until confirmed
-                return current_state, final_msg, "Triage"
-        else:
-            return current_state, "System: You are already connected. Please wait for the physiotherapist.", "Active"
+                new_history.append(msg)
+        current_state["history"] = new_history
+
+        # Append user message to history
+        current_state["history"].append({"role": "user", "content": user_message})
+
+        # Construct the conversation for the LLM
+        messages = [
+            {"role": "user", "parts": [self.system_prompt]}
+        ]
+        
+        # We need to map role "user" and "assistant" to Gemini's "user" and "model"
+        for msg in current_state["history"]:
+            role = "user" if msg["role"] == "user" else "model"
+            messages.append({"role": role, "parts": [msg["content"]]})
+
+        try:
+            model = genai.GenerativeModel('gemini-2.5-flash')
+            response = model.generate_content(
+                messages,
+                generation_config=self.generation_config
+            )
+            
+            result = json.loads(response.text)
+            
+            bot_reply = result.get("response_message", "I didn't quite catch that.")
+            current_state["history"].append({"role": "assistant", "content": bot_reply})
+            
+            # Update state
+            if result.get("pain_area"): current_state["pain_area"] = result.get("pain_area")
+            if result.get("severity"): current_state["severity"] = result.get("severity")
+            if result.get("duration"): current_state["duration"] = result.get("duration")
+            
+            if result.get("is_emergency") is True:
+                return current_state, f"System: EMERGENCY TRIGGERED. {bot_reply}", "Emergency"
+                
+            if result.get("is_triage_complete") is True:
+                current_state["confirmed"] = True
+                current_state["discipline"] = result.get("discipline")
+                
+                final_msg = f"System: {bot_reply}\n[Routing to {current_state['discipline']} Specialist...]"
+                return current_state, final_msg, "Active"
+                
+            return current_state, bot_reply, "Triage"
+            
+        except Exception as e:
+            print("LLM Error:", e)
+            return current_state, "System: Sorry, I am experiencing technical difficulties. Let's try again.", "Triage"
 
 chatbot_instance = RehabChatbot()
