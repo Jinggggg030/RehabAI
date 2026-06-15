@@ -5,6 +5,8 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:rehab_ai/screens/login_page.dart';
 import 'package:rehab_ai/screens/change_password_page.dart';
 
+import 'package:rehab_ai/screens/terms_and_conditions_page.dart';
+
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
 
@@ -96,14 +98,16 @@ class _SettingsPageState extends State<SettingsPage> {
                     },
                   ),
                   _buildNavigationTile(
-                    icon: Icons.chat_bubble_outline,
-                    title: 'Feedback',
-                    onTap: () {},
-                  ),
-                  _buildNavigationTile(
                     icon: Icons.insert_drive_file_outlined,
                     title: 'Terms and Conditions',
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const TermsAndConditionsPage(),
+                        ),
+                      );
+                    },
                   ),
                   _buildNavigationTile(
                     icon: Icons.logout_outlined,
