@@ -3,6 +3,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:rehab_ai/screens/login_page.dart';
+import 'package:rehab_ai/screens/change_password_page.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -85,7 +86,14 @@ class _SettingsPageState extends State<SettingsPage> {
                   _buildNavigationTile(
                     icon: Icons.lock_outline,
                     title: 'Change Password',
-                    onTap: () {},
+                    onTap: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const ChangePasswordPage(),
+                        ),
+                      );
+                    },
                   ),
                   _buildNavigationTile(
                     icon: Icons.chat_bubble_outline,
