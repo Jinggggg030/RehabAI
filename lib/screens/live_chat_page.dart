@@ -16,7 +16,8 @@ class ChatMessage {
 }
 
 class LiveChatPage extends StatefulWidget {
-  const LiveChatPage({super.key});
+  final String? initialMessage;
+  const LiveChatPage({super.key, this.initialMessage});
 
   @override
   State<LiveChatPage> createState() => _LiveChatPageState();
@@ -78,6 +79,11 @@ class _LiveChatPageState extends State<LiveChatPage> {
       }
     } catch (e) {
       debugPrint("Error fetching active session: $e");
+    } finally {
+      if (widget.initialMessage != null && widget.initialMessage!.isNotEmpty) {
+        _messageController.text = widget.initialMessage!;
+        _sendMessage();
+      }
     }
   }
 
