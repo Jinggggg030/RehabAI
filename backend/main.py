@@ -69,6 +69,48 @@ def create_user_profile(profile: UserProfileCreate, db: Session = Depends(get_db
     
     return {"message": "Profile created successfully", "user_id": new_user.user_id}
 
+
+class UserProfileUpdate(BaseModel):
+    username: str = None
+    email: str = None
+    identity_number: str = None
+    gender: str = None
+    contact_number: str = None
+    address: str = None
+    accommodation_type: str = None
+    matric_no: str = None
+
+@app.put("/users/profile/{supabase_id}")
+def update_user_profile(supabase_id: str, profile: UserProfileUpdate, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.supabase_id == supabase_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+        
+    if profile.username is not None:
+        user.username = profile.username
+    if profile.email is not None:
+        user.email = profile.email
+    if profile.identity_number is not None:
+        user.identity_number = profile.identity_number
+    if profile.gender is not None:
+        user.gender = profile.gender
+    if profile.contact_number is not None:
+        user.contact_number = profile.contact_number
+    if profile.address is not None:
+        user.address = profile.address
+    if profile.accommodation_type is not None:
+        user.accommodation_type = profile.accommodation_type
+        
+    db.commit()
+    
+    if user.role == 'S' and profile.matric_no is not None:
+        student = db.query(models.Student).filter(models.Student.student_id == user.user_id).first()
+        if student:
+            student.matric_no = profile.matric_no
+            db.commit()
+            
+    return {"message": "Profile updated successfully"}
+
 @app.get("/users/profile/{supabase_id}")
 def check_user_profile(supabase_id: str, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.supabase_id == supabase_id).first()

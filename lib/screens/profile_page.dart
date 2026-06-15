@@ -176,13 +176,19 @@ class _ProfilePageState extends State<ProfilePage> {
               _buildActionBox(
                 title: 'Edit Profile',
                 icon: Icons.edit_outlined,
-                onTap: () {
-                  Navigator.push(
+                onTap: () async {
+                  final result = await Navigator.push(
                     context,
                     MaterialPageRoute(
                       builder: (context) => const EditProfilePage(),
                     ),
                   );
+                  if (result == true) {
+                    setState(() {
+                      _isLoading = true;
+                    });
+                    _fetchProfile();
+                  }
                 },
               ),
               const SizedBox(height: 16),
