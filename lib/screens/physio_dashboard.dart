@@ -1005,6 +1005,7 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
               child: ListView.builder(
                 itemCount: _appointments.length,
                 itemBuilder: (context, index) {
+                  final a = _appointments[index];
                   final parsedDate = DateTime.tryParse(a['schedule_time'] ?? '');
                   final date = parsedDate?.toLocal().toString().split('.')[0] ?? 'Unknown';
                   final isScheduled = a['status'] == 'Scheduled';

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:rehab_ai/utils/global_state.dart';
 
 class ChatMessage {
   final String text;
@@ -37,6 +39,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
   @override
   void initState() {
     super.initState();
+    GlobalState.hasUnreadLiveChat.value = false;
     // Fetch active session if any, or wait until first message to create one.
     _fetchActiveSession();
   }
@@ -106,6 +109,12 @@ class _LiveChatPageState extends State<LiveChatPage> {
     // 1. Fetch initial data via REST
     try {
       final res = await _supabase.from('Chat_Log').select().eq('session_id', _sessionId!).order('timestamp', ascending: true);
+      if (res.isNotEmpty) {
+        final lastMsg = List<dynamic>.from(res).last;
+        if (lastMsg['timestamp'] != null) {
+          _updateLastReadTimestamp(lastMsg['timestamp'].toString());
+        }
+      }
       if (mounted) {
         setState(() {
           _messages.clear();
@@ -136,6 +145,9 @@ class _LiveChatPageState extends State<LiveChatPage> {
         filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'session_id', value: _sessionId!),
         callback: (payload) {
           final newMsg = payload.newRecord;
+          if (newMsg['timestamp'] != null) {
+            _updateLastReadTimestamp(newMsg['timestamp'].toString());
+          }
           final textContent = newMsg['content'] ?? '';
           if (mounted) {
             setState(() {
@@ -154,6 +166,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
                 isUser: newMsg['sender_id'] == myUserId,
               ));
             });
+            GlobalState.hasUnreadLiveChat.value = false;
             _scrollToBottom();
           }
         }
@@ -268,7 +281,14 @@ class _LiveChatPageState extends State<LiveChatPage> {
     }
   }
   
+
+  Future<void> _updateLastReadTimestamp(String timestamp) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString('last_read_chat_timestamp', timestamp);
+  }
+
   void _scrollToBottom() {
+
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(

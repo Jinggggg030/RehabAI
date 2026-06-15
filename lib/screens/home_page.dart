@@ -1,5 +1,7 @@
+import 'package:rehab_ai/widgets/notification_bell.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:rehab_ai/screens/live_chat_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -39,10 +41,7 @@ class _HomePageState extends State<HomePage> {
                       color: Colors.black,
                     ),
                   ),
-                  IconButton(
-                    onPressed: () {},
-                    icon: const Icon(Icons.notifications_none, color: Color(0xFF207866)),
-                  ),
+                  const NotificationBell(),
                 ],
               ),
               const SizedBox(height: 8),
