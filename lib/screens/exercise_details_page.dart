@@ -31,21 +31,26 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
   Future<void> _initializePlayer() async {
     final videoUrl = widget.exercise['video_url'];
     if (videoUrl != null && videoUrl.isNotEmpty) {
-      _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
-      await _videoPlayerController.initialize();
-      _chewieController = ChewieController(
-        videoPlayerController: _videoPlayerController,
-        autoPlay: false,
-        looping: false,
-        aspectRatio: _videoPlayerController.value.aspectRatio,
-        materialProgressColors: ChewieProgressColors(
-          playedColor: const Color(0xFF207866),
-          handleColor: const Color(0xFF207866),
-          backgroundColor: Colors.grey.shade300,
-          bufferedColor: Colors.grey.shade500,
-        ),
-      );
-      if (mounted) setState(() {});
+      try {
+        _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+        await _videoPlayerController.initialize();
+        _chewieController = ChewieController(
+          videoPlayerController: _videoPlayerController,
+          autoPlay: false,
+          looping: false,
+          aspectRatio: _videoPlayerController.value.aspectRatio,
+          materialProgressColors: ChewieProgressColors(
+            playedColor: const Color(0xFF207866),
+            handleColor: const Color(0xFF207866),
+            backgroundColor: Colors.grey.shade300,
+            bufferedColor: Colors.grey.shade500,
+          ),
+        );
+        if (mounted) setState(() {});
+      } catch (e) {
+        debugPrint("Error initializing video player: $e");
+        // Fallback or handle error if needed
+      }
     }
   }
 

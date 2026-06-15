@@ -4,6 +4,9 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'exercise_details_page.dart';
 
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+
 class RehabilitationExercisesPage extends StatefulWidget {
   const RehabilitationExercisesPage({super.key});
 
@@ -21,7 +24,7 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
   String selectedDiscipline = 'All';
   List<String> disciplines = ['All'];
   
-  final String apiUrl = 'http://127.0.0.1:8000'; // Or use flutter dotenv later
+  final String apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
 
   @override
   void initState() {
