@@ -153,10 +153,6 @@ def get_all_appointments(db: Session = Depends(get_db)):
     appointments = db.query(models.Appointment).all()
     return {"appointments": appointments}
 
-@app.get("/prescriptions")
-def get_all_prescriptions(db: Session = Depends(get_db)):
-    prescriptions = db.query(models.Prescription).all()
-    return {"prescriptions": prescriptions}
 
 @app.get("/exercises")
 def get_all_exercises(db: Session = Depends(get_db)):
@@ -175,16 +171,16 @@ def get_all_exercises(db: Session = Depends(get_db)):
 
 @app.get("/students/{student_id}/prescribed_exercises")
 def get_prescribed_exercises(student_id: int, db: Session = Depends(get_db)):
-    active_prescription = db.query(models.Prescription).filter(
-        models.Prescription.student_id == student_id,
-        models.Prescription.status == 'Active'
-    ).first()
+    active_appointment = db.query(models.Appointment).filter(
+        models.Appointment.student_id == student_id,
+        models.Appointment.prescription != None
+    ).order_by(models.Appointment.schedule_time.desc()).first()
     
-    if not active_prescription:
+    if not active_appointment:
         return {"exercises": []}
         
     prescribed = db.query(models.PrescribedExercise).filter(
-        models.PrescribedExercise.prescription_id == active_prescription.prescription_id
+        models.PrescribedExercise.appointment_id == active_appointment.appointment_id
     ).all()
     
     result = []
@@ -280,8 +276,8 @@ def check_posture_integration(db: Session, student_id: int, auto_reply: str) -> 
     # Phase 6: Link AI Posture feedback to the triage output
     feedback = db.query(models.AIFeedback)\
         .join(models.PrescribedExercise, models.AIFeedback.prescribed_exercise_id == models.PrescribedExercise.prescribed_exercise_id)\
-        .join(models.Prescription, models.PrescribedExercise.prescription_id == models.Prescription.prescription_id)\
-        .filter(models.Prescription.student_id == student_id)\
+        .join(models.Appointment, models.PrescribedExercise.appointment_id == models.Appointment.appointment_id)\
+        .filter(models.Appointment.student_id == student_id)\
         .order_by(models.AIFeedback.timestamp.desc())\
         .first()
     
@@ -440,22 +436,22 @@ def close_chat(session_id: int, db: Session = Depends(get_db)):
 @app.get("/physio/patients/{physio_id}")
 def get_physio_patients(physio_id: int, db: Session = Depends(get_db)):
     students = db.query(models.User.user_id, models.User.username, models.User.email).join(
-        models.Prescription, models.User.user_id == models.Prescription.student_id
-    ).filter(models.Prescription.therapist_id == physio_id).distinct().all()
+        models.Appointment, models.User.user_id == models.Appointment.student_id
+    ).filter(models.Appointment.therapist_id == physio_id).distinct().all()
     
     result = []
     for s in students:
-        presc = db.query(models.Prescription).filter(
-            models.Prescription.student_id == s.user_id,
-            models.Prescription.therapist_id == physio_id,
-            models.Prescription.status == 'Active'
-        ).first()
+        presc = db.query(models.Appointment).filter(
+            models.Appointment.student_id == s.user_id,
+            models.Appointment.therapist_id == physio_id,
+            models.Appointment.prescription != None
+        ).order_by(models.Appointment.schedule_time.desc()).first()
         
         exercises = []
         if presc:
             pexs = db.query(models.PrescribedExercise, models.Exercise.name).join(
                 models.Exercise, models.PrescribedExercise.exercise_id == models.Exercise.exercise_id
-            ).filter(models.PrescribedExercise.prescription_id == presc.prescription_id).all()
+            ).filter(models.PrescribedExercise.appointment_id == presc.appointment_id).all()
             for px, ename in pexs:
                 exercises.append({
                     "id": px.prescribed_exercise_id,
@@ -468,7 +464,7 @@ def get_physio_patients(physio_id: int, db: Session = Depends(get_db)):
             "student_id": s.user_id,
             "student_name": s.username,
             "email": s.email,
-            "active_prescription": presc.diagnosis if presc else None,
+            "active_prescription": presc.prescription if presc else None,
             "exercises": exercises
         })
     return {"patients": result}
@@ -493,6 +489,43 @@ def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
             "evaluation": appt.evaluation
         })
     return {"appointments": result}
+
+class AssignedExercise(BaseModel):
+    exercise_id: int
+    assigned_sets: int
+    assigned_duration: int
+    evaluation: str | None = None
+
+class RecordSessionReq(BaseModel):
+    prescription: str
+    evaluation: str | None = None
+    exercises: list[AssignedExercise]
+
+@app.post("/physio/appointments/{appointment_id}/prescribe")
+def record_session(appointment_id: int, req: RecordSessionReq, db: Session = Depends(get_db)):
+    appointment = db.query(models.Appointment).filter(models.Appointment.appointment_id == appointment_id).first()
+    if not appointment:
+        raise HTTPException(status_code=404, detail="Appointment not found")
+        
+    appointment.prescription = req.prescription
+    if req.evaluation is not None:
+        appointment.evaluation = req.evaluation
+    appointment.status = "Completed"
+    
+    db.query(models.PrescribedExercise).filter(models.PrescribedExercise.appointment_id == appointment_id).delete()
+    
+    for ex in req.exercises:
+        pe = models.PrescribedExercise(
+            appointment_id=appointment_id,
+            exercise_id=ex.exercise_id,
+            assigned_sets=ex.assigned_sets,
+            assigned_duration=ex.assigned_duration,
+            evaluation=ex.evaluation
+        )
+        db.add(pe)
+        
+    db.commit()
+    return {"message": "Session recorded successfully"}
 
 @app.get("/physio/rentals/{physio_id}")
 def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
@@ -574,10 +607,10 @@ def reject_rental(rental_id: int, db: Session = Depends(get_db)):
 @app.get("/appointments/available_physios/{student_id}")
 def get_available_physios(student_id: int, db: Session = Depends(get_db)):
     # 1. Try to find the assigned physiotherapist via active prescription
-    presc = db.query(models.Prescription).filter(
-        models.Prescription.student_id == student_id,
-        models.Prescription.status == 'Active'
-    ).first()
+    presc = db.query(models.Appointment).filter(
+        models.Appointment.student_id == student_id,
+        models.Appointment.prescription != None
+    ).order_by(models.Appointment.schedule_time.desc()).first()
     
     if presc:
         physio = db.query(models.User, models.Physiotherapist).join(

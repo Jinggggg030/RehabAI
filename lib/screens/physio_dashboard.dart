@@ -7,6 +7,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:rehab_ai/screens/login_page.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
+import 'package:rehab_ai/screens/record_session_dialog.dart';
+
 class PhysioDashboard extends StatefulWidget {
   const PhysioDashboard({super.key});
 
@@ -743,7 +745,20 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
     }
   }
 
-  Future<void> _showTransferDialog(dynamic appointment) async {
+  Future<void> _showRecordSessionDialog(Map<String, dynamic> appointment) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => RecordSessionDialog(appointment: appointment),
+    );
+    if (result == true) {
+      _fetchAppointments();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session recorded successfully!', style: TextStyle(color: Colors.white)), backgroundColor: Colors.green));
+      }
+    }
+  }
+
+  Future<void> _showTransferDialog(Map<String, dynamic> appointment) async {
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -990,9 +1005,14 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
               child: ListView.builder(
                 itemCount: _appointments.length,
                 itemBuilder: (context, index) {
-                  final a = _appointments[index];
-                  final date = DateTime.tryParse(a['schedule_time'] ?? '')?.toLocal().toString().split('.')[0] ?? 'Unknown';
+                  final parsedDate = DateTime.tryParse(a['schedule_time'] ?? '');
+                  final date = parsedDate?.toLocal().toString().split('.')[0] ?? 'Unknown';
                   final isScheduled = a['status'] == 'Scheduled';
+                  
+                  final isToday = parsedDate != null && 
+                                  parsedDate.toLocal().year == DateTime.now().year && 
+                                  parsedDate.toLocal().month == DateTime.now().month && 
+                                  parsedDate.toLocal().day == DateTime.now().day;
 
                   return Card(
                     elevation: 2,
@@ -1034,11 +1054,25 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                               ),
                               if (isScheduled) ...[
                                 const SizedBox(height: 8),
-                                OutlinedButton.icon(
-                                  onPressed: () => _showTransferDialog(a),
-                                  icon: const Icon(Icons.swap_horiz, size: 16),
-                                  label: const Text("Transfer"),
-                                  style: OutlinedButton.styleFrom(foregroundColor: Colors.orange.shade800, side: BorderSide(color: Colors.orange.shade200)),
+                                Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: () => _showTransferDialog(a),
+                                      icon: const Icon(Icons.swap_horiz, size: 16),
+                                      label: const Text("Transfer"),
+                                      style: OutlinedButton.styleFrom(foregroundColor: Colors.orange.shade800, side: BorderSide(color: Colors.orange.shade200), padding: const EdgeInsets.symmetric(horizontal: 8)),
+                                    ),
+                                    if (isToday) ...[
+                                      const SizedBox(width: 8),
+                                      ElevatedButton.icon(
+                                        onPressed: () => _showRecordSessionDialog(a),
+                                        icon: const Icon(Icons.edit_document, size: 16),
+                                        label: const Text("Record Session"),
+                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade800, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 8)),
+                                      ),
+                                    ],
+                                  ],
                                 )
                               ]
                             ],

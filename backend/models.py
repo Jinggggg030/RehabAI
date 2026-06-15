@@ -103,25 +103,13 @@ class Appointment(Base):
     schedule_time = Column(DateTime, nullable=False)
     status = Column(String(50), default="Scheduled")
     evaluation = Column(Text, nullable=True)
+    prescription = Column(Text, nullable=True)
 
     __table_args__ = (
-        CheckConstraint("status IN ('Scheduled', 'Cancelled')", name="check_appointment_status"),
+        CheckConstraint("status IN ('Scheduled', 'Cancelled', 'Completed')", name="check_appointment_status"),
     )
 
-class Prescription(Base):
-    __tablename__ = "Prescription"
 
-    prescription_id = Column(Integer, primary_key=True)
-    appointment_id = Column(Integer, ForeignKey("Appointment.appointment_id"), nullable=False)
-    student_id = Column(Integer, ForeignKey("Student.student_id"), nullable=False)
-    therapist_id = Column(Integer, ForeignKey("Physiotherapist.therapist_id"), nullable=False)
-    
-    diagnosis = Column(Text, nullable=False)
-    status = Column(String(10), default="Active")
-
-    __table_args__ = (
-        CheckConstraint("status IN ('Active', 'Completed')", name="check_prescription_status"),
-    )
 
 class Exercise(Base):
     __tablename__ = "Exercise"
@@ -138,7 +126,7 @@ class PrescribedExercise(Base):
 
     prescribed_exercise_id = Column(Integer, primary_key=True)
     exercise_id = Column(Integer, ForeignKey("Exercise.exercise_id"), nullable=False)
-    prescription_id = Column(Integer, ForeignKey("Prescription.prescription_id"), nullable=False)
+    appointment_id = Column(Integer, ForeignKey("Appointment.appointment_id"), nullable=False)
     
     assigned_sets = Column(Integer, nullable=False)
     assigned_duration = Column(Integer, nullable=False)
