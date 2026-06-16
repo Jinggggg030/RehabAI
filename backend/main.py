@@ -185,6 +185,99 @@ def get_all_rental_records(db: Session = Depends(get_db)):
     records = db.query(models.RentalRecord).all()
     return {"rental_records": records}
 
+@app.get("/admin/rentals")
+def get_admin_rentals(db: Session = Depends(get_db)):
+    rentals = db.query(models.RentalRecord).all()
+    result = []
+    for r in rentals:
+        student_user = db.query(models.User).filter(models.User.user_id == r.student_id).first()
+        equipment = db.query(models.Equipment).filter(models.Equipment.equipment_id == r.equipment_id).first()
+        reason = db.query(models.RentalReason).filter(models.RentalReason.rental_reason_id == r.rental_reason_id).first()
+        
+        result.append({
+            "rental_record_id": r.rental_record_id,
+            "student_id": r.student_id,
+            "student_name": student_user.username if student_user else "Unknown",
+            "admin_id": r.admin_id,
+            "equipment_id": r.equipment_id,
+            "equipment_name": equipment.name if equipment else "Unknown",
+            "rental_reason": reason.description if reason else "Unknown",
+            "custom_reason": r.custom_reason,
+            "collection_method": r.collection_method,
+            "delivery_address": r.delivery_address,
+            "collection_date": r.collection_date,
+            "return_date": r.return_date,
+            "status": r.status,
+            "rental_duration": r.rental_duration,
+            "return_status": r.return_status,
+            "proof_of_status": r.proof_of_status
+        })
+    return {"rentals": result}
+
+class RentalStatusUpdate(BaseModel):
+    status: str
+    admin_id: Optional[int] = None
+    return_status: Optional[str] = None
+    
+@app.put("/admin/rentals/{rental_record_id}/status")
+def update_rental_status(rental_record_id: int, update_data: RentalStatusUpdate, db: Session = Depends(get_db)):
+    record = db.query(models.RentalRecord).filter(models.RentalRecord.rental_record_id == rental_record_id).first()
+    if not record:
+        raise HTTPException(status_code=404, detail="Rental record not found")
+        
+    record.status = update_data.status
+    if update_data.admin_id is not None:
+        record.admin_id = update_data.admin_id
+    if update_data.return_status is not None:
+        record.return_status = update_data.return_status
+        
+    db.commit()
+    return {"message": "Rental status updated successfully"}
+
+class EquipmentCreate(BaseModel):
+    name: str
+    description: Optional[str] = None
+    stock: int
+    admin_id: Optional[int] = None
+
+@app.post("/admin/equipment")
+def create_equipment(eq: EquipmentCreate, db: Session = Depends(get_db)):
+    new_eq = models.Equipment(
+        name=eq.name,
+        description=eq.description,
+        stock=eq.stock,
+        admin_id=eq.admin_id
+    )
+    db.add(new_eq)
+    db.commit()
+    db.refresh(new_eq)
+    return {"message": "Equipment added successfully", "equipment_id": new_eq.equipment_id}
+
+@app.put("/admin/equipment/{equipment_id}")
+def update_equipment(equipment_id: int, eq: EquipmentCreate, db: Session = Depends(get_db)):
+    equipment = db.query(models.Equipment).filter(models.Equipment.equipment_id == equipment_id).first()
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipment not found")
+        
+    equipment.name = eq.name
+    equipment.description = eq.description
+    equipment.stock = eq.stock
+    if eq.admin_id is not None:
+        equipment.admin_id = eq.admin_id
+        
+    db.commit()
+    return {"message": "Equipment updated successfully"}
+
+@app.delete("/admin/equipment/{equipment_id}")
+def delete_equipment(equipment_id: int, db: Session = Depends(get_db)):
+    equipment = db.query(models.Equipment).filter(models.Equipment.equipment_id == equipment_id).first()
+    if not equipment:
+        raise HTTPException(status_code=404, detail="Equipment not found")
+        
+    db.delete(equipment)
+    db.commit()
+    return {"message": "Equipment deleted successfully"}
+
 @app.get("/cancellation_reasons")
 def get_all_cancellation_reasons(db: Session = Depends(get_db)):
     reasons = db.query(models.CancellationReason).all()

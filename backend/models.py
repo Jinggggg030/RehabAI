@@ -19,7 +19,7 @@ class User(Base):
     role = Column(String(1), nullable=False, default='S')
 
     __table_args__ = (
-        CheckConstraint("role IN ('S', 'P')", name="check_valid_role"), 
+        CheckConstraint("role IN ('S', 'P', 'A')", name="check_valid_role"), 
     )
 
 class Student(Base):
@@ -36,6 +36,13 @@ class Physiotherapist(Base):
     leave_start_date = Column(DateTime, nullable=True)
     leave_end_date = Column(DateTime, nullable=True)
 
+class Admin(Base):
+    __tablename__ = "Admin"
+
+    admin_id = Column(Integer, ForeignKey("User.user_id"), primary_key=True)
+    shift = Column(String(50), nullable=True)
+    off_day = Column(String(20), nullable=True)
+
 class Category(Base):
     __tablename__ = "Category"
 
@@ -46,6 +53,7 @@ class Equipment(Base):
     __tablename__ = "Equipment"
 
     equipment_id = Column(Integer, primary_key=True)
+    admin_id = Column(Integer, ForeignKey("Admin.admin_id"), nullable=True)
     name = Column(String(50), nullable=False)
     description = Column(Text, nullable=True)
     stock = Column(Integer, nullable=False, default=0)
@@ -68,6 +76,7 @@ class RentalRecord(Base):
 
     rental_record_id = Column(Integer, primary_key=True)
     student_id = Column(Integer, ForeignKey("Student.student_id"), nullable=False)
+    admin_id = Column(Integer, ForeignKey("Admin.admin_id"), nullable=True)
     equipment_id = Column(Integer, ForeignKey("Equipment.equipment_id"), nullable=False)
     rental_reason_id = Column(Integer, ForeignKey("Rental_Reason.rental_reason_id"), nullable=False)
     custom_reason = Column(String(255), nullable=True)

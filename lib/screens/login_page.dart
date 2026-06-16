@@ -9,6 +9,7 @@ import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:rehab_ai/screens/profile_setup_page.dart';
 import 'package:rehab_ai/screens/physio_dashboard.dart';
+import 'package:rehab_ai/screens/admin_dashboard.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 
 class LoginPage extends StatefulWidget {
@@ -136,6 +137,11 @@ class _LoginPageState extends State<LoginPage> {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(builder: (context) => const PhysioDashboard()),
+          );
+        } else if (data['role'] == 'A') {
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(builder: (context) => const AdminDashboard()),
           );
         } else {
           Navigator.pushReplacement(
