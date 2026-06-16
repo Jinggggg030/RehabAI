@@ -262,6 +262,66 @@ def get_all_prescribed_exercises(db: Session = Depends(get_db)):
     prescribed = db.query(models.PrescribedExercise).all()
     return {"prescribed_exercises": prescribed}
 
+class ScheduleExerciseRequest(BaseModel):
+    exercise_id: int
+    scheduled_date: datetime
+
+@app.post("/students/{student_id}/scheduled_exercises")
+def schedule_exercise(student_id: int, request: ScheduleExerciseRequest, db: Session = Depends(get_db)):
+    new_scheduled = models.SelfScheduledExercise(
+        student_id=student_id,
+        exercise_id=request.exercise_id,
+        scheduled_date=request.scheduled_date,
+        status="Pending"
+    )
+    db.add(new_scheduled)
+    db.commit()
+    db.refresh(new_scheduled)
+    return {"message": "Exercise scheduled successfully", "scheduled_id": new_scheduled.scheduled_id}
+
+@app.get("/students/{student_id}/scheduled_exercises")
+def get_scheduled_exercises(student_id: int, db: Session = Depends(get_db)):
+    scheduled = db.query(models.SelfScheduledExercise).filter(
+        models.SelfScheduledExercise.student_id == student_id,
+        models.SelfScheduledExercise.status == "Pending"
+    ).order_by(models.SelfScheduledExercise.scheduled_date.asc()).all()
+    
+    result = []
+    for se in scheduled:
+        ex = db.query(models.Exercise).filter(models.Exercise.exercise_id == se.exercise_id).first()
+        if ex:
+            disciplines = db.query(models.Discipline.description).join(
+                models.ExerciseDiscipline, 
+                models.Discipline.discipline_id == models.ExerciseDiscipline.discipline_id
+            ).filter(models.ExerciseDiscipline.exercise_id == ex.exercise_id).all()
+            
+            discipline_list = [d[0] for d in disciplines]
+            
+            result.append({
+                "scheduled_id": se.scheduled_id,
+                "exercise_id": ex.exercise_id,
+                "name": ex.name,
+                "description": ex.description,
+                "disciplines": discipline_list,
+                "video_url": ex.video_url,
+                "scheduled_date": se.scheduled_date.isoformat(),
+                "status": se.status
+            })
+    return {"scheduled_exercises": result}
+
+class UpdateScheduledExerciseRequest(BaseModel):
+    status: str
+
+@app.put("/scheduled_exercises/{scheduled_id}/status")
+def update_scheduled_exercise_status(scheduled_id: int, request: UpdateScheduledExerciseRequest, db: Session = Depends(get_db)):
+    se = db.query(models.SelfScheduledExercise).filter(models.SelfScheduledExercise.scheduled_id == scheduled_id).first()
+    if not se:
+        raise HTTPException(status_code=404, detail="Scheduled exercise not found")
+        
+    se.status = request.status
+    db.commit()
+    return {"message": "Status updated successfully"}
+
 @app.get("/ai_feedback")
 def get_all_ai_feedback(db: Session = Depends(get_db)):
     feedback = db.query(models.AIFeedback).all()

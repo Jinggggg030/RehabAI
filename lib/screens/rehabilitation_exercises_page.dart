@@ -20,6 +20,7 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
   
   List<dynamic> allExercises = [];
   List<dynamic> assignedExercises = [];
+  List<dynamic> myPlanExercises = [];
   bool isLoading = true;
   
   String selectedDiscipline = 'All';
@@ -30,10 +31,99 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    _tabController = TabController(length: 3, vsync: this);
     _fetchExercises();
   }
   
+  Future<void> _scheduleExercise(Map<String, dynamic> exercise) async {
+    final DateTime? pickedDate = await showDatePicker(
+      context: context,
+      initialDate: DateTime.now(),
+      firstDate: DateTime.now(),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: Color(0xFF207866), 
+              onPrimary: Colors.white, 
+              onSurface: Colors.black, 
+            ),
+            textButtonTheme: TextButtonThemeData(
+              style: TextButton.styleFrom(
+                foregroundColor: const Color(0xFF207866), 
+              ),
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    
+    if (pickedDate != null) {
+      final TimeOfDay? pickedTime = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.now(),
+        builder: (context, child) {
+          return Theme(
+            data: Theme.of(context).copyWith(
+              colorScheme: const ColorScheme.light(
+                primary: Color(0xFF207866),
+              ),
+            ),
+            child: child!,
+          );
+        },
+      );
+      
+      if (pickedTime != null) {
+        final dt = DateTime(pickedDate.year, pickedDate.month, pickedDate.day, pickedTime.hour, pickedTime.minute);
+        
+        setState(() => isLoading = true);
+        try {
+          final res = await http.post(
+            Uri.parse('$apiUrl/students/1/scheduled_exercises'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'exercise_id': exercise['exercise_id'],
+              'scheduled_date': dt.toIso8601String()
+            })
+          );
+          if (res.statusCode == 200) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Exercise scheduled successfully!')));
+              _fetchExercises(); // Refresh plan
+            }
+          }
+        } catch (e) {
+          debugPrint("Schedule error: $e");
+        } finally {
+          setState(() => isLoading = false);
+        }
+      }
+    }
+  }
+
+  Future<void> _cancelScheduledExercise(int scheduledId) async {
+    setState(() => isLoading = true);
+    try {
+      final res = await http.put(
+        Uri.parse('$apiUrl/scheduled_exercises/$scheduledId/status'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'status': 'Cancelled'})
+      );
+      if (res.statusCode == 200) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Scheduled exercise cancelled')));
+          _fetchExercises(); // Refresh plan
+        }
+      }
+    } catch (e) {
+      debugPrint("Cancel error: $e");
+    } finally {
+      setState(() => isLoading = false);
+    }
+  }
   Future<void> _fetchExercises() async {
     try {
       // Fetch all exercises
@@ -62,6 +152,14 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
       if (resAssigned.statusCode == 200) {
         setState(() {
           assignedExercises = jsonDecode(resAssigned.body)['exercises'] ?? [];
+        });
+      }
+      
+      // Fetch self-scheduled exercises
+      final resScheduled = await http.get(Uri.parse('$apiUrl/students/1/scheduled_exercises'));
+      if (resScheduled.statusCode == 200) {
+        setState(() {
+          myPlanExercises = jsonDecode(resScheduled.body)['scheduled_exercises'] ?? [];
         });
       }
     } catch (e) {
@@ -150,6 +248,7 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                 tabs: const [
                   Tab(text: 'Assigned'),
                   Tab(text: 'Explore'),
+                  Tab(text: 'My Plan'),
                 ],
               ),
             ),
@@ -194,7 +293,7 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                       }
                       return false;
                     }).toList(), 
-                    isAssigned: true
+                    tabType: 'Assigned'
                   ),
                   // Explore Tab
                   _buildExercisesList(
@@ -205,7 +304,18 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                       }
                       return false;
                     }).toList(), 
-                    isAssigned: false
+                    tabType: 'Explore'
+                  ),
+                  // My Plan Tab
+                  _buildExercisesList(
+                    myPlanExercises.where((ex) {
+                      if (selectedDiscipline == 'All') return true;
+                      if (ex['disciplines'] != null && ex['disciplines'] is List) {
+                        return (ex['disciplines'] as List).contains(selectedDiscipline);
+                      }
+                      return false;
+                    }).toList(), 
+                    tabType: 'MyPlan'
                   ),
                 ],
               ),
@@ -245,11 +355,11 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
     );
   }
 
-  Widget _buildExercisesList(List<dynamic> exercises, {required bool isAssigned}) {
+  Widget _buildExercisesList(List<dynamic> exercises, {required String tabType}) {
     if (exercises.isEmpty) {
       return Center(
         child: Text(
-          isAssigned ? 'No exercises assigned yet.' : 'No exercises found for this discipline.',
+          tabType == 'Assigned' ? 'No exercises assigned yet.' : (tabType == 'MyPlan' ? 'No self-scheduled exercises.' : 'No exercises found for this discipline.'),
           style: GoogleFonts.readexPro(
             color: Colors.grey.shade500,
             fontSize: 16,
@@ -262,12 +372,12 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
       itemCount: exercises.length,
       separatorBuilder: (context, index) => const SizedBox(height: 16),
       itemBuilder: (context, index) {
-        return _buildExerciseCard(exercises[index], isAssigned: isAssigned);
+        return _buildExerciseCard(exercises[index], tabType: tabType);
       },
     );
   }
 
-  Widget _buildExerciseCard(Map<String, dynamic> exercise, {required bool isAssigned}) {
+  Widget _buildExerciseCard(Map<String, dynamic> exercise, {required String tabType}) {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -332,7 +442,7 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
               color: Colors.black87,
             ),
           ),
-          if (isAssigned) ...[
+          if (tabType == 'Assigned') ...[
             const SizedBox(height: 8),
             Row(
               children: [
@@ -360,6 +470,27 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                 ),
               ],
             ),
+          ] else if (tabType == 'MyPlan') ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.access_time, size: 12, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  exercise['scheduled_date'] != null 
+                    ? DateFormat('MMM dd, yyyy - hh:mm a').format(DateTime.parse(exercise['scheduled_date']))
+                    : 'Unknown date',
+                  style: GoogleFonts.readexPro(fontSize: 12, color: Colors.grey.shade600),
+                ),
+                const SizedBox(width: 12),
+                Icon(Icons.info_outline, size: 12, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  'Status: ${exercise['status'] ?? 'Pending'}',
+                  style: GoogleFonts.readexPro(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
           ],
           const SizedBox(height: 12),
           // Details and Button
@@ -379,35 +510,86 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                 ),
               ),
               const SizedBox(width: 16),
-              ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => ExerciseDetailsPage(
-                        isAssigned: isAssigned, 
-                        exercise: exercise,
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (tabType == 'Explore') ...[
+                    OutlinedButton(
+                      onPressed: () => _scheduleExercise(exercise),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: const Color(0xFF207866),
+                        side: const BorderSide(color: Color(0xFF207866)),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      child: Text(
+                        'Schedule',
+                        style: GoogleFonts.readexPro(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
                       ),
                     ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF207866),
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                  minimumSize: Size.zero,
-                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(6),
+                    const SizedBox(width: 8),
+                  ],
+                  if (tabType == 'MyPlan') ...[
+                    OutlinedButton(
+                      onPressed: () => _cancelScheduledExercise(exercise['scheduled_id']),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: const BorderSide(color: Colors.red),
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(6),
+                        ),
+                      ),
+                      child: Text(
+                        'Cancel',
+                        style: GoogleFonts.readexPro(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                  ],
+                  ElevatedButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => ExerciseDetailsPage(
+                            isAssigned: tabType == 'Assigned', 
+                            exercise: exercise,
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF207866),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    child: Text(
+                      'Perform Now',
+                      style: GoogleFonts.readexPro(
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
                   ),
-                ),
-                child: Text(
-                  'View Details',
-                  style: GoogleFonts.readexPro(
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
+                ],
               ),
             ],
           ),

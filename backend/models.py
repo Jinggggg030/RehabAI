@@ -143,6 +143,16 @@ class PrescribedExercise(Base):
     assigned_duration = Column(Integer, nullable=False)
     evaluation = Column(Text, nullable=True)
 
+class SelfScheduledExercise(Base):
+    __tablename__ = "Self_Scheduled_Exercise"
+
+    scheduled_id = Column(Integer, primary_key=True)
+    student_id = Column(Integer, ForeignKey("Student.student_id", ondelete="CASCADE"), nullable=False)
+    exercise_id = Column(Integer, ForeignKey("Exercise.exercise_id", ondelete="CASCADE"), nullable=False)
+    
+    scheduled_date = Column(DateTime, nullable=False)
+    status = Column(String(50), default="Pending")
+
 class AIFeedback(Base):
     __tablename__ = "Ai_Feedback"
 
