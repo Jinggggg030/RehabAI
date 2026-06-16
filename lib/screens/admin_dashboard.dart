@@ -7,6 +7,8 @@ import 'package:rehab_ai/screens/login_page.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
+import 'dart:io';
+import 'package:image_picker/image_picker.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -23,6 +25,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   List<dynamic> _rentals = [];
   List<dynamic> _equipment = [];
   bool _isLoading = false;
+  final ImagePicker _picker = ImagePicker();
 
   @override
   void initState() {
@@ -83,7 +86,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  Future<void> _updateRentalStatus(int rentalId, String newStatus, {String? returnStatus}) async {
+  Future<void> _updateRentalStatus(int rentalId, String newStatus, {String? returnStatus, String? proofOfCollection}) async {
     setState(() => _isLoading = true);
     try {
       final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
@@ -94,6 +97,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
       if (returnStatus != null) {
         body['return_status'] = returnStatus;
       }
+      if (proofOfCollection != null) {
+        body['proof_of_collection'] = proofOfCollection;
+      }
       final res = await http.put(
         Uri.parse('$apiUrl/admin/rentals/$rentalId/status'),
         headers: {'Content-Type': 'application/json'},
@@ -101,12 +107,77 @@ class _AdminDashboardState extends State<AdminDashboard> {
       );
       if (res.statusCode == 200) {
         _fetchRentals();
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Status updated successfully'), backgroundColor: Colors.green));
+        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Status updated successfully'), backgroundColor: Colors.green));
       }
     } catch (e) {
       debugPrint("Error updating status: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  void _showCollectionDialog(int rentalId) {
+    showDialog(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text('Proof of Collection', style: GoogleFonts.readexPro(fontWeight: FontWeight.bold)),
+          content: Text('Please upload an image as proof of collection.', style: GoogleFonts.readexPro(fontSize: 14)),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: Text('Cancel', style: GoogleFonts.readexPro(color: Colors.grey)),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.photo_library, size: 18),
+              label: Text('Gallery', style: GoogleFonts.readexPro()),
+              onPressed: () async {
+                Navigator.pop(context);
+                final pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+                if (pickedFile != null) {
+                  _uploadProofAndMarkActive(rentalId, pickedFile.path);
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700, foregroundColor: Colors.white),
+            ),
+            ElevatedButton.icon(
+              icon: const Icon(Icons.camera_alt, size: 18),
+              label: Text('Camera', style: GoogleFonts.readexPro()),
+              onPressed: () async {
+                Navigator.pop(context);
+                final pickedFile = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+                if (pickedFile != null) {
+                  _uploadProofAndMarkActive(rentalId, pickedFile.path);
+                }
+              },
+              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF207866), foregroundColor: Colors.white),
+            ),
+          ],
+        );
+      }
+    );
+  }
+
+  Future<void> _uploadProofAndMarkActive(int rentalId, String filePath) async {
+    setState(() => _isLoading = true);
+    try {
+      final file = File(filePath);
+      final fileExt = filePath.split('.').last;
+      final fileName = '${DateTime.now().millisecondsSinceEpoch}_$rentalId.$fileExt';
+      
+      await _supabase.storage.from('proof_of_collection').upload(
+        fileName, 
+        file,
+        fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
+      );
+      
+      final imageUrl = _supabase.storage.from('proof_of_collection').getPublicUrl(fileName);
+      await _updateRentalStatus(rentalId, 'Active', proofOfCollection: imageUrl);
+      
+    } catch (e) {
+      debugPrint("Error uploading proof: $e");
+      if (mounted) ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to upload proof: $e'), backgroundColor: Colors.red));
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -248,7 +319,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   children: [
                     if (r['status'] == 'Approved')
                       ElevatedButton(
-                        onPressed: () => _updateRentalStatus(r['rental_record_id'], 'Active'),
+                        onPressed: () => _showCollectionDialog(r['rental_record_id']),
                         style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF207866), foregroundColor: Colors.white),
                         child: const Text('Mark Collected'),
                       ),

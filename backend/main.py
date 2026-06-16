@@ -11,6 +11,7 @@ import cv2
 from backend.ai.pose_detector import PoseDetector
 from backend.ai.angle_calculator import calculate_angle
 from backend.ai.chatbot import chatbot_instance
+from datetime import datetime
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -204,8 +205,8 @@ def get_admin_rentals(db: Session = Depends(get_db)):
             "rental_reason": reason.description if reason else "Unknown",
             "custom_reason": r.custom_reason,
             "collection_method": r.collection_method,
-            "delivery_address": r.delivery_address,
-            "collection_date": r.collection_date,
+            "proof_of_collection": r.proof_of_collection,
+            "collection_date": r.collection_date.isoformat() if r.collection_date else None,
             "return_date": r.return_date,
             "status": r.status,
             "rental_duration": r.rental_duration,
@@ -216,8 +217,9 @@ def get_admin_rentals(db: Session = Depends(get_db)):
 
 class RentalStatusUpdate(BaseModel):
     status: str
-    admin_id: Optional[int] = None
+    admin_id: int
     return_status: Optional[str] = None
+    proof_of_collection: Optional[str] = None
     
 @app.put("/admin/rentals/{rental_record_id}/status")
 def update_rental_status(rental_record_id: int, update_data: RentalStatusUpdate, db: Session = Depends(get_db)):
@@ -226,10 +228,11 @@ def update_rental_status(rental_record_id: int, update_data: RentalStatusUpdate,
         raise HTTPException(status_code=404, detail="Rental record not found")
         
     record.status = update_data.status
-    if update_data.admin_id is not None:
-        record.admin_id = update_data.admin_id
-    if update_data.return_status is not None:
+    record.admin_id = update_data.admin_id
+    if update_data.return_status:
         record.return_status = update_data.return_status
+    if update_data.proof_of_collection:
+        record.proof_of_collection = update_data.proof_of_collection
         
     db.commit()
     return {"message": "Rental status updated successfully"}
@@ -763,7 +766,7 @@ def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
             "equipment_name": eq_name,
             "collection_date": r.collection_date,
             "collection_method": r.collection_method,
-            "delivery_address": r.delivery_address,
+            "proof_of_collection": r.proof_of_collection,
             "status": r.status,
             "return_status": r.return_status,
             "reason": final_reason
@@ -910,8 +913,6 @@ class ApplyLeaveReq(BaseModel):
 class TransferAppointmentReq(BaseModel):
     new_therapist_id: int
 
-from datetime import datetime
-
 class RentalRequest(BaseModel):
     student_id: int
     equipment_id: int
@@ -919,15 +920,15 @@ class RentalRequest(BaseModel):
     custom_reason: Optional[str] = None
     rental_duration: int
     collection_method: str
-    delivery_address: Optional[str] = None
-    collection_date: datetime
+    proof_of_collection: Optional[str] = None
+    collection_date: str
 
 @app.post("/appointments/book")
 def book_appointment(req: BookAppointmentReq, db: Session = Depends(get_db)):
     appt = models.Appointment(
         student_id=req.student_id,
         therapist_id=req.therapist_id,
-        schedule_time=req.schedule_time,
+        schedule_time=datetime.fromisoformat(req.schedule_time),
         status="Scheduled"
     )
     db.add(appt)
@@ -1029,8 +1030,8 @@ def request_rental(req: RentalRequest, db: Session = Depends(get_db)):
         custom_reason=req.custom_reason,
         rental_duration=req.rental_duration,
         collection_method=req.collection_method,
-        delivery_address=req.delivery_address,
-        collection_date=req.collection_date,
+        proof_of_collection=req.proof_of_collection,
+        collection_date=datetime.fromisoformat(req.collection_date),
         status="Pending"
     )
     db.add(new_rental)

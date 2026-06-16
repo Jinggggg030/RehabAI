@@ -604,18 +604,22 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
             color: Colors.black87,
           ),
         ),
-        DropdownButtonHideUnderline(
-          child: DropdownButton<int>(
-            hint: Text('Select Reason', style: GoogleFonts.readexPro(fontSize: 11)),
-            value: selectedValue,
-            items: _rentalReasons.map<DropdownMenuItem<int>>((r) {
-              return DropdownMenuItem<int>(
-                value: r['rental_reason_id'],
-                child: Text(r['description'], style: GoogleFonts.readexPro(fontSize: 11)),
-              );
-            }).toList(),
-            onChanged: onChanged,
-            icon: const Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.black54),
+        const SizedBox(width: 8),
+        Expanded(
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              isExpanded: true,
+              hint: Text('Select Reason', style: GoogleFonts.readexPro(fontSize: 11)),
+              value: selectedValue,
+              items: _rentalReasons.map<DropdownMenuItem<int>>((r) {
+                return DropdownMenuItem<int>(
+                  value: r['rental_reason_id'],
+                  child: Text(r['description'], style: GoogleFonts.readexPro(fontSize: 11), overflow: TextOverflow.ellipsis),
+                );
+              }).toList(),
+              onChanged: onChanged,
+              icon: const Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.black54),
+            ),
           ),
         ),
       ],
@@ -634,16 +638,20 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
             color: Colors.black87,
           ),
         ),
-        DropdownButtonHideUnderline(
-          child: DropdownButton<int>(
-            value: selectedValue,
-            items: const [
-              DropdownMenuItem(value: 7, child: Text('7 Days', style: TextStyle(fontSize: 11))),
-              DropdownMenuItem(value: 14, child: Text('14 Days', style: TextStyle(fontSize: 11))),
-              DropdownMenuItem(value: 30, child: Text('30 Days', style: TextStyle(fontSize: 11))),
-            ],
-            onChanged: onChanged,
-            icon: const Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.black54),
+        const SizedBox(width: 8),
+        Expanded(
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              isExpanded: true,
+              value: selectedValue,
+              items: const [
+                DropdownMenuItem(value: 7, child: Text('7 Days', style: TextStyle(fontSize: 11))),
+                DropdownMenuItem(value: 14, child: Text('14 Days', style: TextStyle(fontSize: 11))),
+                DropdownMenuItem(value: 30, child: Text('30 Days', style: TextStyle(fontSize: 11))),
+              ],
+              onChanged: onChanged,
+              icon: const Icon(Icons.keyboard_arrow_down, size: 16, color: Colors.black54),
+            ),
           ),
         ),
       ],
