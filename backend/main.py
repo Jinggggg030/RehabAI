@@ -201,11 +201,18 @@ def get_all_exercises(db: Session = Depends(get_db)):
     exercises = db.query(models.Exercise).all()
     result = []
     for ex in exercises:
+        disciplines = db.query(models.Discipline.description).join(
+            models.ExerciseDiscipline, 
+            models.Discipline.discipline_id == models.ExerciseDiscipline.discipline_id
+        ).filter(models.ExerciseDiscipline.exercise_id == ex.exercise_id).all()
+        
+        discipline_list = [d[0] for d in disciplines]
+        
         result.append({
             "exercise_id": ex.exercise_id,
             "name": ex.name,
             "description": ex.description,
-            "discipline": ex.discipline,
+            "disciplines": discipline_list,
             "reference_joint_angle": ex.reference_joint_angle,
             "video_url": ex.video_url
         })
@@ -229,14 +236,24 @@ def get_prescribed_exercises(student_id: int, db: Session = Depends(get_db)):
     for pe in prescribed:
         ex = db.query(models.Exercise).filter(models.Exercise.exercise_id == pe.exercise_id).first()
         if ex:
+            disciplines = db.query(models.Discipline.description).join(
+                models.ExerciseDiscipline, 
+                models.Discipline.discipline_id == models.ExerciseDiscipline.discipline_id
+            ).filter(models.ExerciseDiscipline.exercise_id == ex.exercise_id).all()
+            
+            discipline_list = [d[0] for d in disciplines]
+            
             result.append({
                 "exercise_id": ex.exercise_id,
                 "name": ex.name,
                 "description": ex.description,
-                "discipline": ex.discipline,
+                "disciplines": discipline_list,
                 "reference_joint_angle": ex.reference_joint_angle,
                 "video_url": ex.video_url,
-                "prescribed_exercise_id": pe.prescribed_exercise_id
+                "prescribed_exercise_id": pe.prescribed_exercise_id,
+                "assigned_sets": pe.assigned_sets,
+                "assigned_duration": pe.assigned_duration,
+                "assigned_date": active_appointment.schedule_time.isoformat() if active_appointment.schedule_time else None
             })
     return {"exercises": result}
 

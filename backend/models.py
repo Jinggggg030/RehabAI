@@ -111,13 +111,24 @@ class Appointment(Base):
 
 
 
+class Discipline(Base):
+    __tablename__ = "Discipline"
+    
+    discipline_id = Column(Integer, primary_key=True)
+    description = Column(String(100), nullable=False, unique=True)
+
+class ExerciseDiscipline(Base):
+    __tablename__ = "Exercise_Discipline"
+    
+    exercise_id = Column(Integer, ForeignKey("Exercise.exercise_id", ondelete="CASCADE"), primary_key=True)
+    discipline_id = Column(Integer, ForeignKey("Discipline.discipline_id", ondelete="CASCADE"), primary_key=True)
+
 class Exercise(Base):
     __tablename__ = "Exercise"
 
     exercise_id = Column(Integer, primary_key=True)
     name = Column(String(100), nullable=False)
     description = Column(Text, nullable=True)
-    discipline = Column(String(50), nullable=True)
     reference_joint_angle = Column(Float, nullable=True)
     video_url = Column(String(255), nullable=True)
 

@@ -6,6 +6,7 @@ import 'exercise_details_page.dart';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:intl/intl.dart';
 
 class RehabilitationExercisesPage extends StatefulWidget {
   const RehabilitationExercisesPage({super.key});
@@ -43,8 +44,10 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
         // Extract unique disciplines
         final Set<String> discSet = {'All'};
         for (var ex in fetchedExercises) {
-          if (ex['discipline'] != null) {
-            discSet.add(ex['discipline']);
+          if (ex['disciplines'] != null && ex['disciplines'] is List) {
+            for (var d in ex['disciplines']) {
+              discSet.add(d.toString());
+            }
           }
         }
         
@@ -184,12 +187,24 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                 children: [
                   // Assigned Tab
                   _buildExercisesList(
-                    assignedExercises.where((ex) => selectedDiscipline == 'All' || ex['discipline'] == selectedDiscipline).toList(), 
+                    assignedExercises.where((ex) {
+                      if (selectedDiscipline == 'All') return true;
+                      if (ex['disciplines'] != null && ex['disciplines'] is List) {
+                        return (ex['disciplines'] as List).contains(selectedDiscipline);
+                      }
+                      return false;
+                    }).toList(), 
                     isAssigned: true
                   ),
                   // Explore Tab
                   _buildExercisesList(
-                    allExercises.where((ex) => selectedDiscipline == 'All' || ex['discipline'] == selectedDiscipline).toList(), 
+                    allExercises.where((ex) {
+                      if (selectedDiscipline == 'All') return true;
+                      if (ex['disciplines'] != null && ex['disciplines'] is List) {
+                        return (ex['disciplines'] as List).contains(selectedDiscipline);
+                      }
+                      return false;
+                    }).toList(), 
                     isAssigned: false
                   ),
                 ],
@@ -271,21 +286,42 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header / Discipline
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: const Color(0xFF207866).withOpacity(0.1),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: Text(
-              exercise['discipline'] ?? 'General',
-              style: GoogleFonts.readexPro(
-                fontSize: 10,
-                fontWeight: FontWeight.bold,
-                color: const Color(0xFF207866),
+          if (exercise['disciplines'] != null && (exercise['disciplines'] as List).isNotEmpty)
+            Wrap(
+              spacing: 8,
+              runSpacing: 4,
+              children: (exercise['disciplines'] as List).map<Widget>((d) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF207866).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(4),
+                ),
+                child: Text(
+                  d.toString(),
+                  style: GoogleFonts.readexPro(
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                    color: const Color(0xFF207866),
+                  ),
+                ),
+              )).toList(),
+            )
+          else
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: const Color(0xFF207866).withOpacity(0.1),
+                borderRadius: BorderRadius.circular(4),
+              ),
+              child: Text(
+                'General',
+                style: GoogleFonts.readexPro(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF207866),
+                ),
               ),
             ),
-          ),
           const SizedBox(height: 8),
           // Exercise Name
           Text(
@@ -296,6 +332,35 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
               color: Colors.black87,
             ),
           ),
+          if (isAssigned) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.calendar_today, size: 12, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  exercise['assigned_date'] != null 
+                    ? DateFormat('MMM dd, yyyy').format(DateTime.parse(exercise['assigned_date']))
+                    : 'Unknown date',
+                  style: GoogleFonts.readexPro(fontSize: 12, color: Colors.grey.shade600),
+                ),
+                const SizedBox(width: 12),
+                Icon(Icons.repeat, size: 12, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  '${exercise['assigned_sets'] ?? 0} Sets',
+                  style: GoogleFonts.readexPro(fontSize: 12, color: Colors.grey.shade600),
+                ),
+                const SizedBox(width: 12),
+                Icon(Icons.timer_outlined, size: 12, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Text(
+                  '${exercise['assigned_duration'] ?? 0} Reps/Mins',
+                  style: GoogleFonts.readexPro(fontSize: 12, color: Colors.grey.shade600),
+                ),
+              ],
+            ),
+          ],
           const SizedBox(height: 12),
           // Details and Button
           Row(
