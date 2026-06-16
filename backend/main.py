@@ -137,6 +137,75 @@ def get_all_users(db: Session = Depends(get_db)):
     users = db.query(models.User).all()
     return {"users": users}
 
+@app.get("/users/{user_id}/notifications")
+def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
+    from datetime import datetime, timedelta
+    notifications = []
+    
+    # 1. Chat Notifications
+    active_sessions = db.query(models.LiveChatSession).filter(
+        models.LiveChatSession.student_id == user_id,
+        models.LiveChatSession.session_status.in_(['Triage', 'Active'])
+    ).all()
+    for session in active_sessions:
+        last_log = db.query(models.ChatLog).filter(models.ChatLog.session_id == session.session_id).order_by(models.ChatLog.timestamp.desc()).first()
+        if last_log and last_log.sender_id != user_id:
+            notifications.append({
+                "type": "chat",
+                "title": "New Message",
+                "message": "You have a new message from the physiotherapist.",
+                "reference_id": session.session_id
+            })
+            break
+
+    # 2. Rental Notifications (Approved -> Pending Collection)
+    approved_rentals = db.query(models.RentalRecord).filter(
+        models.RentalRecord.student_id == user_id,
+        models.RentalRecord.status == 'Approved'
+    ).all()
+    for rental in approved_rentals:
+        eq = db.query(models.Equipment).filter(models.Equipment.equipment_id == rental.equipment_id).first()
+        eq_name = eq.name if eq else "Equipment"
+        notifications.append({
+            "type": "rental",
+            "title": "Rental Approved",
+            "message": f"Your request for {eq_name} is approved. Ready for collection!",
+            "reference_id": rental.rental_record_id
+        })
+
+    # 3. Appointment Notifications (Next 48h)
+    now = datetime.now()
+    two_days_later = now + timedelta(hours=48)
+    upcoming_appointments = db.query(models.Appointment).filter(
+        models.Appointment.student_id == user_id,
+        models.Appointment.status == 'Scheduled',
+        models.Appointment.schedule_time >= now,
+        models.Appointment.schedule_time <= two_days_later
+    ).all()
+    for appt in upcoming_appointments:
+        notifications.append({
+            "type": "appointment",
+            "title": "Upcoming Appointment",
+            "message": f"You have an appointment on {appt.schedule_time.strftime('%b %d, %Y at %I:%M %p')}.",
+            "reference_id": appt.appointment_id
+        })
+
+    # 4. Exercise Notifications
+    pending_exercises = db.query(models.SelfScheduledExercise).filter(
+        models.SelfScheduledExercise.student_id == user_id,
+        models.SelfScheduledExercise.status == 'Pending',
+        models.SelfScheduledExercise.scheduled_date <= now
+    ).all()
+    if pending_exercises:
+        notifications.append({
+            "type": "exercise",
+            "title": "Exercises Pending",
+            "message": f"You have {len(pending_exercises)} exercise(s) scheduled for today. Don't forget to complete them!",
+            "reference_id": None
+        })
+
+    return {"notifications": notifications}
+
 @app.get("/students")
 def get_all_students(db: Session = Depends(get_db)):
     students = db.query(models.Student).all()

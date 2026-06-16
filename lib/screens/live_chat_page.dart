@@ -40,7 +40,6 @@ class _LiveChatPageState extends State<LiveChatPage> {
   @override
   void initState() {
     super.initState();
-    GlobalState.hasUnreadLiveChat.value = false;
     // Fetch active session if any, or wait until first message to create one.
     _fetchActiveSession();
   }
@@ -172,7 +171,6 @@ class _LiveChatPageState extends State<LiveChatPage> {
                 isUser: newMsg['sender_id'] == myUserId,
               ));
             });
-            GlobalState.hasUnreadLiveChat.value = false;
             _scrollToBottom();
           }
         }

@@ -9,6 +9,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'dart:io';
 import 'package:image_picker/image_picker.dart';
+import 'dart:async';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -26,11 +27,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
   List<dynamic> _equipment = [];
   bool _isLoading = false;
   final ImagePicker _picker = ImagePicker();
+  Timer? _pollingTimer;
 
   @override
   void initState() {
     super.initState();
     _initDashboard();
+    _pollingTimer = Timer.periodic(const Duration(seconds: 15), (timer) {
+      if (_myUserId != null) {
+        _fetchRentals(silent: true);
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _pollingTimer?.cancel();
+    super.dispose();
   }
   
   Future<void> _initDashboard() async {
@@ -52,20 +65,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  Future<void> _fetchRentals() async {
-    setState(() => _isLoading = true);
+  Future<void> _fetchRentals({bool silent = false}) async {
+    if (!silent) setState(() => _isLoading = true);
     try {
       final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
       final res = await http.get(Uri.parse('$apiUrl/admin/rentals'));
       if (res.statusCode == 200) {
-        setState(() {
-          _rentals = jsonDecode(res.body)['rentals'] ?? [];
-        });
+        if (mounted) {
+          setState(() {
+            _rentals = jsonDecode(res.body)['rentals'] ?? [];
+          });
+        }
       }
     } catch (e) {
       debugPrint("Error fetching rentals: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (!silent && mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -524,18 +539,24 @@ class _AdminDashboardState extends State<AdminDashboard> {
             unselectedIconTheme: const IconThemeData(color: Colors.black54),
             selectedLabelTextStyle: GoogleFonts.readexPro(color: const Color(0xFF207866), fontWeight: FontWeight.bold),
             unselectedLabelTextStyle: GoogleFonts.readexPro(color: Colors.black54, fontWeight: FontWeight.w500),
-            destinations: const [
+            destinations: [
               NavigationRailDestination(
-                icon: Icon(Icons.assignment_late_outlined),
-                selectedIcon: Icon(Icons.assignment_late),
-                label: Text('Requests'),
+                icon: Badge(
+                  isLabelVisible: _rentals.any((r) => r['status'] == 'Pending'),
+                  child: const Icon(Icons.assignment_late_outlined),
+                ),
+                selectedIcon: Badge(
+                  isLabelVisible: _rentals.any((r) => r['status'] == 'Pending'),
+                  child: const Icon(Icons.assignment_late),
+                ),
+                label: const Text('Requests'),
               ),
-              NavigationRailDestination(
+              const NavigationRailDestination(
                 icon: Icon(Icons.assignment_turned_in_outlined),
                 selectedIcon: Icon(Icons.assignment_turned_in),
                 label: Text('Active Rentals'),
               ),
-              NavigationRailDestination(
+              const NavigationRailDestination(
                 icon: Icon(Icons.inventory_2_outlined),
                 selectedIcon: Icon(Icons.inventory_2),
                 label: Text('Inventory'),
