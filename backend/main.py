@@ -379,7 +379,9 @@ def get_all_exercises(db: Session = Depends(get_db)):
             "description": ex.description,
             "disciplines": discipline_list,
             "reference_joint_angle": ex.reference_joint_angle,
-            "video_url": ex.video_url
+            "video_url": ex.video_url,
+            "requires_ai": ex.requires_ai,
+            "ai_type": ex.ai_type
         })
     return {"exercises": result}
 
@@ -415,6 +417,8 @@ def get_prescribed_exercises(student_id: int, db: Session = Depends(get_db)):
                 "disciplines": discipline_list,
                 "reference_joint_angle": ex.reference_joint_angle,
                 "video_url": ex.video_url,
+                "requires_ai": ex.requires_ai,
+                "ai_type": ex.ai_type,
                 "prescribed_exercise_id": pe.prescribed_exercise_id,
                 "assigned_sets": pe.assigned_sets,
                 "assigned_duration": pe.assigned_duration,
@@ -469,6 +473,8 @@ def get_scheduled_exercises(student_id: int, db: Session = Depends(get_db)):
                 "description": ex.description,
                 "disciplines": discipline_list,
                 "video_url": ex.video_url,
+                "requires_ai": ex.requires_ai,
+                "ai_type": ex.ai_type,
                 "scheduled_date": se.scheduled_date.isoformat(),
                 "status": se.status
             })

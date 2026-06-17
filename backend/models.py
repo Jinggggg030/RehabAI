@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, CheckConstraint, JSON
+from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, CheckConstraint, JSON, Boolean
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
 
@@ -140,6 +140,8 @@ class Exercise(Base):
     description = Column(Text, nullable=True)
     reference_joint_angle = Column(Float, nullable=True)
     video_url = Column(String(255), nullable=True)
+    requires_ai = Column(Boolean, default=False)
+    ai_type = Column(String(100), nullable=True)
 
 class PrescribedExercise(Base):
     __tablename__ = "Prescribed_Exercise"

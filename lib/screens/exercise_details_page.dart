@@ -72,45 +72,40 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
             // Header
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-              child: SizedBox(
-                height: 48,
-                child: Stack(
-                  children: [
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: GestureDetector(
-                        onTap: () => Navigator.pop(context),
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.05),
-                                blurRadius: 10,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                            border: Border.all(color: Colors.grey.shade100),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
+                children: [
+                  GestureDetector(
+                    onTap: () => Navigator.pop(context),
+                    child: Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 10,
+                            offset: const Offset(0, 2),
                           ),
-                          child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black54),
-                        ),
+                        ],
+                        border: Border.all(color: Colors.grey.shade100),
+                      ),
+                      child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black54),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Text(
+                      widget.exercise['name'] ?? 'Exercise Details',
+                      style: GoogleFonts.readexPro(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF207866),
                       ),
                     ),
-                    Align(
-                      alignment: Alignment.center,
-                      child: Text(
-                        widget.exercise['name'] ?? 'Exercise Details',
-                        style: GoogleFonts.readexPro(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: const Color(0xFF207866),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
+                  ),
+                ],
               ),
             ),
 
@@ -190,14 +185,23 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                             // Button to start live exercise
                             ElevatedButton(
                               onPressed: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (context) => PoseCameraPage(
-                                      exerciseId: widget.exercise['exercise_id']?.toString() ?? '1',
+                                if (widget.exercise['requires_ai'] == true) {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => PoseCameraPage(
+                                        exerciseId: widget.exercise['exercise_id']?.toString() ?? '1',
+                                      ),
                                     ),
-                                  ),
-                                );
+                                  );
+                                } else {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => const DuringExercisePage(),
+                                    ),
+                                  );
+                                }
                               },
                               style: ElevatedButton.styleFrom(
                                 backgroundColor: const Color(0xFF207866),
@@ -208,7 +212,7 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                                 ),
                               ),
                               child: Text(
-                                'Start Live Tracking',
+                                widget.exercise['requires_ai'] == true ? 'Start Live AI Tracking' : 'Start Video Exercise',
                                 style: GoogleFonts.readexPro(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,

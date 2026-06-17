@@ -4,7 +4,14 @@ import 'package:camera/camera.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
+import 'dart:async';
 import '../services/posture_analyzer.dart';
+
+enum MovementPhase {
+  start,
+  contracted,
+  extended
+}
 
 class PoseCameraPage extends StatefulWidget {
   final String exerciseId;
@@ -24,8 +31,14 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
   late PostureAnalyzer _analyzer;
   int _sensorOrientation = 0;
   double _accuracy = 0;
-int _repCount = 0;
-bool _previousCorrect = false;
+  int _repCount = 0;
+  bool _previousCorrect = false;
+  MovementPhase _phase =
+      MovementPhase.start;
+
+  Timer? _timer;
+  int _seconds = 0;
+  int _setCount = 0;
 
   @override
   void initState() {
@@ -34,6 +47,49 @@ bool _previousCorrect = false;
     _analyzer.loadHeuristics().then((_) {
       _initializeCamera();
     });
+  }
+
+  void _updateRepCounter(
+    double kneeAngle) {
+
+    switch (_phase) {
+
+      case MovementPhase.start:
+
+        if (kneeAngle < 120) {
+          _phase =
+              MovementPhase.contracted;
+        }
+
+        break;
+
+      case MovementPhase.contracted:
+
+        if (kneeAngle > 150) {
+
+          _phase =
+              MovementPhase.extended;
+
+          _repCount++;
+          if (_repCount >= 10) {
+
+            _setCount++;
+
+            _repCount = 0;
+          }
+        }
+
+        break;
+
+      case MovementPhase.extended:
+
+        if (kneeAngle < 120) {
+          _phase =
+              MovementPhase.contracted;
+        }
+
+        break;
+    }
   }
 
   Future<void> _initializeCamera() async {
@@ -57,11 +113,9 @@ bool _previousCorrect = false;
       );
 
       await _cameraController?.initialize();
-      print("CAMERA INITIALIZED");
       if (!mounted) return;
 
       _cameraController?.startImageStream(_processCameraImage);
-      print("IMAGE STREAM STARTED");
       setState(() {});
     } catch (e) {
       debugPrint("Error initializing camera: $e");
@@ -80,7 +134,6 @@ bool _previousCorrect = false;
       }
 
       final poses = await _poseDetector.processImage(inputImage);
-      print("Poses detected: ${poses.length}");
       
       if (poses.isNotEmpty) {
         final result =
@@ -202,28 +255,6 @@ bool _previousCorrect = false;
                           ),
                         ),
                       ],
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 40,
-                  left: 20,
-                  right: 20,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _feedbackText.contains('⚠️') || _feedbackText.contains('❌') ? Colors.orange : const Color(0xFF207866), width: 2)
-                    ),
-                    child: Text(
-                      _feedbackText,
-                      style: GoogleFonts.readexPro(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold
-                      ),
-                      textAlign: TextAlign.center,
                     ),
                   ),
                 ),

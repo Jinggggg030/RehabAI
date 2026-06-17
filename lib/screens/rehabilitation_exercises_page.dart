@@ -396,42 +396,60 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header / Discipline
-          if (exercise['disciplines'] != null && (exercise['disciplines'] as List).isNotEmpty)
-            Wrap(
-              spacing: 8,
-              runSpacing: 4,
-              children: (exercise['disciplines'] as List).map<Widget>((d) => Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF207866).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: Text(
-                  d.toString(),
-                  style: GoogleFonts.readexPro(
-                    fontSize: 10,
-                    fontWeight: FontWeight.bold,
-                    color: const Color(0xFF207866),
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [
+              if (exercise['disciplines'] != null && (exercise['disciplines'] as List).isNotEmpty)
+                ...(exercise['disciplines'] as List).map<Widget>((d) => Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF207866).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    d.toString(),
+                    style: GoogleFonts.readexPro(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF207866),
+                    ),
+                  ),
+                )).toList()
+              else
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF207866).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    'General',
+                    style: GoogleFonts.readexPro(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF207866),
+                    ),
                   ),
                 ),
-              )).toList(),
-            )
-          else
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              decoration: BoxDecoration(
-                color: const Color(0xFF207866).withOpacity(0.1),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                'General',
-                style: GoogleFonts.readexPro(
-                  fontSize: 10,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF207866),
+              if (exercise['requires_ai'] == true)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.blue.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(4),
+                  ),
+                  child: Text(
+                    (exercise['ai_type'] ?? 'AI').toString().toUpperCase(),
+                    style: GoogleFonts.readexPro(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blue,
+                    ),
+                  ),
                 ),
-              ),
-            ),
+            ],
+          ),
           const SizedBox(height: 8),
           // Exercise Name
           Text(
