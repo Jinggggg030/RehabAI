@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'during_exercise_page.dart';
+import 'pose_camera_page.dart';
 
 class ExerciseDetailsPage extends StatefulWidget {
   final bool isAssigned;
@@ -183,37 +184,37 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                                 height: 1.5,
                               ),
                             ),
-                            if (widget.isAssigned) ...[
-                              const SizedBox(height: 24),
-                              const Divider(),
-                              const SizedBox(height: 16),
-                              // Button to start live exercise
-                              ElevatedButton(
-                                onPressed: () {
-                                  Navigator.push(
-                                    context,
-                                    MaterialPageRoute(
-                                      builder: (context) => const DuringExercisePage(),
+                            const SizedBox(height: 24),
+                            const Divider(),
+                            const SizedBox(height: 16),
+                            // Button to start live exercise
+                            ElevatedButton(
+                              onPressed: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => PoseCameraPage(
+                                      exerciseId: widget.exercise['exercise_id']?.toString() ?? '1',
                                     ),
-                                  );
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF207866),
-                                  foregroundColor: Colors.white,
-                                  minimumSize: const Size(double.infinity, 50),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(8),
                                   ),
-                                ),
-                                child: Text(
-                                  'Start Live Tracking',
-                                  style: GoogleFonts.readexPro(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
+                                );
+                              },
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: const Color(0xFF207866),
+                                foregroundColor: Colors.white,
+                                minimumSize: const Size(double.infinity, 50),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
                                 ),
                               ),
-                            ],
+                              child: Text(
+                                'Start Live Tracking',
+                                style: GoogleFonts.readexPro(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
                           ],
                         ),
                       ),

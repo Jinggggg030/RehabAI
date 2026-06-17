@@ -66,5 +66,9 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+    <key>NSCameraUsageDescription</key>
+    <string>Rehab AI needs access to the camera for live posture detection during exercises.</string>
+    <key>NSMicrophoneUsageDescription</key>
+    <string>Rehab AI needs access to the microphone for video recording.</string>
 </dict>
 </plist>

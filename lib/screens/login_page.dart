@@ -127,7 +127,7 @@ class _LoginPageState extends State<LoginPage> {
 
   Future<void> _routeUser(User user, {bool isGoogle = false, String name = '', String email = ''}) async {
     final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-    final checkResponse = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
+    final checkResponse = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}')).timeout(const Duration(seconds: 10));
     
     if (checkResponse.statusCode == 200) {
       final data = jsonDecode(checkResponse.body);
