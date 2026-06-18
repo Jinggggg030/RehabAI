@@ -203,3 +203,19 @@ class ChatLog(Base):
     content = Column(Text, nullable=False)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
+class SessionLog(Base):
+    __tablename__ = "Session_Log"
+
+    session_id = Column(Integer, primary_key=True, autoincrement=True)
+    student_id = Column(Integer, nullable=False)
+    exercise_id = Column(Integer, nullable=False)
+    
+    completed_reps = Column(Integer, nullable=True)
+    duration_seconds = Column(Integer, nullable=True)
+    
+    pain_before = Column(Integer, nullable=True)
+    pain_after = Column(Integer, nullable=True)
+    
+    accuracy_score = Column(Float, nullable=True)
+    completion_date = Column(DateTime, default=datetime.utcnow)
+

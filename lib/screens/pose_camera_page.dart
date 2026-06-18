@@ -1,15 +1,17 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import '../services/posture_analyzer.dart';
+import 'session_summary_page.dart';
 
 class PoseCameraPage extends StatefulWidget {
-  final String exerciseId;
+  final Map<String, dynamic> exercise;
 
-  const PoseCameraPage({super.key, required this.exerciseId});
+  const PoseCameraPage({super.key, required this.exercise});
 
   @override
   State<PoseCameraPage> createState() => _PoseCameraPageState();
@@ -26,13 +28,19 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
   double _accuracy = 0;
 int _repCount = 0;
 bool _previousCorrect = false;
+Timer? _timer;
+int _secondsElapsed = 0;
+
+int? _painBefore;
+int? _painAfter;
 
   @override
   void initState() {
     super.initState();
     _analyzer = PostureAnalyzer();
-    _analyzer.loadHeuristics().then((_) {
-      _initializeCamera();
+    _analyzer.loadHeuristics();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _showPainDialog(isBefore: true);
     });
   }
 
@@ -60,6 +68,14 @@ bool _previousCorrect = false;
       print("CAMERA INITIALIZED");
       if (!mounted) return;
 
+      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
+        if (mounted) {
+          setState(() {
+            _secondsElapsed++;
+          });
+        }
+      });
+
       _cameraController?.startImageStream(_processCameraImage);
       print("IMAGE STREAM STARTED");
       setState(() {});
@@ -86,7 +102,7 @@ bool _previousCorrect = false;
         final result =
             _analyzer.analyzePose(
                 poses.first,
-                widget.exerciseId
+                widget.exercise['exercise_id']?.toString() ?? '1'
             );
           if (mounted) {
                     if (!_previousCorrect &&
@@ -140,8 +156,106 @@ bool _previousCorrect = false;
     );
   }
 
+  void _showPainDialog({required bool isBefore}) {
+    int localPain = 0;
+
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text(isBefore ? 'Exercise Setup' : 'Session Complete'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      isBefore ? 'Rate your Pain Before Exercise' : 'Rate your Pain After Exercise',
+                      style: GoogleFonts.readexPro(fontSize: 16, fontWeight: FontWeight.bold),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '0 (No Pain) to 10 (Worst Pain)',
+                      style: GoogleFonts.readexPro(fontSize: 12, color: Colors.black54),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      '$localPain',
+                      style: GoogleFonts.readexPro(fontSize: 32, fontWeight: FontWeight.bold, color: const Color(0xFF207866)),
+                    ),
+                    Slider(
+                      value: localPain.toDouble(),
+                      min: 0,
+                      max: 10,
+                      divisions: 10,
+                      activeColor: const Color(0xFF207866),
+                      onChanged: (value) {
+                        setDialogState(() {
+                          localPain = value.toInt();
+                        });
+                      },
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    setState(() {
+                      if (isBefore) {
+                        _painBefore = localPain;
+                        _secondsElapsed = 0;
+                      } else {
+                        _painAfter = localPain;
+                      }
+                    });
+                    Navigator.pop(context);
+                    if (isBefore) {
+                      _initializeCamera();
+                    } else {
+                      _completeSessionNavigation();
+                    }
+                  },
+                  child: Text('Confirm', style: GoogleFonts.readexPro(fontWeight: FontWeight.bold, color: const Color(0xFF207866))),
+                ),
+              ],
+            );
+          }
+        );
+      }
+    );
+  }
+
+  void _completeSessionNavigation() {
+    Navigator.pushReplacement(
+      context,
+      MaterialPageRoute(
+        builder: (context) => SessionSummaryPage(
+          exerciseName: widget.exercise['name'] ?? 'AI Exercise',
+          durationSeconds: _secondsElapsed,
+          reps: _repCount,
+          accuracyScore: _accuracy,
+          painBefore: _painBefore,
+          painAfter: _painAfter,
+          exerciseId: widget.exercise['exercise_id'] ?? 1,
+        ),
+      ),
+    );
+  }
+
+  String _formatTime(int seconds) {
+    final m = seconds ~/ 60;
+    final s = seconds % 60;
+    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  }
+
   @override
   void dispose() {
+    _timer?.cancel();
     _cameraController?.stopImageStream();
     _cameraController?.dispose();
     _poseDetector.close();
@@ -156,6 +270,19 @@ bool _previousCorrect = false;
         title: Text('AI Coach', style: GoogleFonts.readexPro(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
+        actions: [
+          TextButton(
+            onPressed: () {
+              _timer?.cancel();
+              _cameraController?.stopImageStream();
+              _showPainDialog(isBefore: false);
+            },
+            child: Text(
+              "Finish",
+              style: GoogleFonts.readexPro(color: const Color(0xFF207866), fontWeight: FontWeight.bold, fontSize: 16),
+            ),
+          )
+        ],
       ),
       body: _cameraController == null || !_cameraController!.value.isInitialized
           ? const Center(child: CircularProgressIndicator(color: Color(0xFF207866)))
@@ -195,6 +322,15 @@ bool _previousCorrect = false;
                         const SizedBox(height: 8),
                         Text(
                           "Reps: $_repCount",
+                          style:
+                              GoogleFonts.readexPro(
+                            color: Colors.white,
+                            fontSize: 18,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          "Time: ${_formatTime(_secondsElapsed)}",
                           style:
                               GoogleFonts.readexPro(
                             color: Colors.white,

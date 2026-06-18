@@ -1139,3 +1139,29 @@ def get_student_rentals(student_id: int, db: Session = Depends(get_db)):
             "return_status": r.return_status
         })
     return {"rentals": result}
+
+class SessionLogRequest(BaseModel):
+    student_id: int
+    exercise_id: int
+    completed_reps: Optional[int] = None
+    duration_seconds: Optional[int] = None
+    pain_before: Optional[int] = None
+    pain_after: Optional[int] = None
+    accuracy_score: Optional[float] = None
+
+@app.post("/session_logs")
+def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
+    new_log = models.SessionLog(
+        student_id=req.student_id,
+        exercise_id=req.exercise_id,
+        completed_reps=req.completed_reps,
+        duration_seconds=req.duration_seconds,
+        pain_before=req.pain_before,
+        pain_after=req.pain_after,
+        accuracy_score=req.accuracy_score,
+        completion_date=datetime.utcnow()
+    )
+    db.add(new_log)
+    db.commit()
+    db.refresh(new_log)
+    return {"status": "success", "session_id": new_log.session_id}

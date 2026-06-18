@@ -1,329 +1,224 @@
-import 'dart:io';
 import 'package:flutter/material.dart';
-import 'package:camera/camera.dart';
-import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:flutter/services.dart';
-import 'dart:async';
-import '../services/posture_analyzer.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
+import 'package:flutter/foundation.dart' show kIsWeb;
 
-enum MovementPhase {
-  start,
-  contracted,
-  extended
-}
+class SessionSummaryPage extends StatefulWidget {
+  final String exerciseName;
+  final int durationSeconds;
+  final int reps;
+  final int? painBefore;
+  final int? painAfter;
+  final double? accuracyScore;
+  final int exerciseId;
 
-class PoseCameraPage extends StatefulWidget {
-  final String exerciseId;
-
-  const PoseCameraPage({super.key, required this.exerciseId});
+  const SessionSummaryPage({
+    super.key,
+    required this.exerciseName,
+    required this.durationSeconds,
+    required this.reps,
+    this.painBefore,
+    this.painAfter,
+    this.accuracyScore,
+    required this.exerciseId,
+  });
 
   @override
-  State<PoseCameraPage> createState() => _PoseCameraPageState();
+  State<SessionSummaryPage> createState() => _SessionSummaryPageState();
 }
 
-class _PoseCameraPageState extends State<PoseCameraPage> {
-  CameraController? _cameraController;
-  final PoseDetector _poseDetector = PoseDetector(options: PoseDetectorOptions());
-  bool _isBusy = false;
-  List<Pose> _poses = [];
-  String _feedbackText = "Initializing AI...";
-  late PostureAnalyzer _analyzer;
-  int _sensorOrientation = 0;
-  double _accuracy = 0;
-  int _repCount = 0;
-  bool _previousCorrect = false;
-  MovementPhase _phase =
-      MovementPhase.start;
-
-  Timer? _timer;
-  int _seconds = 0;
-  int _setCount = 0;
+class _SessionSummaryPageState extends State<SessionSummaryPage> {
+  bool _isSaving = true;
+  bool _saveSuccess = false;
 
   @override
   void initState() {
     super.initState();
-    _analyzer = PostureAnalyzer();
-    _analyzer.loadHeuristics().then((_) {
-      _initializeCamera();
-    });
+    _saveSessionLog();
   }
 
-  void _updateRepCounter(
-    double kneeAngle) {
-
-    switch (_phase) {
-
-      case MovementPhase.start:
-
-        if (kneeAngle < 120) {
-          _phase =
-              MovementPhase.contracted;
-        }
-
-        break;
-
-      case MovementPhase.contracted:
-
-        if (kneeAngle > 150) {
-
-          _phase =
-              MovementPhase.extended;
-
-          _repCount++;
-          if (_repCount >= 10) {
-
-            _setCount++;
-
-            _repCount = 0;
-          }
-        }
-
-        break;
-
-      case MovementPhase.extended:
-
-        if (kneeAngle < 120) {
-          _phase =
-              MovementPhase.contracted;
-        }
-
-        break;
-    }
-  }
-
-  Future<void> _initializeCamera() async {
+  Future<void> _saveSessionLog() async {
+    final String apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    
     try {
-      final cameras = await availableCameras();
-      if (cameras.isEmpty) return;
-
-      // Use front camera
-      final camera = cameras.firstWhere(
-        (c) => c.lensDirection == CameraLensDirection.front,
-        orElse: () => cameras.first,
+      final res = await http.post(
+        Uri.parse('$apiUrl/session_logs'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'student_id': 1, // Using 1 as default per your existing hardcoding, change if you have an auth provider
+          'exercise_id': widget.exerciseId,
+          'completed_reps': widget.reps,
+          'duration_seconds': widget.durationSeconds,
+          'pain_before': widget.painBefore,
+          'pain_after': widget.painAfter,
+          'accuracy_score': widget.accuracyScore,
+        }),
       );
 
-      _sensorOrientation = camera.sensorOrientation;
-
-      _cameraController = CameraController(
-        camera,
-        ResolutionPreset.medium,
-        enableAudio: false,
-        imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,
-      );
-
-      await _cameraController?.initialize();
-      if (!mounted) return;
-
-      _cameraController?.startImageStream(_processCameraImage);
-      setState(() {});
-    } catch (e) {
-      debugPrint("Error initializing camera: $e");
-    }
-  }
-
-  Future<void> _processCameraImage(CameraImage image) async {
-    if (_isBusy) return;
-    _isBusy = true;
-
-    try {
-      final inputImage = _inputImageFromCameraImage(image);
-      if (inputImage == null) {
-        _isBusy = false;
-        return;
-      }
-
-      final poses = await _poseDetector.processImage(inputImage);
-      
-      if (poses.isNotEmpty) {
-        final result =
-            _analyzer.analyzePose(
-                poses.first,
-                widget.exerciseId
-            );
-          if (mounted) {
-                    if (!_previousCorrect &&
-              result.correctPose) {
-            _repCount++;
-          }
-
-          _previousCorrect =
-              result.correctPose;
-
-          setState(() {
-            _poses = poses;
-            _feedbackText =
-                result.feedback;
-            _accuracy =
-                result.accuracy;
-          });
-        }
+      if (res.statusCode == 200) {
+        setState(() {
+          _isSaving = false;
+          _saveSuccess = true;
+        });
       } else {
-         if (mounted) {
-          setState(() {
-            _poses = [];
-            _feedbackText = "Step into the frame";
-          });
-        }
+        setState(() {
+          _isSaving = false;
+          _saveSuccess = false;
+        });
       }
     } catch (e) {
-      debugPrint("Error processing image: $e");
-    } finally {
-      _isBusy = false;
+      setState(() {
+        _isSaving = false;
+        _saveSuccess = false;
+      });
+      debugPrint("Error saving session log: $e");
     }
   }
 
-  InputImage? _inputImageFromCameraImage(CameraImage image) {
-    final format = InputImageFormatValue.fromRawValue(image.format.raw);
-    if (format == null) return null;
-
-    final rotation = InputImageRotationValue.fromRawValue(_sensorOrientation);
-    if (rotation == null) return null;
-
-    final bytes = image.planes.expand((plane) => plane.bytes).toList();
-
-    return InputImage.fromBytes(
-      bytes: Uint8List.fromList(bytes),
-      metadata: InputImageMetadata(
-        size: Size(image.width.toDouble(), image.height.toDouble()),
-        rotation: rotation,
-        format: format,
-        bytesPerRow: image.planes[0].bytesPerRow,
-      ),
-    );
-  }
-
-  @override
-  void dispose() {
-    _cameraController?.stopImageStream();
-    _cameraController?.dispose();
-    _poseDetector.close();
-    super.dispose();
+  String _formatTime(int totalSeconds) {
+    int m = totalSeconds ~/ 60;
+    int s = totalSeconds % 60;
+    if (m > 0) {
+      return '$m min $s sec';
+    }
+    return '$s sec';
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.black,
-      appBar: AppBar(
-        title: Text('AI Coach', style: GoogleFonts.readexPro(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: Colors.black,
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: _cameraController == null || !_cameraController!.value.isInitialized
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF207866)))
-          : Stack(
-              fit: StackFit.expand,
-              children: [
-                CameraPreview(_cameraController!),
-                if (_poses.isNotEmpty)
-                  CustomPaint(
-                    painter: PosePainter(_poses, _cameraController!.value.previewSize!),
-                  ),
-                Positioned(
-                  top: 20,
-                  left: 20,
-                  child: Container(
-                    padding:
-                        const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: Colors.black54,
-                      borderRadius:
-                          BorderRadius.circular(12),
+      backgroundColor: const Color(0xFFF8F9FA),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              const SizedBox(height: 24),
+              Icon(Icons.check_circle, size: 80, color: const Color(0xFF207866)),
+              const SizedBox(height: 16),
+              Text(
+                'Session Summary',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.readexPro(
+                  fontSize: 28,
+                  fontWeight: FontWeight.bold,
+                  color: const Color(0xFF207866),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                'Exercise Completed',
+                textAlign: TextAlign.center,
+                style: GoogleFonts.readexPro(fontSize: 16, color: Colors.black54),
+              ),
+              const SizedBox(height: 32),
+              
+              Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.05),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
                     ),
-                    child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          "Accuracy: ${_accuracy.toStringAsFixed(0)}%",
-                          style:
-                              GoogleFonts.readexPro(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight:
-                                FontWeight.bold,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Reps: $_repCount",
-                          style:
-                              GoogleFonts.readexPro(
-                            color: Colors.white,
-                            fontSize: 18,
-                          ),
-                        ),
-                      ],
-                    ),
+                  ],
+                ),
+                child: Column(
+                  children: [
+                    _buildSummaryRow('Exercise:', widget.exerciseName),
+                    const Divider(height: 24),
+                    _buildSummaryRow('Duration:', _formatTime(widget.durationSeconds)),
+                    const Divider(height: 24),
+                    _buildSummaryRow('Repetitions:', '${widget.reps}'),
+                    
+                    if (widget.painBefore != null || widget.painAfter != null) ...[
+                      const Divider(height: 24),
+                      _buildSummaryRow('Pain Before:', '${widget.painBefore ?? '-'}/10'),
+                      const SizedBox(height: 8),
+                      _buildSummaryRow('Pain After:', '${widget.painAfter ?? '-'}/10'),
+                    ],
+                    
+                    if (widget.accuracyScore != null) ...[
+                      const Divider(height: 24),
+                      _buildSummaryRow('AI Accuracy:', '${widget.accuracyScore!.toStringAsFixed(1)}%'),
+                    ],
+                  ],
+                ),
+              ),
+              
+              const SizedBox(height: 24),
+              if (_isSaving)
+                const Center(child: CircularProgressIndicator(color: Color(0xFF207866)))
+              else if (_saveSuccess)
+                Text(
+                  '✓ Progress securely saved',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.readexPro(color: const Color(0xFF207866), fontWeight: FontWeight.bold),
+                )
+              else
+                Text(
+                  '❌ Failed to save progress to cloud',
+                  textAlign: TextAlign.center,
+                  style: GoogleFonts.readexPro(color: Colors.red, fontWeight: FontWeight.bold),
+                ),
+
+              const Spacer(),
+              ElevatedButton(
+                onPressed: () {
+                  // Pop back twice to get out of the exercise flow completely
+                  Navigator.pop(context); // pop summary
+                  Navigator.pop(context); // pop details
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF207866),
+                  foregroundColor: Colors.white,
+                  minimumSize: const Size(double.infinity, 50),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-              ],
-            ),
+                child: Text(
+                  'Finish',
+                  style: GoogleFonts.readexPro(fontSize: 16, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
-}
 
-class PosePainter extends CustomPainter {
-  final List<Pose> poses;
-  final Size absoluteImageSize;
-
-  PosePainter(this.poses, this.absoluteImageSize);
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 4.0
-      ..color = const Color(0xFF207866);
-
-    final jointPaint = Paint()
-      ..style = PaintingStyle.fill
-      ..strokeWidth = 2.0
-      ..color = Colors.white;
-
-    for (final pose in poses) {
-      pose.landmarks.forEach((_, landmark) {
-        final x = size.width - (landmark.x * (size.width / absoluteImageSize.height)); // Mirrored X
-        final y = landmark.y * (size.height / absoluteImageSize.width);
-        canvas.drawCircle(Offset(x, y), 5, jointPaint);
-      });
-      
-      // Helper to draw line
-      void drawLine(PoseLandmarkType t1, PoseLandmarkType t2) {
-        final l1 = pose.landmarks[t1];
-        final l2 = pose.landmarks[t2];
-        if (l1 != null && l2 != null) {
-          final x1 = size.width - (l1.x * (size.width / absoluteImageSize.height));
-          final y1 = l1.y * (size.height / absoluteImageSize.width);
-          final x2 = size.width - (l2.x * (size.width / absoluteImageSize.height));
-          final y2 = l2.y * (size.height / absoluteImageSize.width);
-          canvas.drawLine(Offset(x1, y1), Offset(x2, y2), paint);
-        }
-      }
-
-      // Torso
-      drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.rightShoulder);
-      drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip);
-      drawLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip);
-      drawLine(PoseLandmarkType.leftHip, PoseLandmarkType.rightHip);
-      
-      // Arms
-      drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow);
-      drawLine(PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist);
-      drawLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow);
-      drawLine(PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist);
-      
-      // Legs
-      drawLine(PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee);
-      drawLine(PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle);
-      drawLine(PoseLandmarkType.rightHip, PoseLandmarkType.rightKnee);
-      drawLine(PoseLandmarkType.rightKnee, PoseLandmarkType.rightAnkle);
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant PosePainter oldDelegate) {
-    return oldDelegate.poses != poses || oldDelegate.absoluteImageSize != absoluteImageSize;
+  Widget _buildSummaryRow(String label, String value) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.readexPro(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: Colors.black54,
+          ),
+        ),
+        Flexible(
+          child: Text(
+            value,
+            textAlign: TextAlign.right,
+            style: GoogleFonts.readexPro(
+              fontSize: 16,
+              fontWeight: FontWeight.bold,
+              color: Colors.black87,
+            ),
+          ),
+        ),
+      ],
+    );
   }
 }

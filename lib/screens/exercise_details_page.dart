@@ -185,12 +185,12 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                             // Button to start live exercise
                             ElevatedButton(
                               onPressed: () {
-                                if (widget.exercise['requires_ai'] == true) {
+                                if (widget.exercise['requires_ai'] == true && widget.exercise['ai_type'] == 'posture') {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => PoseCameraPage(
-                                        exerciseId: widget.exercise['exercise_id']?.toString() ?? '1',
+                                        exercise: widget.exercise,
                                       ),
                                     ),
                                   );
@@ -198,7 +198,9 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
-                                      builder: (context) => const DuringExercisePage(),
+                                      builder: (context) => DuringExercisePage(
+                                        exercise: widget.exercise,
+                                      ),
                                     ),
                                   );
                                 }
@@ -212,7 +214,7 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                                 ),
                               ),
                               child: Text(
-                                widget.exercise['requires_ai'] == true ? 'Start Live AI Tracking' : 'Start Video Exercise',
+                                (widget.exercise['requires_ai'] == true && widget.exercise['ai_type'] == 'posture') ? 'Start Live AI Tracking' : 'Start Video Exercise',
                                 style: GoogleFonts.readexPro(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
