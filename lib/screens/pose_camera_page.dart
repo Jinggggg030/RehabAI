@@ -27,7 +27,7 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
   bool _isBusy = false;
   List<Pose> _poses = [];
   String _feedbackText = "Initializing AI...";
-  late PostureAnalyzer _analyzer;
+  PostureAnalyzer? _analyzer;
   int _sensorOrientation = 0;
   double _accuracy = 0;
   double _accuracyTotal = 0;
@@ -53,7 +53,6 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
   @override
   void initState() {
     super.initState();
-    _analyzer = PostureAnalyzer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _configureSession();
     });
@@ -65,20 +64,38 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
       defaultMode: AiTrackingMode.duration,
     );
     if (!mounted || config == null) return;
+    final exerciseId = _readExerciseId();
+    final exerciseName = widget.exercise['name']?.toString() ?? '';
+    final analyzer = await PostureAnalyzer.create(
+      exerciseId: exerciseId,
+      exerciseName: exerciseName,
+    );
+    if (!mounted) return;
     setState(() {
+      _analyzer = analyzer;
       _trackingMode = config.mode;
       _targetPerSet = config.target;
       _totalSets = config.sets;
       _painBefore = config.painBefore;
       _setSecondsRemaining = config.target;
-      _feedbackText = 'Camera ready. Tap Start Set when you are in position.';
+      _feedbackText = analyzer.isSupported
+          ? '${analyzer.cameraGuidance} Tap Start Set when ready.'
+          : analyzer.cameraGuidance;
     });
     await _initializeCamera();
   }
 
+  int? _readExerciseId() {
+    final rawId =
+        widget.exercise['exercise_id'] ??
+        widget.exercise['exerciseId'] ??
+        widget.exercise['id'];
+    if (rawId is num) return rawId.toInt();
+    return int.tryParse(rawId?.toString().trim() ?? '');
+  }
+
   Future<void> _initializeCamera() async {
     try {
-      await _analyzer.loadHeuristics();
       final cameras = await availableCameras();
       if (cameras.isEmpty) return;
 
@@ -124,12 +141,9 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
 
       final poses = await _poseDetector.processImage(inputImage);
       if (poses.isNotEmpty) {
-        final result = _analyzer.analyzePose(
-          poses.first,
-          widget.exercise['exercise_id']?.toString() ?? '1',
-          referenceJointAngle:
-              (widget.exercise['reference_joint_angle'] as num?)?.toDouble(),
-        );
+        final analyzer = _analyzer;
+        if (analyzer == null) return;
+        final result = analyzer.analyzePose(poses.first);
         if (mounted) {
           var reachedTarget = false;
           if (_setActive && result.accuracy > 0) {
@@ -177,7 +191,19 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
   }
 
   void _startSet() {
+    final analyzer = _analyzer;
+    if (analyzer == null || !analyzer.isSupported) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Posture detection is not configured for this exercise.',
+          ),
+        ),
+      );
+      return;
+    }
     _timer?.cancel();
+    analyzer.reset();
     setState(() {
       _setActive = true;
       _setRepCount = 0;

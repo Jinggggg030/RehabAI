@@ -1,0 +1,142 @@
+{
+  "4": {
+    "name": "Side-Lying Clamshell",
+    "detector": "clamshell",
+    "direction": "increasing",
+    "start_threshold": 0.22,
+    "end_threshold": 0.38,
+    "stable_frames": 5,
+    "cooldown_frames": 8,
+    "camera_guidance": "Use a side view and keep both hips, knees and feet visible."
+  },
+  "6": {
+    "name": "Straight Leg Raise",
+    "detector": "straight_leg_raise",
+    "direction": "increasing",
+    "start_threshold": 0.25,
+    "end_threshold": 0.55,
+    "stable_frames": 5,
+    "cooldown_frames": 8,
+    "camera_guidance": "Use a side view and keep the entire active leg visible."
+  },
+  "9": {
+    "name": "Step-Up",
+    "detector": "step_up",
+    "direction": "increasing",
+    "start_threshold": 0.10,
+    "end_threshold": 0.25,
+    "stable_frames": 5,
+    "cooldown_frames": 10,
+    "camera_guidance": "Use a side view and keep the step and both feet visible. Start with both feet on the floor."
+  },
+  "18": {
+    "name": "Standing Heel Raise",
+    "detector": "heel_raise",
+    "direction": "increasing",
+    "start_threshold": 0.04,
+    "end_threshold": 0.10,
+    "stable_frames": 6,
+    "cooldown_frames": 8,
+    "camera_guidance": "Use a front view and keep both knees and complete feet visible."
+  },
+  "19": {
+    "name": "Seated Toe Raise",
+    "detector": "toe_raise",
+    "direction": "increasing",
+    "start_threshold": 0.04,
+    "end_threshold": 0.10,
+    "stable_frames": 6,
+    "cooldown_frames": 8,
+    "camera_guidance": "Use a front or diagonal view and keep both heels and toes visible."
+  },
+  "23": {
+    "name": "Supine Wand Flexion",
+    "detector": "wand_flexion",
+    "direction": "increasing",
+    "start_threshold": 0.25,
+    "end_threshold": 0.55,
+    "stable_frames": 5,
+    "cooldown_frames": 8,
+    "camera_guidance": "Use a side view and keep the hips, shoulders, elbows and hands visible."
+  },
+  "37": {
+    "name": "Prone Back Extension",
+    "detector": "back_extension",
+    "direction": "increasing",
+    "start_threshold": 0.05,
+    "end_threshold": 0.18,
+    "stable_frames": 5,
+    "cooldown_frames": 10,
+    "camera_guidance": "Use a side view and keep the hips and entire upper body visible. Start with the chest lowered."
+  },
+  "42": {
+    "name": "Push-Up",
+    "detector": "push_up",
+    "direction": "decreasing",
+    "start_threshold": 0.60,
+    "end_threshold": 0.40,
+    "stable_frames": 4,
+    "cooldown_frames": 8,
+    "camera_guidance": "Use a side view and keep the wrists, torso and ankles visible."
+  },
+  "53": {
+    "name": "Sit-to-Stand",
+    "detector": "sit_to_stand",
+    "direction": "increasing",
+    "start_threshold": 0.25,
+    "end_threshold": 0.60,
+    "stable_frames": 5,
+    "cooldown_frames": 10,
+    "camera_guidance": "Use a side or diagonal view and keep the chair and whole body visible."
+  },
+  "57": {
+    "name": "Seated Knee Extension",
+    "detector": "knee_extension",
+    "direction": "increasing",
+    "start_threshold": 0.35,
+    "end_threshold": 0.72,
+    "stable_frames": 5,
+    "cooldown_frames": 8,
+    "camera_guidance": "Use a side or diagonal view and keep the active leg completely visible."
+  },
+  "59": {
+    "name": "Sitting External Rotation",
+    "detector": "external_rotation",
+    "direction": "increasing",
+    "start_threshold": 0.95,
+    "end_threshold": 1.35,
+    "stable_frames": 5,
+    "cooldown_frames": 8,
+    "camera_guidance": "Use a front view and keep both elbows and hands visible."
+  },
+  "61": {
+    "name": "Low Row",
+    "detector": "low_row",
+    "direction": "decreasing",
+    "start_threshold": 0.85,
+    "end_threshold": 0.62,
+    "stable_frames": 5,
+    "cooldown_frames": 8,
+    "camera_guidance": "Use a side view and keep the torso and both arms visible."
+  },
+  "66": {
+    "name": "Single-Arm Wall Press",
+    "detector": "wall_press",
+    "direction": "decreasing",
+    "start_threshold": 0.78,
+    "end_threshold": 0.58,
+    "stable_frames": 5,
+    "cooldown_frames": 8,
+    "camera_guidance": "Use a side view and keep the wall hand and whole body visible."
+  },
+  "71": {
+    "name": "Shoulder Press",
+    "detector": "shoulder_press",
+    "direction": "increasing",
+    "start_threshold": 0.25,
+    "end_threshold": 0.65,
+    "stable_frames": 5,
+    "cooldown_frames": 8,
+    "camera_guidance": "Use a front view and keep both hands, shoulders and hips visible."
+  }
+}

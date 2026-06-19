@@ -27,7 +27,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
   bool _isBusy = false;
   List<Pose> _poses = [];
   String _feedbackText = "Initializing Camera...";
-  MovementAnalyzer _analyzer = MovementAnalyzer();
+  MovementAnalyzer? _analyzer;
   int _sensorOrientation = 0;
   AiTrackingMode _trackingMode = AiTrackingMode.reps;
   int _targetPerSet = 10;
@@ -58,13 +58,21 @@ class _RepCounterPageState extends State<RepCounterPage> {
       defaultMode: AiTrackingMode.reps,
     );
     if (!mounted || config == null) return;
+    final analyzer = await MovementAnalyzer.create(
+      exerciseId: (widget.exercise['exercise_id'] as num?)?.toInt(),
+      exerciseName: widget.exercise['name']?.toString() ?? '',
+    );
+    if (!mounted) return;
     setState(() {
+      _analyzer = analyzer;
       _trackingMode = config.mode;
       _targetPerSet = config.target;
       _totalSets = config.sets;
       _painBefore = config.painBefore;
       _setSecondsRemaining = config.target;
-      _feedbackText = 'Camera ready. Tap Start Set when you are in position.';
+      _feedbackText = analyzer.isSupported
+          ? '${analyzer.cameraGuidance} Tap Start Set when ready.'
+          : 'No automatic rep rule is configured for this exercise.';
     });
     await _initializeCamera();
   }
@@ -117,12 +125,11 @@ class _RepCounterPageState extends State<RepCounterPage> {
       final poses = await _poseDetector.processImage(inputImage);
 
       if (poses.isNotEmpty) {
+        final analyzer = _analyzer;
         final repCompleted =
             _setActive &&
-            _analyzer.analyzeForRep(
-              poses.first,
-              widget.exercise['name']?.toString() ?? '',
-            );
+            analyzer != null &&
+            analyzer.analyzeForRep(poses.first);
 
         if (mounted) {
           var reachedTarget = false;
@@ -136,8 +143,8 @@ class _RepCounterPageState extends State<RepCounterPage> {
 
           setState(() {
             _poses = poses;
-            if (_setActive) {
-              _feedbackText = "Keep going! You're doing great.";
+            if (_setActive && analyzer != null) {
+              _feedbackText = analyzer.lastFeedback;
             }
           });
           if (reachedTarget) _finishSet();
@@ -158,12 +165,24 @@ class _RepCounterPageState extends State<RepCounterPage> {
   }
 
   void _startSet() {
+    final analyzer = _analyzer;
+    if (_trackingMode == AiTrackingMode.reps &&
+        (analyzer == null || !analyzer.isSupported)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Automatic rep counting is not configured for this exercise.',
+          ),
+        ),
+      );
+      return;
+    }
     _timer?.cancel();
     setState(() {
       _setActive = true;
       _setRepCount = 0;
       _setSecondsRemaining = _targetPerSet;
-      _analyzer = MovementAnalyzer();
+      analyzer?.reset();
       _feedbackText = 'Set $_currentSet started. Keep going!';
     });
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {

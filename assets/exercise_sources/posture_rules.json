@@ -1,0 +1,66 @@
+{
+  "1": {
+    "name": "Half-Kneel Hip Flexor Stretch",
+    "camera_guidance": "Use a side view and keep the working hip, knee and ankle visible.",
+    "stable_frames": 8,
+    "checks": [
+      {"metric": "best_knee_angle", "label": "knee angle", "min": 80, "max": 100}
+    ]
+  },
+  "3": {
+    "name": "Bridging",
+    "camera_guidance": "Use a side view and keep both hips, knees and feet visible.",
+    "stable_frames": 8,
+    "checks": [
+      {"metric": "left_knee_angle", "label": "left knee", "min": 80, "max": 100},
+      {"metric": "right_knee_angle", "label": "right knee", "min": 80, "max": 100}
+    ]
+  },
+  "7": {
+    "name": "Side-Lying Hip Abduction",
+    "camera_guidance": "Use a side view and keep both whole legs visible from hips to ankles.",
+    "stable_frames": 8,
+    "checks": [
+      {"metric": "whole_leg_separation", "label": "whole-leg separation", "min": 35, "max": 55},
+      {"metric": "raised_knee_angle", "label": "raised leg straightness", "min": 155, "max": 180}
+    ]
+  },
+  "40": {
+    "name": "Plank",
+    "camera_guidance": "Use a side view and keep the shoulders, elbows, hips and ankles visible.",
+    "stable_frames": 8,
+    "checks": [
+      {"metric": "left_body_alignment", "label": "left body alignment", "min": 160, "max": 180},
+      {"metric": "right_body_alignment", "label": "right body alignment", "min": 160, "max": 180},
+      {"metric": "best_elbow_angle", "label": "supporting elbow", "min": 75, "max": 105}
+    ]
+  },
+  "41": {
+    "name": "Wall Sit",
+    "camera_guidance": "Use a side or diagonal view and keep both knees visible.",
+    "stable_frames": 8,
+    "checks": [
+      {"metric": "left_knee_angle", "label": "left knee", "min": 80, "max": 100},
+      {"metric": "right_knee_angle", "label": "right knee", "min": 80, "max": 100}
+    ]
+  },
+  "62": {
+    "name": "Bicep Curl Hold",
+    "camera_guidance": "Use a side or diagonal view and keep the active shoulder, elbow and wrist visible.",
+    "stable_frames": 8,
+    "checks": [
+      {"metric": "active_elbow_angle", "label": "arm angle", "min": 35, "max": 55},
+      {"metric": "active_wrist_position", "label": "wrist position", "min": 1, "max": 1, "show_measurement": false, "instruction": "Raise your wrist above the elbow and toward the shoulder."}
+    ]
+  },
+  "69": {
+    "name": "Bodyweight Squat",
+    "camera_guidance": "Use a side or diagonal view and keep both hips, knees and ankles visible.",
+    "stable_frames": 8,
+    "checks": [
+      {"metric": "left_knee_angle", "label": "left knee", "min": 80, "max": 100},
+      {"metric": "right_knee_angle", "label": "right knee", "min": 80, "max": 100},
+      {"metric": "thigh_horizontal_angle", "label": "thigh position", "min": 0, "max": 20}
+    ]
+  }
+}
