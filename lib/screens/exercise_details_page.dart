@@ -4,15 +4,18 @@ import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'during_exercise_page.dart';
 import 'pose_camera_page.dart';
+import 'rep_counter_page.dart';
 
 class ExerciseDetailsPage extends StatefulWidget {
   final bool isAssigned;
   final Map<String, dynamic> exercise;
+  final int? scheduleId;
   
   const ExerciseDetailsPage({
     super.key, 
     required this.isAssigned,
     required this.exercise,
+    this.scheduleId,
   });
 
   @override
@@ -185,12 +188,23 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                             // Button to start live exercise
                             ElevatedButton(
                               onPressed: () {
-                                if (widget.exercise['requires_ai'] == true && widget.exercise['ai_type'] == 'posture') {
+                                if (widget.exercise['ai_type'] == 'posture') {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => PoseCameraPage(
                                         exercise: widget.exercise,
+                                        scheduleId: widget.scheduleId,
+                                      ),
+                                    ),
+                                  );
+                                } else if (widget.exercise['ai_type'] == 'rep_counter') {
+                                  Navigator.push(
+                                    context,
+                                    MaterialPageRoute(
+                                      builder: (context) => RepCounterPage(
+                                        exercise: widget.exercise,
+                                        scheduleId: widget.scheduleId,
                                       ),
                                     ),
                                   );
@@ -200,6 +214,7 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                                     MaterialPageRoute(
                                       builder: (context) => DuringExercisePage(
                                         exercise: widget.exercise,
+                                        scheduleId: widget.scheduleId,
                                       ),
                                     ),
                                   );

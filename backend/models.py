@@ -16,6 +16,7 @@ class User(Base):
     contact_number = Column(String(20), nullable=False)
     address = Column(Text, nullable=True)
     accommodation_type = Column(String(50), nullable=True)
+    fcm_token = Column(String(255), nullable=True)
     role = Column(String(1), nullable=False, default='S')
 
     __table_args__ = (
@@ -154,16 +155,6 @@ class PrescribedExercise(Base):
     assigned_duration = Column(Integer, nullable=False)
     evaluation = Column(Text, nullable=True)
 
-class SelfScheduledExercise(Base):
-    __tablename__ = "Self_Scheduled_Exercise"
-
-    scheduled_id = Column(Integer, primary_key=True)
-    student_id = Column(Integer, ForeignKey("Student.student_id", ondelete="CASCADE"), nullable=False)
-    exercise_id = Column(Integer, ForeignKey("Exercise.exercise_id", ondelete="CASCADE"), nullable=False)
-    
-    scheduled_date = Column(DateTime, nullable=False)
-    status = Column(String(50), default="Pending")
-
 class AIFeedback(Base):
     __tablename__ = "Ai_Feedback"
 
@@ -206,9 +197,10 @@ class ChatLog(Base):
 class SessionLog(Base):
     __tablename__ = "Session_Log"
 
-    session_id = Column(Integer, primary_key=True, autoincrement=True)
+    schedule_id = Column(Integer, primary_key=True, autoincrement=True)
     student_id = Column(Integer, nullable=False)
     exercise_id = Column(Integer, nullable=False)
+    status = Column(String(20), nullable=False, default="Completed")
     
     completed_reps = Column(Integer, nullable=True)
     duration_seconds = Column(Integer, nullable=True)

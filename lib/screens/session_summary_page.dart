@@ -13,6 +13,7 @@ class SessionSummaryPage extends StatefulWidget {
   final int? painAfter;
   final double? accuracyScore;
   final int exerciseId;
+  final int? scheduleId;
 
   const SessionSummaryPage({
     super.key,
@@ -23,6 +24,7 @@ class SessionSummaryPage extends StatefulWidget {
     this.painAfter,
     this.accuracyScore,
     required this.exerciseId,
+    this.scheduleId,
   });
 
   @override
@@ -43,18 +45,24 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
     final String apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
     
     try {
+      final bodyData = {
+        'student_id': 1, // Using 1 as default per your existing hardcoding
+        'exercise_id': widget.exerciseId,
+        'completed_reps': widget.reps,
+        'duration_seconds': widget.durationSeconds,
+        'pain_before': widget.painBefore,
+        'pain_after': widget.painAfter,
+        'accuracy_score': widget.accuracyScore,
+      };
+      
+      if (widget.scheduleId != null) {
+        bodyData['schedule_id'] = widget.scheduleId;
+      }
+
       final res = await http.post(
         Uri.parse('$apiUrl/session_logs'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'student_id': 1, // Using 1 as default per your existing hardcoding, change if you have an auth provider
-          'exercise_id': widget.exerciseId,
-          'completed_reps': widget.reps,
-          'duration_seconds': widget.durationSeconds,
-          'pain_before': widget.painBefore,
-          'pain_after': widget.painAfter,
-          'accuracy_score': widget.accuracyScore,
-        }),
+        body: jsonEncode(bodyData),
       );
 
       if (res.statusCode == 200) {

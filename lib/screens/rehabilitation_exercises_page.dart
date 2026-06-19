@@ -556,7 +556,7 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                   ],
                   if (tabType == 'MyPlan') ...[
                     OutlinedButton(
-                      onPressed: () => _cancelScheduledExercise(exercise['scheduled_id']),
+                      onPressed: () => _cancelScheduledExercise(exercise['schedule_id']),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.red,
                         side: const BorderSide(color: Colors.red),
@@ -585,6 +585,7 @@ class _RehabilitationExercisesPageState extends State<RehabilitationExercisesPag
                           builder: (context) => ExerciseDetailsPage(
                             isAssigned: tabType == 'Assigned', 
                             exercise: exercise,
+                            scheduleId: exercise['schedule_id'],
                           ),
                         ),
                       );

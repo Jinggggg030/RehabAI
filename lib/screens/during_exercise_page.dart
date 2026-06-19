@@ -7,10 +7,12 @@ import 'session_summary_page.dart';
 
 class DuringExercisePage extends StatefulWidget {
   final Map<String, dynamic> exercise;
+  final int? scheduleId;
 
   const DuringExercisePage({
     super.key,
     required this.exercise,
+    this.scheduleId,
   });
 
   @override
@@ -275,6 +277,7 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
           painBefore: _painBefore,
           painAfter: _painAfter,
           exerciseId: widget.exercise['exercise_id'] ?? 1,
+          scheduleId: widget.scheduleId,
         ),
       ),
     );

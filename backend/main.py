@@ -191,10 +191,10 @@ def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
         })
 
     # 4. Exercise Notifications
-    pending_exercises = db.query(models.SelfScheduledExercise).filter(
-        models.SelfScheduledExercise.student_id == user_id,
-        models.SelfScheduledExercise.status == 'Pending',
-        models.SelfScheduledExercise.scheduled_date <= now
+    pending_exercises = db.query(models.SessionLog).filter(
+        models.SessionLog.student_id == user_id,
+        models.SessionLog.status == 'Pending',
+        models.SessionLog.completion_date <= now
     ).all()
     if pending_exercises:
         notifications.append({
@@ -437,23 +437,23 @@ class ScheduleExerciseRequest(BaseModel):
 
 @app.post("/students/{student_id}/scheduled_exercises")
 def schedule_exercise(student_id: int, request: ScheduleExerciseRequest, db: Session = Depends(get_db)):
-    new_scheduled = models.SelfScheduledExercise(
+    new_scheduled = models.SessionLog(
         student_id=student_id,
         exercise_id=request.exercise_id,
-        scheduled_date=request.scheduled_date,
+        completion_date=request.scheduled_date,
         status="Pending"
     )
     db.add(new_scheduled)
     db.commit()
     db.refresh(new_scheduled)
-    return {"message": "Exercise scheduled successfully", "scheduled_id": new_scheduled.scheduled_id}
+    return {"message": "Exercise scheduled successfully", "schedule_id": new_scheduled.schedule_id}
 
 @app.get("/students/{student_id}/scheduled_exercises")
 def get_scheduled_exercises(student_id: int, db: Session = Depends(get_db)):
-    scheduled = db.query(models.SelfScheduledExercise).filter(
-        models.SelfScheduledExercise.student_id == student_id,
-        models.SelfScheduledExercise.status == "Pending"
-    ).order_by(models.SelfScheduledExercise.scheduled_date.asc()).all()
+    scheduled = db.query(models.SessionLog).filter(
+        models.SessionLog.student_id == student_id,
+        models.SessionLog.status == "Pending"
+    ).order_by(models.SessionLog.completion_date.asc()).all()
     
     result = []
     for se in scheduled:
@@ -467,7 +467,7 @@ def get_scheduled_exercises(student_id: int, db: Session = Depends(get_db)):
             discipline_list = [d[0] for d in disciplines]
             
             result.append({
-                "scheduled_id": se.scheduled_id,
+                "schedule_id": se.schedule_id,
                 "exercise_id": ex.exercise_id,
                 "name": ex.name,
                 "description": ex.description,
@@ -475,7 +475,7 @@ def get_scheduled_exercises(student_id: int, db: Session = Depends(get_db)):
                 "video_url": ex.video_url,
                 "requires_ai": ex.requires_ai,
                 "ai_type": ex.ai_type,
-                "scheduled_date": se.scheduled_date.isoformat(),
+                "scheduled_date": se.completion_date.isoformat(),
                 "status": se.status
             })
     return {"scheduled_exercises": result}
@@ -483,9 +483,9 @@ def get_scheduled_exercises(student_id: int, db: Session = Depends(get_db)):
 class UpdateScheduledExerciseRequest(BaseModel):
     status: str
 
-@app.put("/scheduled_exercises/{scheduled_id}/status")
-def update_scheduled_exercise_status(scheduled_id: int, request: UpdateScheduledExerciseRequest, db: Session = Depends(get_db)):
-    se = db.query(models.SelfScheduledExercise).filter(models.SelfScheduledExercise.scheduled_id == scheduled_id).first()
+@app.put("/scheduled_exercises/{schedule_id}/status")
+def update_scheduled_exercise_status(schedule_id: int, request: UpdateScheduledExerciseRequest, db: Session = Depends(get_db)):
+    se = db.query(models.SessionLog).filter(models.SessionLog.schedule_id == schedule_id).first()
     if not se:
         raise HTTPException(status_code=404, detail="Scheduled exercise not found")
         
@@ -1148,9 +1148,23 @@ class SessionLogRequest(BaseModel):
     pain_before: Optional[int] = None
     pain_after: Optional[int] = None
     accuracy_score: Optional[float] = None
+    schedule_id: Optional[int] = None
 
 @app.post("/session_logs")
 def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
+    if req.schedule_id:
+        existing_log = db.query(models.SessionLog).filter(models.SessionLog.schedule_id == req.schedule_id).first()
+        if existing_log:
+            existing_log.completed_reps = req.completed_reps
+            existing_log.duration_seconds = req.duration_seconds
+            existing_log.pain_before = req.pain_before
+            existing_log.pain_after = req.pain_after
+            existing_log.accuracy_score = req.accuracy_score
+            existing_log.completion_date = datetime.utcnow()
+            existing_log.status = "Completed"
+            db.commit()
+            return {"status": "success", "session_id": existing_log.schedule_id}
+            
     new_log = models.SessionLog(
         student_id=req.student_id,
         exercise_id=req.exercise_id,
@@ -1159,9 +1173,10 @@ def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
         pain_before=req.pain_before,
         pain_after=req.pain_after,
         accuracy_score=req.accuracy_score,
-        completion_date=datetime.utcnow()
+        completion_date=datetime.utcnow(),
+        status="Completed"
     )
     db.add(new_log)
     db.commit()
     db.refresh(new_log)
-    return {"status": "success", "session_id": new_log.session_id}
+    return {"status": "success", "session_id": new_log.schedule_id}

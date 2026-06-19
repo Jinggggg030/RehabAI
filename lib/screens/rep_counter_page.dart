@@ -5,45 +5,42 @@ import 'package:camera/camera.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
-import '../services/posture_analyzer.dart';
+import '../services/movement_analyzer.dart';
 import 'session_summary_page.dart';
 
-class PoseCameraPage extends StatefulWidget {
+class RepCounterPage extends StatefulWidget {
   final Map<String, dynamic> exercise;
   final int? scheduleId;
 
-  const PoseCameraPage({
+  const RepCounterPage({
     super.key,
     required this.exercise,
     this.scheduleId,
   });
 
   @override
-  State<PoseCameraPage> createState() => _PoseCameraPageState();
+  State<RepCounterPage> createState() => _RepCounterPageState();
 }
 
-class _PoseCameraPageState extends State<PoseCameraPage> {
+class _RepCounterPageState extends State<RepCounterPage> {
   CameraController? _cameraController;
   final PoseDetector _poseDetector = PoseDetector(options: PoseDetectorOptions());
   bool _isBusy = false;
   List<Pose> _poses = [];
-  String _feedbackText = "Initializing AI...";
-  late PostureAnalyzer _analyzer;
+  String _feedbackText = "Initializing Camera...";
+  late MovementAnalyzer _analyzer;
   int _sensorOrientation = 0;
-  double _accuracy = 0;
-int _repCount = 0;
-bool _previousCorrect = false;
-Timer? _timer;
-int _secondsElapsed = 0;
+  int _repCount = 0;
+  Timer? _timer;
+  int _secondsElapsed = 0;
 
-int? _painBefore;
-int? _painAfter;
+  int? _painBefore;
+  int? _painAfter;
 
   @override
   void initState() {
     super.initState();
-    _analyzer = PostureAnalyzer();
-    _analyzer.loadHeuristics();
+    _analyzer = MovementAnalyzer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showPainDialog(isBefore: true);
     });
@@ -101,29 +98,21 @@ int? _painAfter;
       }
 
       final poses = await _poseDetector.processImage(inputImage);
-      print("Poses detected: ${poses.length}");
       
       if (poses.isNotEmpty) {
-        final result =
-            _analyzer.analyzePose(
-                poses.first,
-                widget.exercise['exercise_id']?.toString() ?? '1'
-            );
-          if (mounted) {
-                    if (!_previousCorrect &&
-              result.correctPose) {
+        bool repCompleted = _analyzer.analyzeForRep(
+          poses.first,
+          widget.exercise['name']?.toString() ?? '',
+        );
+
+        if (mounted) {
+          if (repCompleted) {
             _repCount++;
           }
 
-          _previousCorrect =
-              result.correctPose;
-
           setState(() {
             _poses = poses;
-            _feedbackText =
-                result.feedback;
-            _accuracy =
-                result.accuracy;
+            _feedbackText = "Keep going! You're doing great.";
           });
         }
       } else {
@@ -240,10 +229,10 @@ int? _painAfter;
       context,
       MaterialPageRoute(
         builder: (context) => SessionSummaryPage(
-          exerciseName: widget.exercise['name'] ?? 'AI Exercise',
+          exerciseName: widget.exercise['name'] ?? 'Rep Exercise',
           durationSeconds: _secondsElapsed,
           reps: _repCount,
-          accuracyScore: _accuracy,
+          accuracyScore: null, // No accuracy for rep counter exercises
           painBefore: _painBefore,
           painAfter: _painAfter,
           exerciseId: widget.exercise['exercise_id'] ?? 1,
@@ -273,7 +262,7 @@ int? _painAfter;
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text('AI Coach', style: GoogleFonts.readexPro(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(widget.exercise['name'] ?? 'Rep Counter', style: GoogleFonts.readexPro(color: Colors.white, fontWeight: FontWeight.bold)),
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
@@ -304,43 +293,35 @@ int? _painAfter;
                   top: 20,
                   left: 20,
                   child: Container(
-                    padding:
-                        const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: Colors.black54,
-                      borderRadius:
-                          BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          "Accuracy: ${_accuracy.toStringAsFixed(0)}%",
-                          style:
-                              GoogleFonts.readexPro(
+                          "Current Reps:",
+                          style: GoogleFonts.readexPro(
                             color: Colors.white,
-                            fontSize: 18,
-                            fontWeight:
-                                FontWeight.bold,
+                            fontSize: 14,
                           ),
                         ),
-                        const SizedBox(height: 8),
                         Text(
-                          "Reps: $_repCount",
-                          style:
-                              GoogleFonts.readexPro(
-                            color: Colors.white,
-                            fontSize: 18,
+                          "$_repCount",
+                          style: GoogleFonts.readexPro(
+                            color: const Color(0xFF207866),
+                            fontSize: 32,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           "Time: ${_formatTime(_secondsElapsed)}",
-                          style:
-                              GoogleFonts.readexPro(
+                          style: GoogleFonts.readexPro(
                             color: Colors.white,
-                            fontSize: 18,
+                            fontSize: 16,
                           ),
                         ),
                       ],
@@ -356,7 +337,7 @@ int? _painAfter;
                     decoration: BoxDecoration(
                       color: Colors.black.withOpacity(0.7),
                       borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _feedbackText.contains('⚠️') || _feedbackText.contains('❌') ? Colors.orange : const Color(0xFF207866), width: 2)
+                      border: Border.all(color: const Color(0xFF207866), width: 2)
                     ),
                     child: Text(
                       _feedbackText,
@@ -400,7 +381,6 @@ class PosePainter extends CustomPainter {
         canvas.drawCircle(Offset(x, y), 5, jointPaint);
       });
       
-      // Helper to draw line
       void drawLine(PoseLandmarkType t1, PoseLandmarkType t2) {
         final l1 = pose.landmarks[t1];
         final l2 = pose.landmarks[t2];
