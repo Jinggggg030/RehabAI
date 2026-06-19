@@ -472,6 +472,7 @@ def get_scheduled_exercises(student_id: int, db: Session = Depends(get_db)):
                 "name": ex.name,
                 "description": ex.description,
                 "disciplines": discipline_list,
+                "reference_joint_angle": ex.reference_joint_angle,
                 "video_url": ex.video_url,
                 "requires_ai": ex.requires_ai,
                 "ai_type": ex.ai_type,
@@ -1148,6 +1149,8 @@ class SessionLogRequest(BaseModel):
     pain_before: Optional[int] = None
     pain_after: Optional[int] = None
     accuracy_score: Optional[float] = None
+    completed_sets: Optional[int] = None
+    planned_sets: Optional[int] = None
     schedule_id: Optional[int] = None
 
 @app.post("/session_logs")
@@ -1160,6 +1163,8 @@ def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
             existing_log.pain_before = req.pain_before
             existing_log.pain_after = req.pain_after
             existing_log.accuracy_score = req.accuracy_score
+            existing_log.completed_sets = req.completed_sets
+            existing_log.planned_sets = req.planned_sets
             existing_log.completion_date = datetime.utcnow()
             existing_log.status = "Completed"
             db.commit()
@@ -1173,6 +1178,8 @@ def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
         pain_before=req.pain_before,
         pain_after=req.pain_after,
         accuracy_score=req.accuracy_score,
+        completed_sets=req.completed_sets,
+        planned_sets=req.planned_sets,
         completion_date=datetime.utcnow(),
         status="Completed"
     )

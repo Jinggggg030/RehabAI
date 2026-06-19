@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'dart:async';
+import 'package:flutter/services.dart';
 import 'session_summary_page.dart';
 
 class DuringExercisePage extends StatefulWidget {
@@ -94,6 +95,11 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
   void _showPainDialog({required bool isBefore}) {
     int localPain = 0;
     int localDurationMinutes = 5; // Default 5 minutes
+    final repsController = TextEditingController(
+      text: !isBefore && !_trackByTime && _completedReps > 0
+          ? '$_completedReps'
+          : '',
+    );
     
     showDialog(
       context: context,
@@ -135,6 +141,21 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
                         });
                       },
                     ),
+
+                    if (!isBefore && !_trackByTime) ...[
+                      const Divider(height: 32),
+                      TextField(
+                        controller: repsController,
+                        keyboardType: TextInputType.number,
+                        inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                        autofocus: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Total completed reps',
+                          hintText: 'For example, 12',
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
                     
                     if (isBefore) ...[
                       const Divider(height: 32),
@@ -241,6 +262,10 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
                         }
                       } else {
                         _painAfter = localPain;
+                        if (!_trackByTime) {
+                          _completedReps =
+                              int.tryParse(repsController.text) ?? 0;
+                        }
                       }
                     });
                     Navigator.pop(context);
@@ -394,41 +419,17 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
                       ),
                       const SizedBox(height: 32),
                       
-                      // Manual Rep Counter
+                      // Manual reps are entered once when the session finishes.
                       if (!_trackByTime) ...[
                         Text(
-                          'Completed Reps',
+                          'Complete your set without touching the phone',
                           style: GoogleFonts.readexPro(fontSize: 16, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 16),
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            IconButton(
-                              iconSize: 48,
-                              color: Colors.red,
-                              icon: const Icon(Icons.remove_circle),
-                              onPressed: () {
-                                if (_completedReps > 0) {
-                                  setState(() => _completedReps--);
-                                }
-                              },
-                            ),
-                            const SizedBox(width: 32),
-                            Text(
-                              '$_completedReps',
-                              style: GoogleFonts.readexPro(fontSize: 48, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(width: 32),
-                            IconButton(
-                              iconSize: 48,
-                              color: const Color(0xFF207866),
-                              icon: const Icon(Icons.add_circle),
-                              onPressed: () {
-                                setState(() => _completedReps++);
-                              },
-                            ),
-                          ],
+                        Text(
+                          'You will enter the total reps after tapping Complete Session.',
+                          textAlign: TextAlign.center,
+                          style: GoogleFonts.readexPro(color: Colors.black54),
                         ),
                         const SizedBox(height: 32),
                       ],

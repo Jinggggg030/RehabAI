@@ -6,17 +6,14 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import '../services/movement_analyzer.dart';
+import 'ai_session_setup_dialog.dart';
 import 'session_summary_page.dart';
 
 class RepCounterPage extends StatefulWidget {
   final Map<String, dynamic> exercise;
   final int? scheduleId;
 
-  const RepCounterPage({
-    super.key,
-    required this.exercise,
-    this.scheduleId,
-  });
+  const RepCounterPage({super.key, required this.exercise, this.scheduleId});
 
   @override
   State<RepCounterPage> createState() => _RepCounterPageState();
@@ -24,13 +21,23 @@ class RepCounterPage extends StatefulWidget {
 
 class _RepCounterPageState extends State<RepCounterPage> {
   CameraController? _cameraController;
-  final PoseDetector _poseDetector = PoseDetector(options: PoseDetectorOptions());
+  final PoseDetector _poseDetector = PoseDetector(
+    options: PoseDetectorOptions(),
+  );
   bool _isBusy = false;
   List<Pose> _poses = [];
   String _feedbackText = "Initializing Camera...";
-  late MovementAnalyzer _analyzer;
+  MovementAnalyzer _analyzer = MovementAnalyzer();
   int _sensorOrientation = 0;
-  int _repCount = 0;
+  AiTrackingMode _trackingMode = AiTrackingMode.reps;
+  int _targetPerSet = 10;
+  int _totalSets = 3;
+  int _currentSet = 1;
+  int _completedSets = 0;
+  int _setRepCount = 0;
+  int _totalRepCount = 0;
+  int _setSecondsRemaining = 30;
+  bool _setActive = false;
   Timer? _timer;
   int _secondsElapsed = 0;
 
@@ -40,10 +47,26 @@ class _RepCounterPageState extends State<RepCounterPage> {
   @override
   void initState() {
     super.initState();
-    _analyzer = MovementAnalyzer();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showPainDialog(isBefore: true);
+      _configureSession();
     });
+  }
+
+  Future<void> _configureSession() async {
+    final config = await showAiSessionSetupDialog(
+      context,
+      defaultMode: AiTrackingMode.reps,
+    );
+    if (!mounted || config == null) return;
+    setState(() {
+      _trackingMode = config.mode;
+      _targetPerSet = config.target;
+      _totalSets = config.sets;
+      _painBefore = config.painBefore;
+      _setSecondsRemaining = config.target;
+      _feedbackText = 'Camera ready. Tap Start Set when you are in position.';
+    });
+    await _initializeCamera();
   }
 
   Future<void> _initializeCamera() async {
@@ -63,23 +86,17 @@ class _RepCounterPageState extends State<RepCounterPage> {
         camera,
         ResolutionPreset.medium,
         enableAudio: false,
-        imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,
+        imageFormatGroup: Platform.isAndroid
+            ? ImageFormatGroup.nv21
+            : ImageFormatGroup.bgra8888,
       );
 
       await _cameraController?.initialize();
-      print("CAMERA INITIALIZED");
+      debugPrint('Camera initialized');
       if (!mounted) return;
 
-      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (mounted) {
-          setState(() {
-            _secondsElapsed++;
-          });
-        }
-      });
-
       _cameraController?.startImageStream(_processCameraImage);
-      print("IMAGE STREAM STARTED");
+      debugPrint('Image stream started');
       setState(() {});
     } catch (e) {
       debugPrint("Error initializing camera: $e");
@@ -98,25 +115,35 @@ class _RepCounterPageState extends State<RepCounterPage> {
       }
 
       final poses = await _poseDetector.processImage(inputImage);
-      
+
       if (poses.isNotEmpty) {
-        bool repCompleted = _analyzer.analyzeForRep(
-          poses.first,
-          widget.exercise['name']?.toString() ?? '',
-        );
+        final repCompleted =
+            _setActive &&
+            _analyzer.analyzeForRep(
+              poses.first,
+              widget.exercise['name']?.toString() ?? '',
+            );
 
         if (mounted) {
+          var reachedTarget = false;
           if (repCompleted) {
-            _repCount++;
+            _setRepCount++;
+            _totalRepCount++;
+            reachedTarget =
+                _trackingMode == AiTrackingMode.reps &&
+                _setRepCount >= _targetPerSet;
           }
 
           setState(() {
             _poses = poses;
-            _feedbackText = "Keep going! You're doing great.";
+            if (_setActive) {
+              _feedbackText = "Keep going! You're doing great.";
+            }
           });
+          if (reachedTarget) _finishSet();
         }
       } else {
-         if (mounted) {
+        if (mounted) {
           setState(() {
             _poses = [];
             _feedbackText = "Step into the frame";
@@ -128,6 +155,80 @@ class _RepCounterPageState extends State<RepCounterPage> {
     } finally {
       _isBusy = false;
     }
+  }
+
+  void _startSet() {
+    _timer?.cancel();
+    setState(() {
+      _setActive = true;
+      _setRepCount = 0;
+      _setSecondsRemaining = _targetPerSet;
+      _analyzer = MovementAnalyzer();
+      _feedbackText = 'Set $_currentSet started. Keep going!';
+    });
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || !_setActive) return;
+      var shouldFinish = false;
+      setState(() {
+        _secondsElapsed++;
+        if (_trackingMode == AiTrackingMode.duration) {
+          _setSecondsRemaining--;
+          shouldFinish = _setSecondsRemaining <= 0;
+        }
+      });
+      if (shouldFinish) _finishSet();
+    });
+  }
+
+  void _finishSet() {
+    if (!_setActive) return;
+    _timer?.cancel();
+    setState(() {
+      _setActive = false;
+      _completedSets++;
+      _feedbackText = 'Set $_currentSet of $_totalSets complete.';
+    });
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _showSetCompleteDialog(),
+    );
+  }
+
+  Future<void> _showSetCompleteDialog() async {
+    if (!mounted) return;
+    final hasNextSet = _currentSet < _totalSets;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Set $_currentSet / $_totalSets complete'),
+        content: Text(
+          hasNextSet
+              ? 'Take a rest. Start the next set when you are ready.'
+              : 'You completed all planned sets.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              _showPainDialog(isBefore: false);
+            },
+            child: Text(hasNextSet ? 'Stop Performing' : 'Finish'),
+          ),
+          if (hasNextSet)
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                setState(() => _currentSet++);
+                _startSet();
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF207866),
+              ),
+              child: const Text('Start Next Set'),
+            ),
+        ],
+      ),
+    );
   }
 
   InputImage? _inputImageFromCameraImage(CameraImage image) {
@@ -166,20 +267,32 @@ class _RepCounterPageState extends State<RepCounterPage> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      isBefore ? 'Rate your Pain Before Exercise' : 'Rate your Pain After Exercise',
-                      style: GoogleFonts.readexPro(fontSize: 16, fontWeight: FontWeight.bold),
+                      isBefore
+                          ? 'Rate your Pain Before Exercise'
+                          : 'Rate your Pain After Exercise',
+                      style: GoogleFonts.readexPro(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
                       '0 (No Pain) to 10 (Worst Pain)',
-                      style: GoogleFonts.readexPro(fontSize: 12, color: Colors.black54),
+                      style: GoogleFonts.readexPro(
+                        fontSize: 12,
+                        color: Colors.black54,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
                       '$localPain',
-                      style: GoogleFonts.readexPro(fontSize: 32, fontWeight: FontWeight.bold, color: const Color(0xFF207866)),
+                      style: GoogleFonts.readexPro(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF207866),
+                      ),
                     ),
                     Slider(
                       value: localPain.toDouble(),
@@ -214,13 +327,19 @@ class _RepCounterPageState extends State<RepCounterPage> {
                       _completeSessionNavigation();
                     }
                   },
-                  child: Text('Confirm', style: GoogleFonts.readexPro(fontWeight: FontWeight.bold, color: const Color(0xFF207866))),
+                  child: Text(
+                    'Confirm',
+                    style: GoogleFonts.readexPro(
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF207866),
+                    ),
+                  ),
                 ),
               ],
             );
-          }
+          },
         );
-      }
+      },
     );
   }
 
@@ -231,12 +350,14 @@ class _RepCounterPageState extends State<RepCounterPage> {
         builder: (context) => SessionSummaryPage(
           exerciseName: widget.exercise['name'] ?? 'Rep Exercise',
           durationSeconds: _secondsElapsed,
-          reps: _repCount,
+          reps: _totalRepCount,
           accuracyScore: null, // No accuracy for rep counter exercises
           painBefore: _painBefore,
           painAfter: _painAfter,
           exerciseId: widget.exercise['exercise_id'] ?? 1,
           scheduleId: widget.scheduleId,
+          completedSets: _completedSets,
+          plannedSets: _totalSets,
         ),
       ),
     );
@@ -262,7 +383,13 @@ class _RepCounterPageState extends State<RepCounterPage> {
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text(widget.exercise['name'] ?? 'Rep Counter', style: GoogleFonts.readexPro(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(
+          widget.exercise['name'] ?? 'Rep Counter',
+          style: GoogleFonts.readexPro(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
@@ -274,20 +401,29 @@ class _RepCounterPageState extends State<RepCounterPage> {
             },
             child: Text(
               "Finish",
-              style: GoogleFonts.readexPro(color: const Color(0xFF207866), fontWeight: FontWeight.bold, fontSize: 16),
+              style: GoogleFonts.readexPro(
+                color: const Color(0xFF207866),
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
-          )
+          ),
         ],
       ),
       body: _cameraController == null || !_cameraController!.value.isInitialized
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF207866)))
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFF207866)),
+            )
           : Stack(
               fit: StackFit.expand,
               children: [
                 CameraPreview(_cameraController!),
                 if (_poses.isNotEmpty)
                   CustomPaint(
-                    painter: PosePainter(_poses, _cameraController!.value.previewSize!),
+                    painter: PosePainter(
+                      _poses,
+                      _cameraController!.value.previewSize!,
+                    ),
                   ),
                 Positioned(
                   top: 20,
@@ -302,14 +438,16 @@ class _RepCounterPageState extends State<RepCounterPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          "Current Reps:",
+                          "Set $_currentSet / $_totalSets",
                           style: GoogleFonts.readexPro(
                             color: Colors.white,
                             fontSize: 14,
                           ),
                         ),
                         Text(
-                          "$_repCount",
+                          _trackingMode == AiTrackingMode.reps
+                              ? '$_setRepCount / $_targetPerSet reps'
+                              : '${_formatTime(_setSecondsRemaining)} left',
                           style: GoogleFonts.readexPro(
                             color: const Color(0xFF207866),
                             fontSize: 32,
@@ -333,20 +471,42 @@ class _RepCounterPageState extends State<RepCounterPage> {
                   left: 20,
                   right: 20,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: const Color(0xFF207866), width: 2)
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 16,
+                      horizontal: 20,
                     ),
-                    child: Text(
-                      _feedbackText,
-                      style: GoogleFonts.readexPro(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: const Color(0xFF207866),
+                        width: 2,
                       ),
-                      textAlign: TextAlign.center,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _feedbackText,
+                          style: GoogleFonts.readexPro(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        if (!_setActive) ...[
+                          const SizedBox(height: 14),
+                          FilledButton.icon(
+                            onPressed: _startSet,
+                            icon: const Icon(Icons.play_arrow),
+                            label: Text('Start Set $_currentSet'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF207866),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
@@ -376,18 +536,23 @@ class PosePainter extends CustomPainter {
 
     for (final pose in poses) {
       pose.landmarks.forEach((_, landmark) {
-        final x = size.width - (landmark.x * (size.width / absoluteImageSize.height)); // Mirrored X
+        final x =
+            size.width -
+            (landmark.x *
+                (size.width / absoluteImageSize.height)); // Mirrored X
         final y = landmark.y * (size.height / absoluteImageSize.width);
         canvas.drawCircle(Offset(x, y), 5, jointPaint);
       });
-      
+
       void drawLine(PoseLandmarkType t1, PoseLandmarkType t2) {
         final l1 = pose.landmarks[t1];
         final l2 = pose.landmarks[t2];
         if (l1 != null && l2 != null) {
-          final x1 = size.width - (l1.x * (size.width / absoluteImageSize.height));
+          final x1 =
+              size.width - (l1.x * (size.width / absoluteImageSize.height));
           final y1 = l1.y * (size.height / absoluteImageSize.width);
-          final x2 = size.width - (l2.x * (size.width / absoluteImageSize.height));
+          final x2 =
+              size.width - (l2.x * (size.width / absoluteImageSize.height));
           final y2 = l2.y * (size.height / absoluteImageSize.width);
           canvas.drawLine(Offset(x1, y1), Offset(x2, y2), paint);
         }
@@ -398,13 +563,13 @@ class PosePainter extends CustomPainter {
       drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip);
       drawLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip);
       drawLine(PoseLandmarkType.leftHip, PoseLandmarkType.rightHip);
-      
+
       // Arms
       drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow);
       drawLine(PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist);
       drawLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow);
       drawLine(PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist);
-      
+
       // Legs
       drawLine(PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee);
       drawLine(PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle);
@@ -415,6 +580,7 @@ class PosePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant PosePainter oldDelegate) {
-    return oldDelegate.poses != poses || oldDelegate.absoluteImageSize != absoluteImageSize;
+    return oldDelegate.poses != poses ||
+        oldDelegate.absoluteImageSize != absoluteImageSize;
   }
 }

@@ -204,6 +204,8 @@ class SessionLog(Base):
     
     completed_reps = Column(Integer, nullable=True)
     duration_seconds = Column(Integer, nullable=True)
+    completed_sets = Column(Integer, nullable=True)
+    planned_sets = Column(Integer, nullable=True)
     
     pain_before = Column(Integer, nullable=True)
     pain_after = Column(Integer, nullable=True)

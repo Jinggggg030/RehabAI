@@ -26,6 +26,11 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
   late VideoPlayerController _videoPlayerController;
   ChewieController? _chewieController;
 
+  String get _aiType =>
+      (widget.exercise['ai_type'] ?? '').toString().trim().toLowerCase();
+
+  bool get _usesAi => widget.exercise['requires_ai'] == true;
+
   @override
   void initState() {
     super.initState();
@@ -188,7 +193,7 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                             // Button to start live exercise
                             ElevatedButton(
                               onPressed: () {
-                                if (widget.exercise['ai_type'] == 'posture') {
+                                if (_usesAi && _aiType == 'posture') {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -198,7 +203,9 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                                       ),
                                     ),
                                   );
-                                } else if (widget.exercise['ai_type'] == 'rep_counter') {
+                                } else if (_usesAi &&
+                                    (_aiType == 'rep_count' ||
+                                        _aiType == 'rep_counter')) {
                                   Navigator.push(
                                     context,
                                     MaterialPageRoute(
@@ -229,7 +236,7 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                                 ),
                               ),
                               child: Text(
-                                (widget.exercise['requires_ai'] == true && widget.exercise['ai_type'] == 'posture') ? 'Start Live AI Tracking' : 'Start Video Exercise',
+                                _usesAi ? 'Start Live AI Tracking' : 'Start Exercise',
                                 style: GoogleFonts.readexPro(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,

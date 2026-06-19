@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import '../utils/pose_math.dart';
 
@@ -7,7 +6,7 @@ enum MovementState { unknown, start, end }
 class MovementAnalyzer {
   MovementState _currentState = MovementState.unknown;
 
-  /// Analyzes the pose and returns true if a full rep was just completed.
+  /// Returns true only after a complete start -> end -> start cycle.
   bool analyzeForRep(Pose pose, String exerciseName) {
     final landmarks = pose.landmarks;
     if (landmarks.isEmpty) return false;
@@ -30,30 +29,22 @@ class MovementAnalyzer {
   }
 
   bool _checkBicepCurl(Map<PoseLandmarkType, PoseLandmark> landmarks) {
-    // Need shoulder, elbow, wrist
     if (landmarks[PoseLandmarkType.leftShoulder] == null ||
         landmarks[PoseLandmarkType.leftElbow] == null ||
         landmarks[PoseLandmarkType.leftWrist] == null) {
       return false;
     }
 
-    // Usually we check the active arm, but let's just check left arm for simplicity or check both
-    double leftAngle = PoseMath.calculateAngle(
-      landmarks[PoseLandmarkType.leftShoulder]!,
-      landmarks[PoseLandmarkType.leftElbow]!,
-      landmarks[PoseLandmarkType.leftWrist]!,
-    );
+    final shoulder = landmarks[PoseLandmarkType.leftShoulder]!;
+    final elbow = landmarks[PoseLandmarkType.leftElbow]!;
+    final wrist = landmarks[PoseLandmarkType.leftWrist]!;
 
-    // Arm straight: angle > 150 means START
-    // Arm bent: angle < 50 means END (Rep counted)
-    if (leftAngle > 150) {
-      _currentState = MovementState.start;
-    } else if (leftAngle < 50 && _currentState == MovementState.start) {
-      _currentState = MovementState.end; // Wait for it to return to start
-      return true; // Rep completed!
-    }
-
-    return false;
+    // Image y grows downwards. A curl moves the wrist above the elbow and then
+    // back below it. Using relative landmark positions makes rep_count distinct
+    // from posture's reference-angle comparison.
+    final atTop = wrist.y < elbow.y && wrist.y < shoulder.y;
+    final atBottom = wrist.y > elbow.y;
+    return _completeCycle(atBottom: atBottom, atTop: atTop);
   }
 
   bool _checkSquat(Map<PoseLandmarkType, PoseLandmark> landmarks) {
@@ -73,10 +64,9 @@ class MovementAnalyzer {
     // Standing: angle > 160 means START
     // Squatting: angle < 100 means END (Rep counted)
     if (leftKneeAngle > 160) {
-      _currentState = MovementState.start;
-    } else if (leftKneeAngle < 100 && _currentState == MovementState.start) {
-      _currentState = MovementState.end;
-      return true; 
+      return _completeCycle(atBottom: true, atTop: false);
+    } else if (leftKneeAngle < 100) {
+      return _completeCycle(atBottom: false, atTop: true);
     }
 
     return false;
@@ -98,10 +88,9 @@ class MovementAnalyzer {
     // Lying flat: hip angle ~ 170-180 -> START
     // Leg raised: hip angle < 110 -> END
     if (hipAngle > 160) {
-      _currentState = MovementState.start;
-    } else if (hipAngle < 110 && _currentState == MovementState.start) {
-      _currentState = MovementState.end;
-      return true;
+      return _completeCycle(atBottom: true, atTop: false);
+    } else if (hipAngle < 110) {
+      return _completeCycle(atBottom: false, atTop: true);
     }
 
     return false;
@@ -114,21 +103,24 @@ class MovementAnalyzer {
       return false;
     }
 
-    double elbowAngle = PoseMath.calculateAngle(
-      landmarks[PoseLandmarkType.leftShoulder]!,
-      landmarks[PoseLandmarkType.leftElbow]!,
-      landmarks[PoseLandmarkType.leftWrist]!,
+    final shoulder = landmarks[PoseLandmarkType.leftShoulder]!;
+    final wrist = landmarks[PoseLandmarkType.leftWrist]!;
+    return _completeCycle(
+      atBottom: wrist.y > shoulder.y,
+      atTop: wrist.y < shoulder.y,
     );
+  }
 
-    // Arms down/bent: angle < 90 -> START
-    // Arms extended: angle > 150 -> END
-    if (elbowAngle < 90) {
+  bool _completeCycle({required bool atBottom, required bool atTop}) {
+    if (atBottom) {
+      if (_currentState == MovementState.end) {
+        _currentState = MovementState.start;
+        return true;
+      }
       _currentState = MovementState.start;
-    } else if (elbowAngle > 150 && _currentState == MovementState.start) {
+    } else if (atTop && _currentState == MovementState.start) {
       _currentState = MovementState.end;
-      return true;
     }
-
     return false;
   }
 }

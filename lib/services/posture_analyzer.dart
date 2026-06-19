@@ -1,7 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'dart:convert';
+
 import 'package:flutter/services.dart';
 import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
+
 import '../utils/pose_math.dart';
 
 class PostureResult {
@@ -21,160 +22,121 @@ class PostureAnalyzer {
   bool _isLoaded = false;
 
   Future<void> loadHeuristics() async {
-    try {
-      final jsonString = await rootBundle.loadString(
-        'assets/exercise_sources/heuristics.json',
-      );
-
-      _heuristics = jsonDecode(jsonString);
-      _isLoaded = true;
-    } catch (e) {
-      print("Error loading heuristics: $e");
-    }
+    final jsonString = await rootBundle.loadString(
+      'assets/exercise_sources/heuristics.json',
+    );
+    _heuristics = jsonDecode(jsonString);
+    _isLoaded = true;
   }
 
   PostureResult analyzePose(
     Pose pose,
-    String exerciseId,
-  ) {
-    if (!_isLoaded || !_heuristics.containsKey(exerciseId)) {
+    String exerciseId, {
+    double? referenceJointAngle,
+  }) {
+    if (!_isLoaded) {
       return const PostureResult(
         accuracy: 0,
-        feedback: "Analyzing...",
+        feedback: 'Analyzing...',
         correctPose: false,
       );
     }
 
     final landmarks = pose.landmarks;
-
     if (landmarks.isEmpty) {
       return const PostureResult(
         accuracy: 0,
-        feedback: "No person detected",
+        feedback: 'No person detected',
         correctPose: false,
       );
     }
 
-    final rules = _heuristics[exerciseId];
-    debugPrint("Exercise ID = $exerciseId");
-    debugPrint("Keys = ${_heuristics.keys}");
-    debugPrint("Rules = $rules");
+    final rules = _heuristics[exerciseId] as Map<String, dynamic>?;
+    final correct =
+        (rules?['correct_avg_min'] as Map<String, dynamic>?) ?? {};
+    final scores = <double>[];
 
-    final correctAvg =
-        rules['correct_avg_min'] ?? {};
+    void compareDatasetAngle(double current, String prefix) {
+      final minValue = correct['${prefix}_min'];
+      final maxValue = correct['${prefix}_max'];
+      final meanValue = correct['${prefix}_mean'];
+      if (minValue == null && maxValue == null && meanValue == null) return;
 
-    List<double> scores = [];
+      final target = (meanValue ?? minValue ?? maxValue).toDouble();
+      final min = minValue?.toDouble() ?? target - 12;
+      final max = maxValue?.toDouble() ?? target + 12;
+      final tolerance = ((max - min).abs() / 2).clamp(10.0, 25.0);
+      final error = current < min
+          ? min - current
+          : current > max
+              ? current - max
+              : 0.0;
+      scores.add(
+        (100 - (error / tolerance * 100)).clamp(0, 100).toDouble(),
+      );
+    }
 
-    void compareAngle(
-      double current,
-      String key,
-    ) {
-      if (correctAvg.containsKey(key)) {
-        double target =
-            correctAvg[key].toDouble();
+    void scoreAngle(
+      PoseLandmarkType first,
+      PoseLandmarkType middle,
+      PoseLandmarkType last,
+      String prefix, {
+      double? reference,
+    }) {
+      final a = landmarks[first];
+      final b = landmarks[middle];
+      final c = landmarks[last];
+      if (a == null || b == null || c == null) return;
 
-        double error =
-            (current - target).abs();
-
-        double score =
-            (100 - error).clamp(0, 100);
-
-        scores.add(score);
+      final current = PoseMath.calculateAngle(a, b, c);
+      if (reference != null) {
+        const tolerance = 15.0;
+        final error = (current - reference).abs();
+        scores.add(
+          (100 - (error / tolerance * 100)).clamp(0, 100).toDouble(),
+        );
+      } else {
+        compareDatasetAngle(current, prefix);
       }
     }
 
-    if (landmarks[
-            PoseLandmarkType.leftShoulder] !=
-        null &&
-        landmarks[
-                PoseLandmarkType.leftHip] !=
-            null &&
-        landmarks[
-                PoseLandmarkType.leftKnee] !=
-            null) {
-      double angle =
-          PoseMath.calculateAngle(
-        landmarks[
-            PoseLandmarkType.leftShoulder]!,
-        landmarks[
-            PoseLandmarkType.leftHip]!,
-        landmarks[
-            PoseLandmarkType.leftKnee]!,
+    scoreAngle(
+      PoseLandmarkType.leftShoulder,
+      PoseLandmarkType.leftHip,
+      PoseLandmarkType.leftKnee,
+      'L_Hip',
+    );
+    scoreAngle(
+      PoseLandmarkType.leftHip,
+      PoseLandmarkType.leftKnee,
+      PoseLandmarkType.leftAnkle,
+      'L_Knee',
+    );
+    scoreAngle(
+      PoseLandmarkType.leftShoulder,
+      PoseLandmarkType.leftElbow,
+      PoseLandmarkType.leftWrist,
+      'L_Elbow',
+      // Existing records define reference_joint_angle for the primary elbow.
+      reference: referenceJointAngle,
+    );
+
+    if (scores.isEmpty) {
+      return const PostureResult(
+        accuracy: 0,
+        feedback: 'Move your full body into the frame',
+        correctPose: false,
       );
-
-      compareAngle(angle, "L_Hip_mean");
     }
 
-    if (landmarks[
-            PoseLandmarkType.leftHip] !=
-        null &&
-        landmarks[
-                PoseLandmarkType.leftKnee] !=
-            null &&
-        landmarks[
-                PoseLandmarkType.leftAnkle] !=
-            null) {
-      double angle =
-          PoseMath.calculateAngle(
-        landmarks[
-            PoseLandmarkType.leftHip]!,
-        landmarks[
-            PoseLandmarkType.leftKnee]!,
-        landmarks[
-            PoseLandmarkType.leftAnkle]!,
-      );
-
-      compareAngle(angle, "L_Knee_mean");
-    }
-
-    if (landmarks[
-            PoseLandmarkType.leftShoulder] !=
-        null &&
-        landmarks[
-                PoseLandmarkType.leftElbow] !=
-            null &&
-        landmarks[
-                PoseLandmarkType.leftWrist] !=
-            null) {
-      double angle =
-          PoseMath.calculateAngle(
-        landmarks[
-            PoseLandmarkType.leftShoulder]!,
-        landmarks[
-            PoseLandmarkType.leftElbow]!,
-        landmarks[
-            PoseLandmarkType.leftWrist]!,
-      );
-
-      compareAngle(angle, "L_Elbow_mean");
-    }
-
-    double accuracy = 0;
-
-    if (scores.isNotEmpty) {
-      accuracy =
-          scores.reduce((a, b) => a + b) /
-              scores.length;
-    }
-
-    String feedback;
-
-    if (accuracy >= 85) {
-      feedback =
-          "✅ Excellent posture!";
-    } else if (accuracy >= 70) {
-      feedback =
-          "👍 Good posture. Minor adjustments needed.";
-    } else if (accuracy >= 50) {
-      feedback =
-          "⚠️ Improve your alignment.";
-    } else {
-      feedback =
-          "❌ Incorrect posture detected.";
-    }
-
-    debugPrint("Scores = $scores");
-    debugPrint("Accuracy = $accuracy");
+    final accuracy = scores.reduce((a, b) => a + b) / scores.length;
+    final feedback = accuracy >= 85
+        ? 'Excellent posture!'
+        : accuracy >= 70
+            ? 'Good posture. Minor adjustments needed.'
+            : accuracy >= 50
+                ? 'Improve your alignment.'
+                : 'Incorrect posture detected.';
 
     return PostureResult(
       accuracy: accuracy,

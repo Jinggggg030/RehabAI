@@ -8,12 +8,14 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 class SessionSummaryPage extends StatefulWidget {
   final String exerciseName;
   final int durationSeconds;
-  final int reps;
+  final int? reps;
   final int? painBefore;
   final int? painAfter;
   final double? accuracyScore;
   final int exerciseId;
   final int? scheduleId;
+  final int? completedSets;
+  final int? plannedSets;
 
   const SessionSummaryPage({
     super.key,
@@ -25,6 +27,8 @@ class SessionSummaryPage extends StatefulWidget {
     this.accuracyScore,
     required this.exerciseId,
     this.scheduleId,
+    this.completedSets,
+    this.plannedSets,
   });
 
   @override
@@ -42,8 +46,10 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
   }
 
   Future<void> _saveSessionLog() async {
-    final String apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-    
+    final String apiUrl = kIsWeb
+        ? 'http://127.0.0.1:8000'
+        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+
     try {
       final bodyData = {
         'student_id': 1, // Using 1 as default per your existing hardcoding
@@ -53,8 +59,10 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
         'pain_before': widget.painBefore,
         'pain_after': widget.painAfter,
         'accuracy_score': widget.accuracyScore,
+        'completed_sets': widget.completedSets,
+        'planned_sets': widget.plannedSets,
       };
-      
+
       if (widget.scheduleId != null) {
         bodyData['schedule_id'] = widget.scheduleId;
       }
@@ -105,7 +113,11 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               const SizedBox(height: 24),
-              Icon(Icons.check_circle, size: 80, color: const Color(0xFF207866)),
+              Icon(
+                Icons.check_circle,
+                size: 80,
+                color: const Color(0xFF207866),
+              ),
               const SizedBox(height: 16),
               Text(
                 'Session Summary',
@@ -120,10 +132,13 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
               Text(
                 'Exercise Completed',
                 textAlign: TextAlign.center,
-                style: GoogleFonts.readexPro(fontSize: 16, color: Colors.black54),
+                style: GoogleFonts.readexPro(
+                  fontSize: 16,
+                  color: Colors.black54,
+                ),
               ),
               const SizedBox(height: 32),
-              
+
               Container(
                 padding: const EdgeInsets.all(24),
                 decoration: BoxDecoration(
@@ -131,7 +146,7 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.05),
                       blurRadius: 10,
                       offset: const Offset(0, 4),
                     ),
@@ -141,39 +156,69 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
                   children: [
                     _buildSummaryRow('Exercise:', widget.exerciseName),
                     const Divider(height: 24),
-                    _buildSummaryRow('Duration:', _formatTime(widget.durationSeconds)),
-                    const Divider(height: 24),
-                    _buildSummaryRow('Repetitions:', '${widget.reps}'),
-                    
-                    if (widget.painBefore != null || widget.painAfter != null) ...[
+                    _buildSummaryRow(
+                      'Duration:',
+                      _formatTime(widget.durationSeconds),
+                    ),
+                    if (widget.reps != null) ...[
                       const Divider(height: 24),
-                      _buildSummaryRow('Pain Before:', '${widget.painBefore ?? '-'}/10'),
-                      const SizedBox(height: 8),
-                      _buildSummaryRow('Pain After:', '${widget.painAfter ?? '-'}/10'),
+                      _buildSummaryRow('Repetitions:', '${widget.reps}'),
                     ],
-                    
+                    if (widget.completedSets != null) ...[
+                      const Divider(height: 24),
+                      _buildSummaryRow(
+                        'Sets:',
+                        '${widget.completedSets} / ${widget.plannedSets ?? widget.completedSets}',
+                      ),
+                    ],
+
+                    if (widget.painBefore != null ||
+                        widget.painAfter != null) ...[
+                      const Divider(height: 24),
+                      _buildSummaryRow(
+                        'Pain Before:',
+                        '${widget.painBefore ?? '-'}/10',
+                      ),
+                      const SizedBox(height: 8),
+                      _buildSummaryRow(
+                        'Pain After:',
+                        '${widget.painAfter ?? '-'}/10',
+                      ),
+                    ],
+
                     if (widget.accuracyScore != null) ...[
                       const Divider(height: 24),
-                      _buildSummaryRow('AI Accuracy:', '${widget.accuracyScore!.toStringAsFixed(1)}%'),
+                      _buildSummaryRow(
+                        'AI Accuracy:',
+                        '${widget.accuracyScore!.toStringAsFixed(1)}%',
+                      ),
                     ],
                   ],
                 ),
               ),
-              
+
               const SizedBox(height: 24),
               if (_isSaving)
-                const Center(child: CircularProgressIndicator(color: Color(0xFF207866)))
+                const Center(
+                  child: CircularProgressIndicator(color: Color(0xFF207866)),
+                )
               else if (_saveSuccess)
                 Text(
                   '✓ Progress securely saved',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.readexPro(color: const Color(0xFF207866), fontWeight: FontWeight.bold),
+                  style: GoogleFonts.readexPro(
+                    color: const Color(0xFF207866),
+                    fontWeight: FontWeight.bold,
+                  ),
                 )
               else
                 Text(
                   '❌ Failed to save progress to cloud',
                   textAlign: TextAlign.center,
-                  style: GoogleFonts.readexPro(color: Colors.red, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.readexPro(
+                    color: Colors.red,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
 
               const Spacer(),
@@ -193,7 +238,10 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
                 ),
                 child: Text(
                   'Finish',
-                  style: GoogleFonts.readexPro(fontSize: 16, fontWeight: FontWeight.bold),
+                  style: GoogleFonts.readexPro(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
             ],

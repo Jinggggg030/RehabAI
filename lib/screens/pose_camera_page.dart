@@ -6,17 +6,14 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import '../services/posture_analyzer.dart';
+import 'ai_session_setup_dialog.dart';
 import 'session_summary_page.dart';
 
 class PoseCameraPage extends StatefulWidget {
   final Map<String, dynamic> exercise;
   final int? scheduleId;
 
-  const PoseCameraPage({
-    super.key,
-    required this.exercise,
-    this.scheduleId,
-  });
+  const PoseCameraPage({super.key, required this.exercise, this.scheduleId});
 
   @override
   State<PoseCameraPage> createState() => _PoseCameraPageState();
@@ -24,33 +21,64 @@ class PoseCameraPage extends StatefulWidget {
 
 class _PoseCameraPageState extends State<PoseCameraPage> {
   CameraController? _cameraController;
-  final PoseDetector _poseDetector = PoseDetector(options: PoseDetectorOptions());
+  final PoseDetector _poseDetector = PoseDetector(
+    options: PoseDetectorOptions(),
+  );
   bool _isBusy = false;
   List<Pose> _poses = [];
   String _feedbackText = "Initializing AI...";
   late PostureAnalyzer _analyzer;
   int _sensorOrientation = 0;
   double _accuracy = 0;
-int _repCount = 0;
-bool _previousCorrect = false;
-Timer? _timer;
-int _secondsElapsed = 0;
+  double _accuracyTotal = 0;
+  int _accuracySamples = 0;
+  AiTrackingMode _trackingMode = AiTrackingMode.duration;
+  int _targetPerSet = 30;
+  int _totalSets = 3;
+  int _currentSet = 1;
+  int _completedSets = 0;
+  int _setSecondsRemaining = 30;
+  int _setRepCount = 0;
+  int _totalRepCount = 0;
+  bool _postureRepReady = true;
+  int _correctFrames = 0;
+  int _incorrectFrames = 0;
+  bool _setActive = false;
+  Timer? _timer;
+  int _secondsElapsed = 0;
 
-int? _painBefore;
-int? _painAfter;
+  int? _painBefore;
+  int? _painAfter;
 
   @override
   void initState() {
     super.initState();
     _analyzer = PostureAnalyzer();
-    _analyzer.loadHeuristics();
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _showPainDialog(isBefore: true);
+      _configureSession();
     });
+  }
+
+  Future<void> _configureSession() async {
+    final config = await showAiSessionSetupDialog(
+      context,
+      defaultMode: AiTrackingMode.duration,
+    );
+    if (!mounted || config == null) return;
+    setState(() {
+      _trackingMode = config.mode;
+      _targetPerSet = config.target;
+      _totalSets = config.sets;
+      _painBefore = config.painBefore;
+      _setSecondsRemaining = config.target;
+      _feedbackText = 'Camera ready. Tap Start Set when you are in position.';
+    });
+    await _initializeCamera();
   }
 
   Future<void> _initializeCamera() async {
     try {
+      await _analyzer.loadHeuristics();
       final cameras = await availableCameras();
       if (cameras.isEmpty) return;
 
@@ -66,23 +94,17 @@ int? _painAfter;
         camera,
         ResolutionPreset.medium,
         enableAudio: false,
-        imageFormatGroup: Platform.isAndroid ? ImageFormatGroup.nv21 : ImageFormatGroup.bgra8888,
+        imageFormatGroup: Platform.isAndroid
+            ? ImageFormatGroup.nv21
+            : ImageFormatGroup.bgra8888,
       );
 
       await _cameraController?.initialize();
-      print("CAMERA INITIALIZED");
+      debugPrint('Camera initialized');
       if (!mounted) return;
 
-      _timer = Timer.periodic(const Duration(seconds: 1), (timer) {
-        if (mounted) {
-          setState(() {
-            _secondsElapsed++;
-          });
-        }
-      });
-
       _cameraController?.startImageStream(_processCameraImage);
-      print("IMAGE STREAM STARTED");
+      debugPrint('Image stream started');
       setState(() {});
     } catch (e) {
       debugPrint("Error initializing camera: $e");
@@ -101,33 +123,46 @@ int? _painAfter;
       }
 
       final poses = await _poseDetector.processImage(inputImage);
-      print("Poses detected: ${poses.length}");
-      
       if (poses.isNotEmpty) {
-        final result =
-            _analyzer.analyzePose(
-                poses.first,
-                widget.exercise['exercise_id']?.toString() ?? '1'
-            );
-          if (mounted) {
-                    if (!_previousCorrect &&
-              result.correctPose) {
-            _repCount++;
+        final result = _analyzer.analyzePose(
+          poses.first,
+          widget.exercise['exercise_id']?.toString() ?? '1',
+          referenceJointAngle:
+              (widget.exercise['reference_joint_angle'] as num?)?.toDouble(),
+        );
+        if (mounted) {
+          var reachedTarget = false;
+          if (_setActive && result.accuracy > 0) {
+            _accuracyTotal += result.accuracy;
+            _accuracySamples++;
           }
 
-          _previousCorrect =
-              result.correctPose;
+          if (_setActive && _trackingMode == AiTrackingMode.reps) {
+            if (result.correctPose) {
+              _correctFrames++;
+              _incorrectFrames = 0;
+              if (_postureRepReady && _correctFrames >= 5) {
+                _setRepCount++;
+                _totalRepCount++;
+                _postureRepReady = false;
+                reachedTarget = _setRepCount >= _targetPerSet;
+              }
+            } else {
+              _incorrectFrames++;
+              _correctFrames = 0;
+              if (_incorrectFrames >= 5) _postureRepReady = true;
+            }
+          }
 
           setState(() {
             _poses = poses;
-            _feedbackText =
-                result.feedback;
-            _accuracy =
-                result.accuracy;
+            _feedbackText = result.feedback;
+            _accuracy = result.accuracy;
           });
+          if (reachedTarget) _finishSet();
         }
       } else {
-         if (mounted) {
+        if (mounted) {
           setState(() {
             _poses = [];
             _feedbackText = "Step into the frame";
@@ -139,6 +174,82 @@ int? _painAfter;
     } finally {
       _isBusy = false;
     }
+  }
+
+  void _startSet() {
+    _timer?.cancel();
+    setState(() {
+      _setActive = true;
+      _setRepCount = 0;
+      _setSecondsRemaining = _targetPerSet;
+      _postureRepReady = true;
+      _correctFrames = 0;
+      _incorrectFrames = 0;
+      _feedbackText = 'Set $_currentSet started. Hold the correct posture.';
+    });
+    _timer = Timer.periodic(const Duration(seconds: 1), (_) {
+      if (!mounted || !_setActive) return;
+      var shouldFinish = false;
+      setState(() {
+        _secondsElapsed++;
+        if (_trackingMode == AiTrackingMode.duration) {
+          _setSecondsRemaining--;
+          shouldFinish = _setSecondsRemaining <= 0;
+        }
+      });
+      if (shouldFinish) _finishSet();
+    });
+  }
+
+  void _finishSet() {
+    if (!_setActive) return;
+    _timer?.cancel();
+    setState(() {
+      _setActive = false;
+      _completedSets++;
+      _feedbackText = 'Set $_currentSet of $_totalSets complete.';
+    });
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _showSetCompleteDialog(),
+    );
+  }
+
+  Future<void> _showSetCompleteDialog() async {
+    if (!mounted) return;
+    final hasNextSet = _currentSet < _totalSets;
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        title: Text('Set $_currentSet / $_totalSets complete'),
+        content: Text(
+          hasNextSet
+              ? 'Take a rest. Start the next set when you are ready.'
+              : 'You completed all planned sets.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              Navigator.pop(dialogContext);
+              _showPainDialog(isBefore: false);
+            },
+            child: Text(hasNextSet ? 'Stop Performing' : 'Finish'),
+          ),
+          if (hasNextSet)
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(dialogContext);
+                setState(() => _currentSet++);
+                _startSet();
+              },
+              style: FilledButton.styleFrom(
+                backgroundColor: const Color(0xFF207866),
+              ),
+              child: const Text('Start Next Set'),
+            ),
+        ],
+      ),
+    );
   }
 
   InputImage? _inputImageFromCameraImage(CameraImage image) {
@@ -177,20 +288,32 @@ int? _painAfter;
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      isBefore ? 'Rate your Pain Before Exercise' : 'Rate your Pain After Exercise',
-                      style: GoogleFonts.readexPro(fontSize: 16, fontWeight: FontWeight.bold),
+                      isBefore
+                          ? 'Rate your Pain Before Exercise'
+                          : 'Rate your Pain After Exercise',
+                      style: GoogleFonts.readexPro(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
                       '0 (No Pain) to 10 (Worst Pain)',
-                      style: GoogleFonts.readexPro(fontSize: 12, color: Colors.black54),
+                      style: GoogleFonts.readexPro(
+                        fontSize: 12,
+                        color: Colors.black54,
+                      ),
                       textAlign: TextAlign.center,
                     ),
                     const SizedBox(height: 8),
                     Text(
                       '$localPain',
-                      style: GoogleFonts.readexPro(fontSize: 32, fontWeight: FontWeight.bold, color: const Color(0xFF207866)),
+                      style: GoogleFonts.readexPro(
+                        fontSize: 32,
+                        fontWeight: FontWeight.bold,
+                        color: const Color(0xFF207866),
+                      ),
                     ),
                     Slider(
                       value: localPain.toDouble(),
@@ -225,13 +348,19 @@ int? _painAfter;
                       _completeSessionNavigation();
                     }
                   },
-                  child: Text('Confirm', style: GoogleFonts.readexPro(fontWeight: FontWeight.bold, color: const Color(0xFF207866))),
+                  child: Text(
+                    'Confirm',
+                    style: GoogleFonts.readexPro(
+                      fontWeight: FontWeight.bold,
+                      color: const Color(0xFF207866),
+                    ),
+                  ),
                 ),
               ],
             );
-          }
+          },
         );
-      }
+      },
     );
   }
 
@@ -242,12 +371,16 @@ int? _painAfter;
         builder: (context) => SessionSummaryPage(
           exerciseName: widget.exercise['name'] ?? 'AI Exercise',
           durationSeconds: _secondsElapsed,
-          reps: _repCount,
-          accuracyScore: _accuracy,
+          reps: _trackingMode == AiTrackingMode.reps ? _totalRepCount : null,
+          accuracyScore: _accuracySamples == 0
+              ? 0
+              : _accuracyTotal / _accuracySamples,
           painBefore: _painBefore,
           painAfter: _painAfter,
           exerciseId: widget.exercise['exercise_id'] ?? 1,
           scheduleId: widget.scheduleId,
+          completedSets: _completedSets,
+          plannedSets: _totalSets,
         ),
       ),
     );
@@ -273,7 +406,13 @@ int? _painAfter;
     return Scaffold(
       backgroundColor: Colors.black,
       appBar: AppBar(
-        title: Text('AI Coach', style: GoogleFonts.readexPro(color: Colors.white, fontWeight: FontWeight.bold)),
+        title: Text(
+          'AI Coach',
+          style: GoogleFonts.readexPro(
+            color: Colors.white,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
         backgroundColor: Colors.black,
         iconTheme: const IconThemeData(color: Colors.white),
         actions: [
@@ -285,60 +424,65 @@ int? _painAfter;
             },
             child: Text(
               "Finish",
-              style: GoogleFonts.readexPro(color: const Color(0xFF207866), fontWeight: FontWeight.bold, fontSize: 16),
+              style: GoogleFonts.readexPro(
+                color: const Color(0xFF207866),
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
             ),
-          )
+          ),
         ],
       ),
       body: _cameraController == null || !_cameraController!.value.isInitialized
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF207866)))
+          ? const Center(
+              child: CircularProgressIndicator(color: Color(0xFF207866)),
+            )
           : Stack(
               fit: StackFit.expand,
               children: [
                 CameraPreview(_cameraController!),
                 if (_poses.isNotEmpty)
                   CustomPaint(
-                    painter: PosePainter(_poses, _cameraController!.value.previewSize!),
+                    painter: PosePainter(
+                      _poses,
+                      _cameraController!.value.previewSize!,
+                    ),
                   ),
                 Positioned(
                   top: 20,
                   left: 20,
                   child: Container(
-                    padding:
-                        const EdgeInsets.all(12),
+                    padding: const EdgeInsets.all(12),
                     decoration: BoxDecoration(
                       color: Colors.black54,
-                      borderRadius:
-                          BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     child: Column(
-                      crossAxisAlignment:
-                          CrossAxisAlignment.start,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
+                          'Set $_currentSet / $_totalSets',
+                          style: GoogleFonts.readexPro(
+                            color: Colors.white,
+                            fontSize: 16,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
                           "Accuracy: ${_accuracy.toStringAsFixed(0)}%",
-                          style:
-                              GoogleFonts.readexPro(
+                          style: GoogleFonts.readexPro(
                             color: Colors.white,
                             fontSize: 18,
-                            fontWeight:
-                                FontWeight.bold,
+                            fontWeight: FontWeight.bold,
                           ),
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          "Reps: $_repCount",
-                          style:
-                              GoogleFonts.readexPro(
-                            color: Colors.white,
-                            fontSize: 18,
-                          ),
-                        ),
-                        const SizedBox(height: 8),
-                        Text(
-                          "Time: ${_formatTime(_secondsElapsed)}",
-                          style:
-                              GoogleFonts.readexPro(
+                          _trackingMode == AiTrackingMode.duration
+                              ? 'Time left: ${_formatTime(_setSecondsRemaining)}'
+                              : 'Reps: $_setRepCount / $_targetPerSet',
+                          style: GoogleFonts.readexPro(
                             color: Colors.white,
                             fontSize: 18,
                           ),
@@ -352,20 +496,44 @@ int? _painAfter;
                   left: 20,
                   right: 20,
                   child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.7),
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: _feedbackText.contains('⚠️') || _feedbackText.contains('❌') ? Colors.orange : const Color(0xFF207866), width: 2)
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 16,
+                      horizontal: 20,
                     ),
-                    child: Text(
-                      _feedbackText,
-                      style: GoogleFonts.readexPro(
-                        color: Colors.white,
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold
+                    decoration: BoxDecoration(
+                      color: Colors.black.withValues(alpha: 0.7),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(
+                        color: _accuracy < 70
+                            ? Colors.orange
+                            : const Color(0xFF207866),
+                        width: 2,
                       ),
-                      textAlign: TextAlign.center,
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          _feedbackText,
+                          style: GoogleFonts.readexPro(
+                            color: Colors.white,
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        if (!_setActive) ...[
+                          const SizedBox(height: 14),
+                          FilledButton.icon(
+                            onPressed: _startSet,
+                            icon: const Icon(Icons.play_arrow),
+                            label: Text('Start Set $_currentSet'),
+                            style: FilledButton.styleFrom(
+                              backgroundColor: const Color(0xFF207866),
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ),
                 ),
@@ -395,19 +563,24 @@ class PosePainter extends CustomPainter {
 
     for (final pose in poses) {
       pose.landmarks.forEach((_, landmark) {
-        final x = size.width - (landmark.x * (size.width / absoluteImageSize.height)); // Mirrored X
+        final x =
+            size.width -
+            (landmark.x *
+                (size.width / absoluteImageSize.height)); // Mirrored X
         final y = landmark.y * (size.height / absoluteImageSize.width);
         canvas.drawCircle(Offset(x, y), 5, jointPaint);
       });
-      
+
       // Helper to draw line
       void drawLine(PoseLandmarkType t1, PoseLandmarkType t2) {
         final l1 = pose.landmarks[t1];
         final l2 = pose.landmarks[t2];
         if (l1 != null && l2 != null) {
-          final x1 = size.width - (l1.x * (size.width / absoluteImageSize.height));
+          final x1 =
+              size.width - (l1.x * (size.width / absoluteImageSize.height));
           final y1 = l1.y * (size.height / absoluteImageSize.width);
-          final x2 = size.width - (l2.x * (size.width / absoluteImageSize.height));
+          final x2 =
+              size.width - (l2.x * (size.width / absoluteImageSize.height));
           final y2 = l2.y * (size.height / absoluteImageSize.width);
           canvas.drawLine(Offset(x1, y1), Offset(x2, y2), paint);
         }
@@ -418,13 +591,13 @@ class PosePainter extends CustomPainter {
       drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftHip);
       drawLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightHip);
       drawLine(PoseLandmarkType.leftHip, PoseLandmarkType.rightHip);
-      
+
       // Arms
       drawLine(PoseLandmarkType.leftShoulder, PoseLandmarkType.leftElbow);
       drawLine(PoseLandmarkType.leftElbow, PoseLandmarkType.leftWrist);
       drawLine(PoseLandmarkType.rightShoulder, PoseLandmarkType.rightElbow);
       drawLine(PoseLandmarkType.rightElbow, PoseLandmarkType.rightWrist);
-      
+
       // Legs
       drawLine(PoseLandmarkType.leftHip, PoseLandmarkType.leftKnee);
       drawLine(PoseLandmarkType.leftKnee, PoseLandmarkType.leftAnkle);
@@ -435,6 +608,7 @@ class PosePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(covariant PosePainter oldDelegate) {
-    return oldDelegate.poses != poses || oldDelegate.absoluteImageSize != absoluteImageSize;
+    return oldDelegate.poses != poses ||
+        oldDelegate.absoluteImageSize != absoluteImageSize;
   }
 }
