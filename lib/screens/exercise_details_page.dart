@@ -5,14 +5,15 @@ import 'package:chewie/chewie.dart';
 import 'during_exercise_page.dart';
 import 'pose_camera_page.dart';
 import 'rep_counter_page.dart';
+import '../utils/exercise_formatters.dart';
 
 class ExerciseDetailsPage extends StatefulWidget {
   final bool isAssigned;
   final Map<String, dynamic> exercise;
   final int? scheduleId;
-  
+
   const ExerciseDetailsPage({
-    super.key, 
+    super.key,
     required this.isAssigned,
     required this.exercise,
     this.scheduleId,
@@ -41,7 +42,9 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
     final videoUrl = widget.exercise['video_url'];
     if (videoUrl != null && videoUrl.isNotEmpty) {
       try {
-        _videoPlayerController = VideoPlayerController.networkUrl(Uri.parse(videoUrl));
+        _videoPlayerController = VideoPlayerController.networkUrl(
+          Uri.parse(videoUrl),
+        );
         await _videoPlayerController.initialize();
         _chewieController = ChewieController(
           videoPlayerController: _videoPlayerController,
@@ -79,7 +82,10 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
           children: [
             // Header
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 24.0,
+              ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
@@ -92,14 +98,18 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
+                            color: Colors.black.withValues(alpha: 0.05),
                             blurRadius: 10,
                             offset: const Offset(0, 2),
                           ),
                         ],
                         border: Border.all(color: Colors.grey.shade100),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black54),
+                      child: const Icon(
+                        Icons.arrow_back_ios_new,
+                        size: 16,
+                        color: Colors.black54,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 16),
@@ -140,21 +150,29 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(8),
-                            child: _chewieController != null &&
-                                    _chewieController!.videoPlayerController.value.isInitialized
+                            child:
+                                _chewieController != null &&
+                                    _chewieController!
+                                        .videoPlayerController
+                                        .value
+                                        .isInitialized
                                 ? Chewie(controller: _chewieController!)
                                 : Center(
-                                    child: widget.exercise['video_url'] == null 
-                                    ? Text(
-                                        'No video available',
-                                        style: GoogleFonts.readexPro(color: Colors.white),
-                                      )
-                                    : const CircularProgressIndicator(color: Color(0xFF207866)),
+                                    child: widget.exercise['video_url'] == null
+                                        ? Text(
+                                            'No video available',
+                                            style: GoogleFonts.readexPro(
+                                              color: Colors.white,
+                                            ),
+                                          )
+                                        : const CircularProgressIndicator(
+                                            color: Color(0xFF207866),
+                                          ),
                                   ),
                           ),
                         ),
                       ),
-                      
+
                       // Information section
                       Padding(
                         padding: const EdgeInsets.all(16.0),
@@ -162,7 +180,7 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              'Discipline: ${widget.exercise['discipline'] ?? 'General'}',
+                              'Discipline: ${exerciseDisciplineLabel(widget.exercise)}',
                               style: GoogleFonts.readexPro(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
@@ -180,7 +198,8 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              widget.exercise['description'] ?? 'No description available.',
+                              widget.exercise['description'] ??
+                                  'No description available.',
                               style: GoogleFonts.readexPro(
                                 fontSize: 14,
                                 color: Colors.black54,
@@ -236,7 +255,9 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                                 ),
                               ),
                               child: Text(
-                                _usesAi ? 'Start Live AI Tracking' : 'Start Exercise',
+                                _usesAi
+                                    ? 'Start Live AI Tracking'
+                                    : 'Start Exercise',
                                 style: GoogleFonts.readexPro(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,

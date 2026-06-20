@@ -481,6 +481,47 @@ def get_scheduled_exercises(student_id: int, db: Session = Depends(get_db)):
             })
     return {"scheduled_exercises": result}
 
+@app.get("/students/{student_id}/completed_exercises")
+def get_completed_exercises(student_id: int, db: Session = Depends(get_db)):
+    completed = db.query(models.SessionLog).filter(
+        models.SessionLog.student_id == student_id,
+        models.SessionLog.status == "Completed"
+    ).order_by(models.SessionLog.completion_date.desc()).all()
+
+    result = []
+    for session in completed:
+        ex = db.query(models.Exercise).filter(
+            models.Exercise.exercise_id == session.exercise_id
+        ).first()
+        if not ex:
+            continue
+
+        disciplines = db.query(models.Discipline.description).join(
+            models.ExerciseDiscipline,
+            models.Discipline.discipline_id == models.ExerciseDiscipline.discipline_id
+        ).filter(
+            models.ExerciseDiscipline.exercise_id == ex.exercise_id
+        ).all()
+
+        result.append({
+            "schedule_id": session.schedule_id,
+            "exercise_id": ex.exercise_id,
+            "name": ex.name,
+            "description": ex.description,
+            "disciplines": [discipline[0] for discipline in disciplines],
+            "completion_date": session.completion_date.isoformat() if session.completion_date else None,
+            "completed_reps": session.completed_reps,
+            "duration_seconds": session.duration_seconds,
+            "completed_sets": session.completed_sets,
+            "planned_sets": session.planned_sets,
+            "accuracy_score": session.accuracy_score,
+            "pain_before": session.pain_before,
+            "pain_after": session.pain_after,
+            "status": session.status
+        })
+
+    return {"completed_exercises": result}
+
 class UpdateScheduledExerciseRequest(BaseModel):
     status: str
 
