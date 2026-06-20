@@ -4,6 +4,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import '../utils/current_user_id.dart';
 
 class SessionSummaryPage extends StatefulWidget {
   final String exerciseName;
@@ -16,6 +17,7 @@ class SessionSummaryPage extends StatefulWidget {
   final int? scheduleId;
   final int? completedSets;
   final int? plannedSets;
+  final String sessionOrigin;
 
   const SessionSummaryPage({
     super.key,
@@ -29,6 +31,7 @@ class SessionSummaryPage extends StatefulWidget {
     this.scheduleId,
     this.completedSets,
     this.plannedSets,
+    this.sessionOrigin = 'Self-selected',
   });
 
   @override
@@ -51,8 +54,9 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
         : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
 
     try {
+      final studentId = await getCurrentBackendUserId();
       final bodyData = {
-        'student_id': 1, // Using 1 as default per your existing hardcoding
+        'student_id': studentId,
         'exercise_id': widget.exerciseId,
         'completed_reps': widget.reps,
         'duration_seconds': widget.durationSeconds,
@@ -61,6 +65,7 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
         'accuracy_score': widget.accuracyScore,
         'completed_sets': widget.completedSets,
         'planned_sets': widget.plannedSets,
+        'session_origin': widget.sessionOrigin,
       };
 
       if (widget.scheduleId != null) {

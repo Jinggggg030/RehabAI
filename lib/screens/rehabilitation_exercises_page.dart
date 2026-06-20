@@ -7,6 +7,7 @@ import 'exercise_details_page.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/intl.dart';
+import '../utils/current_user_id.dart';
 
 class RehabilitationExercisesPage extends StatefulWidget {
   const RehabilitationExercisesPage({super.key});
@@ -107,8 +108,9 @@ class _RehabilitationExercisesPageState
 
         setState(() => isLoading = true);
         try {
+          final studentId = await getCurrentBackendUserId();
           final res = await http.post(
-            Uri.parse('$apiUrl/students/1/scheduled_exercises'),
+            Uri.parse('$apiUrl/students/$studentId/scheduled_exercises'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'exercise_id': exercise['exercise_id'],
@@ -160,6 +162,7 @@ class _RehabilitationExercisesPageState
 
   Future<void> _fetchExercises() async {
     try {
+      final studentId = await getCurrentBackendUserId();
       // Fetch all exercises
       final resAll = await http.get(Uri.parse('$apiUrl/exercises'));
       if (resAll.statusCode == 200) {
@@ -184,9 +187,9 @@ class _RehabilitationExercisesPageState
         });
       }
 
-      // Fetch assigned exercises (assuming student_id = 1 for now)
+      // Fetch exercises belonging to the authenticated student.
       final resAssigned = await http.get(
-        Uri.parse('$apiUrl/students/1/prescribed_exercises'),
+        Uri.parse('$apiUrl/students/$studentId/prescribed_exercises'),
       );
       if (resAssigned.statusCode == 200) {
         setState(() {
@@ -196,7 +199,7 @@ class _RehabilitationExercisesPageState
 
       // Fetch self-scheduled exercises
       final resScheduled = await http.get(
-        Uri.parse('$apiUrl/students/1/scheduled_exercises'),
+        Uri.parse('$apiUrl/students/$studentId/scheduled_exercises'),
       );
       if (resScheduled.statusCode == 200) {
         setState(() {
@@ -206,7 +209,7 @@ class _RehabilitationExercisesPageState
       }
 
       final resCompleted = await http.get(
-        Uri.parse('$apiUrl/students/1/completed_exercises'),
+        Uri.parse('$apiUrl/students/$studentId/completed_exercises'),
       );
       if (resCompleted.statusCode == 200) {
         setState(() {

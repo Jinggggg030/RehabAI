@@ -7,6 +7,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:rehab_ai/widgets/notification_bell.dart';
+import '../utils/current_user_id.dart';
 
 enum _ProgressRange { sevenDays, thirtyDays, allTime }
 
@@ -42,8 +43,9 @@ class _ProgressPageState extends State<ProgressPage> {
     }
 
     try {
+      final studentId = await getCurrentBackendUserId();
       final response = await http.get(
-        Uri.parse('$_apiUrl/students/1/completed_exercises'),
+        Uri.parse('$_apiUrl/students/$studentId/completed_exercises'),
       );
       if (response.statusCode != 200) {
         throw Exception('Server returned ${response.statusCode}');

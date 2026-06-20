@@ -201,6 +201,7 @@ class SessionLog(Base):
     student_id = Column(Integer, nullable=False)
     exercise_id = Column(Integer, nullable=False)
     status = Column(String(20), nullable=False, default="Completed")
+    session_origin = Column(String(20), nullable=True)
     
     completed_reps = Column(Integer, nullable=True)
     duration_seconds = Column(Integer, nullable=True)

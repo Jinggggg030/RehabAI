@@ -303,6 +303,8 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
           painAfter: _painAfter,
           exerciseId: widget.exercise['exercise_id'] ?? 1,
           scheduleId: widget.scheduleId,
+          sessionOrigin:
+              widget.exercise['session_origin']?.toString() ?? 'Self-selected',
         ),
       ),
     );

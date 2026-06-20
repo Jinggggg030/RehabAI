@@ -2,6 +2,7 @@ from typing import Optional, List
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
+from sqlalchemy import text
 from pydantic import BaseModel
 from backend.database import engine, get_db
 from backend import models
@@ -14,6 +15,14 @@ from backend.ai.chatbot import chatbot_instance
 from datetime import datetime
 
 models.Base.metadata.create_all(bind=engine)
+
+# create_all() does not add columns to existing tables. Keep this additive
+# migration here so existing installations can start safely after upgrading.
+with engine.begin() as connection:
+    connection.execute(text(
+        'ALTER TABLE "Session_Log" '
+        'ADD COLUMN IF NOT EXISTS session_origin VARCHAR(20)'
+    ))
 
 app = FastAPI(title="Rehab AI Backend")
 
@@ -441,7 +450,8 @@ def schedule_exercise(student_id: int, request: ScheduleExerciseRequest, db: Ses
         student_id=student_id,
         exercise_id=request.exercise_id,
         completion_date=request.scheduled_date,
-        status="Pending"
+        status="Pending",
+        session_origin="Self-selected"
     )
     db.add(new_scheduled)
     db.commit()
@@ -517,6 +527,7 @@ def get_completed_exercises(student_id: int, db: Session = Depends(get_db)):
             "accuracy_score": session.accuracy_score,
             "pain_before": session.pain_before,
             "pain_after": session.pain_after,
+            "session_origin": session.session_origin,
             "status": session.status
         })
 
@@ -800,6 +811,243 @@ def get_physio_patients(physio_id: int, db: Session = Depends(get_db)):
             "exercises": exercises
         })
     return {"patients": result}
+
+@app.get("/physio/{physio_id}/patients/{student_id}/progress")
+def get_physio_patient_progress(
+    physio_id: int,
+    student_id: int,
+    db: Session = Depends(get_db)
+):
+    relationship = db.query(models.Appointment).filter(
+        models.Appointment.therapist_id == physio_id,
+        models.Appointment.student_id == student_id
+    ).first()
+    if not relationship:
+        raise HTTPException(status_code=404, detail="Patient is not assigned to this physiotherapist")
+
+    student = db.query(models.User).filter(models.User.user_id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Patient not found")
+
+    prescribed_rows = db.query(
+        models.PrescribedExercise,
+        models.Exercise
+    ).join(
+        models.Exercise,
+        models.PrescribedExercise.exercise_id == models.Exercise.exercise_id
+    ).join(
+        models.Appointment,
+        models.PrescribedExercise.appointment_id == models.Appointment.appointment_id
+    ).filter(
+        models.Appointment.therapist_id == physio_id,
+        models.Appointment.student_id == student_id
+    ).all()
+
+    exercise_assignments = {}
+    for prescribed, exercise in prescribed_rows:
+        exercise_assignments[exercise.exercise_id] = {
+            "exercise_id": exercise.exercise_id,
+            "name": exercise.name,
+            "assigned_sets": prescribed.assigned_sets,
+            "assigned_duration": prescribed.assigned_duration,
+            "evaluation": prescribed.evaluation
+        }
+
+    exercise_ids = set(exercise_assignments.keys())
+    sessions = db.query(models.SessionLog).filter(
+        models.SessionLog.student_id == student_id,
+        models.SessionLog.status == "Completed"
+    ).order_by(models.SessionLog.completion_date.desc()).all()
+
+    session_exercise_ids = {session.exercise_id for session in sessions}
+    exercise_catalog = {
+        exercise.exercise_id: exercise.name
+        for exercise in db.query(models.Exercise).filter(
+            models.Exercise.exercise_id.in_(session_exercise_ids)
+        ).all()
+    } if session_exercise_ids else {}
+
+    def session_origin(session):
+        if session.session_origin in {"Assigned", "Self-selected"}:
+            return session.session_origin
+        # Backward-compatible classification for logs created before origin
+        # was stored explicitly. An exercise may exist in the prescription but
+        # still have been started independently from Explore. A different set
+        # target is the strongest legacy signal available for that case.
+        assignment = exercise_assignments.get(session.exercise_id)
+        if assignment is None:
+            return "Self-selected"
+        if (
+            session.planned_sets is not None
+            and assignment["assigned_sets"] is not None
+            and session.planned_sets != assignment["assigned_sets"]
+        ):
+            return "Self-selected"
+        return "Assigned"
+
+    assigned_sessions = [
+        session for session in sessions if session_origin(session) == "Assigned"
+    ]
+    self_selected_sessions = [
+        session for session in sessions if session_origin(session) == "Self-selected"
+    ]
+
+    total_seconds = sum(session.duration_seconds or 0 for session in sessions)
+    accuracy_values = [
+        session.accuracy_score for session in sessions
+        if session.accuracy_score is not None
+    ]
+    pain_changes = [
+        session.pain_before - session.pain_after for session in sessions
+        if session.pain_before is not None and session.pain_after is not None
+    ]
+
+    session_days = sorted({
+        session.completion_date.date() for session in sessions
+        if session.completion_date is not None
+    }, reverse=True)
+    streak = 0
+    if session_days:
+        streak = 1
+        expected = session_days[0]
+        from datetime import timedelta
+        for day in session_days[1:]:
+            expected = expected - timedelta(days=1)
+            if day == expected:
+                streak += 1
+            elif day < expected:
+                break
+
+    per_exercise = []
+    for exercise_id, assignment in exercise_assignments.items():
+        exercise_sessions = [
+            session for session in assigned_sessions
+            if session.exercise_id == exercise_id
+        ]
+        exercise_accuracy = [
+            session.accuracy_score for session in exercise_sessions
+            if session.accuracy_score is not None
+        ]
+        latest = exercise_sessions[0] if exercise_sessions else None
+        per_exercise.append({
+            **assignment,
+            "source": "Assigned",
+            "session_count": len(exercise_sessions),
+            "total_duration_seconds": sum(
+                session.duration_seconds or 0 for session in exercise_sessions
+            ),
+            "average_accuracy": (
+                sum(exercise_accuracy) / len(exercise_accuracy)
+                if exercise_accuracy else None
+            ),
+            "last_completed": (
+                latest.completion_date.isoformat()
+                if latest and latest.completion_date else None
+            )
+        })
+
+    for exercise_id in sorted({
+        session.exercise_id for session in self_selected_sessions
+    }):
+        exercise_sessions = [
+            session for session in self_selected_sessions
+            if session.exercise_id == exercise_id
+        ]
+        exercise_accuracy = [
+            session.accuracy_score for session in exercise_sessions
+            if session.accuracy_score is not None
+        ]
+        latest = exercise_sessions[0]
+        per_exercise.append({
+            "exercise_id": exercise_id,
+            "name": exercise_catalog.get(exercise_id, "Exercise"),
+            "source": "Self-selected",
+            "assigned_sets": None,
+            "assigned_duration": None,
+            "evaluation": None,
+            "session_count": len(exercise_sessions),
+            "total_duration_seconds": sum(
+                session.duration_seconds or 0 for session in exercise_sessions
+            ),
+            "average_accuracy": (
+                sum(exercise_accuracy) / len(exercise_accuracy)
+                if exercise_accuracy else None
+            ),
+            "last_completed": (
+                latest.completion_date.isoformat()
+                if latest.completion_date else None
+            )
+        })
+
+    today = datetime.utcnow().date()
+    from datetime import timedelta
+    weekly_activity = []
+    for days_ago in range(6, -1, -1):
+        day = today - timedelta(days=days_ago)
+        day_sessions = [
+            session for session in sessions
+            if session.completion_date and session.completion_date.date() == day
+        ]
+        weekly_activity.append({
+            "date": day.isoformat(),
+            "session_count": len(day_sessions),
+            "duration_seconds": sum(
+                session.duration_seconds or 0 for session in day_sessions
+            )
+        })
+
+    recent_sessions = []
+    for session in sessions[:20]:
+        exercise = exercise_assignments.get(session.exercise_id, {})
+        recent_sessions.append({
+            "session_id": session.schedule_id,
+            "exercise_id": session.exercise_id,
+            "exercise_name": exercise.get(
+                "name", exercise_catalog.get(session.exercise_id, "Exercise")
+            ),
+            "source": session_origin(session),
+            "completion_date": (
+                session.completion_date.isoformat()
+                if session.completion_date else None
+            ),
+            "completed_reps": session.completed_reps,
+            "duration_seconds": session.duration_seconds,
+            "completed_sets": session.completed_sets,
+            "planned_sets": session.planned_sets,
+            "accuracy_score": session.accuracy_score,
+            "pain_before": session.pain_before,
+            "pain_after": session.pain_after
+        })
+
+    return {
+        "patient": {
+            "student_id": student.user_id,
+            "student_name": student.username,
+            "email": student.email
+        },
+        "summary": {
+            "total_sessions": len(sessions),
+            "assigned_sessions": len(assigned_sessions),
+            "self_selected_sessions": len(self_selected_sessions),
+            "total_duration_seconds": total_seconds,
+            "average_accuracy": (
+                sum(accuracy_values) / len(accuracy_values)
+                if accuracy_values else None
+            ),
+            "average_pain_change": (
+                sum(pain_changes) / len(pain_changes)
+                if pain_changes else None
+            ),
+            "activity_streak": streak,
+            "last_session": (
+                sessions[0].completion_date.isoformat()
+                if sessions and sessions[0].completion_date else None
+            )
+        },
+        "exercises": per_exercise,
+        "weekly_activity": weekly_activity,
+        "recent_sessions": recent_sessions
+    }
 
 @app.get("/physio/appointments/{physio_id}")
 def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
@@ -1193,9 +1441,13 @@ class SessionLogRequest(BaseModel):
     completed_sets: Optional[int] = None
     planned_sets: Optional[int] = None
     schedule_id: Optional[int] = None
+    session_origin: Optional[str] = None
 
 @app.post("/session_logs")
 def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
+    if req.session_origin not in {None, "Assigned", "Self-selected"}:
+        raise HTTPException(status_code=400, detail="Invalid session origin")
+
     if req.schedule_id:
         existing_log = db.query(models.SessionLog).filter(models.SessionLog.schedule_id == req.schedule_id).first()
         if existing_log:
@@ -1206,6 +1458,8 @@ def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
             existing_log.accuracy_score = req.accuracy_score
             existing_log.completed_sets = req.completed_sets
             existing_log.planned_sets = req.planned_sets
+            if req.session_origin is not None:
+                existing_log.session_origin = req.session_origin
             existing_log.completion_date = datetime.utcnow()
             existing_log.status = "Completed"
             db.commit()
@@ -1221,6 +1475,7 @@ def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
         accuracy_score=req.accuracy_score,
         completed_sets=req.completed_sets,
         planned_sets=req.planned_sets,
+        session_origin=req.session_origin or "Self-selected",
         completion_date=datetime.utcnow(),
         status="Completed"
     )

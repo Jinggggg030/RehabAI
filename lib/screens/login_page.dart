@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:async';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:rehab_ai/screens/profile_setup_page.dart';
 import 'package:rehab_ai/screens/physio_dashboard.dart';
@@ -45,14 +46,23 @@ class _LoginPageState extends State<LoginPage> {
         throw Exception('Please fill in both email and password.');
       }
 
-      final response = await Supabase.instance.client.auth.signInWithPassword(
-        email: email,
-        password: password,
-      );
+      final response = await Supabase.instance.client.auth
+          .signInWithPassword(email: email, password: password)
+          .timeout(const Duration(seconds: 20));
 
       if (response.user != null) {
         await _routeUser(response.user!);
       }
+    } on TimeoutException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text(
+            'Login timed out. Check your internet and backend connection.',
+          ),
+          backgroundColor: Colors.red,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -76,21 +86,24 @@ class _LoginPageState extends State<LoginPage> {
     });
 
     try {
-      final webClientId = dotenv.env['GOOGLE_WEB_CLIENT_ID'] ?? 'YOUR_WEB_CLIENT_ID';
-      
+      final webClientId =
+          dotenv.env['GOOGLE_WEB_CLIENT_ID'] ?? 'YOUR_WEB_CLIENT_ID';
+
       final GoogleSignIn googleSignIn = GoogleSignIn(
         clientId: webClientId,
         serverClientId: kIsWeb ? null : webClientId,
       );
-      final googleUser = await googleSignIn.signIn();
+      final googleUser = await googleSignIn.signIn().timeout(
+        const Duration(seconds: 30),
+      );
       if (googleUser == null) {
         throw Exception('Google Sign-In aborted.');
       }
-      
+
       final googleAuth = await googleUser.authentication;
       final accessToken = googleAuth.accessToken;
       final idToken = googleAuth.idToken;
-      
+
       if (idToken == null) {
         throw Exception('No ID Token found.');
       }
@@ -100,14 +113,22 @@ class _LoginPageState extends State<LoginPage> {
         idToken: idToken,
         accessToken: accessToken ?? '',
       );
-      
+
       final user = response.user;
       if (user != null) {
-        final name = user.userMetadata?['full_name'] ?? googleUser.displayName ?? '';
-        final email = user.email ?? googleUser.email ?? '';
+        final name =
+            user.userMetadata?['full_name'] ?? googleUser.displayName ?? '';
+        final email = user.email ?? googleUser.email;
         await _routeUser(user, isGoogle: true, name: name, email: email);
       }
-
+    } on TimeoutException {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Google Sign-In timed out. Please try again.'),
+          backgroundColor: Colors.red,
+        ),
+      );
     } catch (e) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -125,10 +146,19 @@ class _LoginPageState extends State<LoginPage> {
     }
   }
 
-  Future<void> _routeUser(User user, {bool isGoogle = false, String name = '', String email = ''}) async {
-    final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-    final checkResponse = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}')).timeout(const Duration(seconds: 10));
-    
+  Future<void> _routeUser(
+    User user, {
+    bool isGoogle = false,
+    String name = '',
+    String email = '',
+  }) async {
+    final apiUrl = kIsWeb
+        ? 'http://127.0.0.1:8000'
+        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final checkResponse = await http
+        .get(Uri.parse('$apiUrl/users/profile/${user.id}'))
+        .timeout(const Duration(seconds: 10));
+
     if (checkResponse.statusCode == 200) {
       final data = jsonDecode(checkResponse.body);
       if (!mounted) return;
@@ -153,10 +183,12 @@ class _LoginPageState extends State<LoginPage> {
         if (isGoogle) {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => ProfileSetupPage(name: name, email: email)),
+            MaterialPageRoute(
+              builder: (context) => ProfileSetupPage(name: name, email: email),
+            ),
           );
         } else {
-           throw Exception('User profile not found. Please sign up first.');
+          throw Exception('User profile not found. Please sign up first.');
         }
       }
     } else {
@@ -170,10 +202,7 @@ class _LoginPageState extends State<LoginPage> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(
-              horizontal: 40.0,
-              vertical: 50.0,
-          ),
+          padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 50.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -191,19 +220,25 @@ class _LoginPageState extends State<LoginPage> {
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
-                            color: Colors.black.withOpacity(0.1),
+                            color: Colors.black.withValues(alpha: 0.1),
                             blurRadius: 10,
                             offset: const Offset(0, 2),
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black54),
+                      child: const Icon(
+                        Icons.arrow_back_ios_new,
+                        size: 16,
+                        color: Colors.black54,
+                      ),
                     ),
                   ),
                   Expanded(
                     child: Center(
                       child: Padding(
-                        padding: EdgeInsets.only(right: 36.0), // Offset for back button to center title
+                        padding: EdgeInsets.only(
+                          right: 36.0,
+                        ), // Offset for back button to center title
                         child: Text(
                           'Login',
                           style: GoogleFonts.readexPro(
@@ -225,8 +260,15 @@ class _LoginPageState extends State<LoginPage> {
                 keyboardType: TextInputType.emailAddress,
                 decoration: InputDecoration(
                   hintText: 'Enter your email',
-                  hintStyle: GoogleFonts.readexPro(color: Colors.grey, fontSize: 14),
-                  prefixIcon: const Icon(Icons.email_outlined, color: Colors.grey, size: 20),
+                  hintStyle: GoogleFonts.readexPro(
+                    color: Colors.grey,
+                    fontSize: 14,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.email_outlined,
+                    color: Colors.grey,
+                    size: 20,
+                  ),
                   contentPadding: const EdgeInsets.symmetric(vertical: 16),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(20),
@@ -246,11 +288,20 @@ class _LoginPageState extends State<LoginPage> {
                 obscureText: _obscurePassword,
                 decoration: InputDecoration(
                   hintText: 'Enter your password',
-                  hintStyle: GoogleFonts.readexPro(color: Colors.grey, fontSize: 14),
-                  prefixIcon: const Icon(Icons.lock_outline, color: Colors.grey, size: 20),
+                  hintStyle: GoogleFonts.readexPro(
+                    color: Colors.grey,
+                    fontSize: 14,
+                  ),
+                  prefixIcon: const Icon(
+                    Icons.lock_outline,
+                    color: Colors.grey,
+                    size: 20,
+                  ),
                   suffixIcon: IconButton(
                     icon: Icon(
-                      _obscurePassword ? Icons.visibility_off_outlined : Icons.visibility_outlined,
+                      _obscurePassword
+                          ? Icons.visibility_off_outlined
+                          : Icons.visibility_outlined,
                       color: Colors.grey,
                       size: 20,
                     ),
@@ -332,13 +383,18 @@ class _LoginPageState extends State<LoginPage> {
                 children: [
                   Text(
                     'Don\'t have an account? ',
-                    style: GoogleFonts.readexPro(color: Colors.grey, fontSize: 13),
+                    style: GoogleFonts.readexPro(
+                      color: Colors.grey,
+                      fontSize: 13,
+                    ),
                   ),
                   GestureDetector(
                     onTap: () {
                       Navigator.pushReplacement(
                         context,
-                        MaterialPageRoute(builder: (context) => const SignupPage()),
+                        MaterialPageRoute(
+                          builder: (context) => const SignupPage(),
+                        ),
                       );
                     },
                     child: Text(
@@ -360,7 +416,10 @@ class _LoginPageState extends State<LoginPage> {
                   Expanded(child: Divider(color: Colors.grey.shade300)),
                   const Padding(
                     padding: EdgeInsets.symmetric(horizontal: 16),
-                    child: Text('OR', style: TextStyle(color: Colors.grey, fontSize: 12)),
+                    child: Text(
+                      'OR',
+                      style: TextStyle(color: Colors.grey, fontSize: 12),
+                    ),
                   ),
                   Expanded(child: Divider(color: Colors.grey.shade300)),
                 ],
@@ -378,32 +437,29 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   foregroundColor: Colors.black87,
                 ),
-                child: _isLoading 
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        color: Color(0xFF207866),
-                        strokeWidth: 2,
+                child: _isLoading
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          color: Color(0xFF207866),
+                          strokeWidth: 2,
+                        ),
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Image.asset('assets/images/google.png', height: 20),
+                          const SizedBox(width: 12),
+                          Text(
+                            'Sign in with Google',
+                            style: GoogleFonts.readexPro(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ],
                       ),
-                    )
-                  : Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Image.asset(
-                      'assets/images/google.png',
-                      height: 20,
-                    ),
-                    const SizedBox(width: 12),
-                    Text(
-                      'Sign in with Google',
-                      style: GoogleFonts.readexPro(
-                        fontSize: 14,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ],
-                ),
               ),
               const SizedBox(height: 24),
             ],

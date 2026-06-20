@@ -8,6 +8,7 @@ import 'package:rehab_ai/screens/login_page.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/record_session_dialog.dart';
+import 'package:rehab_ai/screens/physio_progress_tab.dart';
 
 class PhysioDashboard extends StatefulWidget {
   const PhysioDashboard({super.key});
@@ -209,7 +210,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
           }
         );
       case 1:
-        return PhysioPatientsTab(myUserId: _myUserId!);
+        return PhysioProgressTab(physioId: _myUserId!);
       case 2:
         return PhysioAppointmentsTab(myUserId: _myUserId!);
       case 3:

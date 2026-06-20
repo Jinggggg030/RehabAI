@@ -32,6 +32,11 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
 
   bool get _usesAi => widget.exercise['requires_ai'] == true;
 
+  Map<String, dynamic> get _exerciseForSession => {
+    ...widget.exercise,
+    'session_origin': widget.isAssigned ? 'Assigned' : 'Self-selected',
+  };
+
   @override
   void initState() {
     super.initState();
@@ -217,7 +222,7 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => PoseCameraPage(
-                                        exercise: widget.exercise,
+                                        exercise: _exerciseForSession,
                                         scheduleId: widget.scheduleId,
                                       ),
                                     ),
@@ -229,7 +234,7 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => RepCounterPage(
-                                        exercise: widget.exercise,
+                                        exercise: _exerciseForSession,
                                         scheduleId: widget.scheduleId,
                                       ),
                                     ),
@@ -239,7 +244,7 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                                     context,
                                     MaterialPageRoute(
                                       builder: (context) => DuringExercisePage(
-                                        exercise: widget.exercise,
+                                        exercise: _exerciseForSession,
                                         scheduleId: widget.scheduleId,
                                       ),
                                     ),

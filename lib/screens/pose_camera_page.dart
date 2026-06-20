@@ -407,6 +407,8 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
           scheduleId: widget.scheduleId,
           completedSets: _completedSets,
           plannedSets: _totalSets,
+          sessionOrigin:
+              widget.exercise['session_origin']?.toString() ?? 'Self-selected',
         ),
       ),
     );
