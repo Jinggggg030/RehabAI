@@ -1132,7 +1132,12 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
   Future<void> _updateRentalStatus(int rentalId, String action) async {
     try {
       final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final res = await http.post(Uri.parse('$apiUrl/physio/rentals/$rentalId/$action'));
+      final res = await http.post(
+        Uri.parse(
+          '$apiUrl/physio/rentals/$rentalId/$action'
+          '?physio_id=${widget.myUserId}',
+        ),
+      );
       if (res.statusCode == 200) {
         _fetchRentals();
         if (mounted) {
@@ -1255,14 +1260,6 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
                           ),
                         ],
                       )
-                    ] else if (isApproved) ...[
-                      const SizedBox(height: 8),
-                      OutlinedButton.icon(
-                        onPressed: () => _updateRentalStatus(r['rental_record_id'], 'active'),
-                        icon: const Icon(Icons.handshake, size: 16),
-                        label: const Text("Mark as Taken"),
-                        style: OutlinedButton.styleFrom(foregroundColor: Colors.blue.shade700, side: BorderSide(color: Colors.blue.shade200), padding: const EdgeInsets.symmetric(horizontal: 8)),
-                      ),
                     ]
                   ],
                 )

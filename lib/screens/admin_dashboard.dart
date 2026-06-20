@@ -7,7 +7,6 @@ import 'package:rehab_ai/screens/login_page.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
-import 'dart:io';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
 
@@ -101,7 +100,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  Future<void> _updateRentalStatus(int rentalId, String newStatus, {String? returnStatus, String? proofOfCollection}) async {
+  Future<void> _updateRentalStatus(
+    int rentalId,
+    String newStatus, {
+    String? returnStatus,
+    String? proofOfCollection,
+    String? proofOfStatus,
+  }) async {
     setState(() => _isLoading = true);
     try {
       final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
@@ -114,6 +119,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
       }
       if (proofOfCollection != null) {
         body['proof_of_collection'] = proofOfCollection;
+      }
+      if (proofOfStatus != null) {
+        body['proof_of_status'] = proofOfStatus;
       }
       final res = await http.put(
         Uri.parse('$apiUrl/admin/rentals/$rentalId/status'),
@@ -144,25 +152,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
               child: Text('Cancel', style: GoogleFonts.readexPro(color: Colors.grey)),
             ),
             ElevatedButton.icon(
-              icon: const Icon(Icons.photo_library, size: 18),
-              label: Text('Gallery', style: GoogleFonts.readexPro()),
+              icon: const Icon(Icons.upload_file, size: 18),
+              label: Text('Upload Photo', style: GoogleFonts.readexPro()),
               onPressed: () async {
                 Navigator.pop(context);
                 final pickedFile = await _picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
                 if (pickedFile != null) {
-                  _uploadProofAndMarkActive(rentalId, pickedFile.path);
-                }
-              },
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade700, foregroundColor: Colors.white),
-            ),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.camera_alt, size: 18),
-              label: Text('Camera', style: GoogleFonts.readexPro()),
-              onPressed: () async {
-                Navigator.pop(context);
-                final pickedFile = await _picker.pickImage(source: ImageSource.camera, imageQuality: 70);
-                if (pickedFile != null) {
-                  _uploadProofAndMarkActive(rentalId, pickedFile.path);
+                  _uploadProofAndMarkActive(rentalId, pickedFile);
                 }
               },
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF207866), foregroundColor: Colors.white),
@@ -173,16 +169,18 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Future<void> _uploadProofAndMarkActive(int rentalId, String filePath) async {
+  Future<void> _uploadProofAndMarkActive(int rentalId, XFile image) async {
     setState(() => _isLoading = true);
     try {
-      final file = File(filePath);
-      final fileExt = filePath.split('.').last;
+      final bytes = await image.readAsBytes();
+      final fileExt = image.name.contains('.')
+          ? image.name.split('.').last
+          : 'jpg';
       final fileName = '${DateTime.now().millisecondsSinceEpoch}_$rentalId.$fileExt';
       
-      await _supabase.storage.from('proof_of_collection').upload(
+      await _supabase.storage.from('proof_of_collection').uploadBinary(
         fileName, 
-        file,
+        bytes,
         fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
       );
       
@@ -231,7 +229,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 ElevatedButton(
                   onPressed: () {
                     Navigator.pop(context);
-                    _updateRentalStatus(rentalId, 'Returned', returnStatus: selectedReturnStatus);
+                    _showReturnProofDialog(rentalId, selectedReturnStatus);
                   },
                   style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF207866)),
                   child: Text('Confirm', style: GoogleFonts.readexPro(color: Colors.white)),
@@ -242,6 +240,84 @@ class _AdminDashboardState extends State<AdminDashboard> {
         );
       }
     );
+  }
+
+  void _showReturnProofDialog(int rentalId, String returnStatus) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(
+          'Return Photo',
+          style: GoogleFonts.readexPro(fontWeight: FontWeight.bold),
+        ),
+        content: Text(
+          'Take or choose a photo showing the equipment when it is received.',
+          style: GoogleFonts.readexPro(fontSize: 14),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton.icon(
+            onPressed: () async {
+              Navigator.pop(context);
+              final image = await _picker.pickImage(
+                source: ImageSource.gallery,
+                imageQuality: 70,
+              );
+              if (image != null) {
+                _uploadReturnProof(rentalId, returnStatus, image);
+              }
+            },
+            icon: const Icon(Icons.upload_file, size: 18),
+            label: const Text('Upload Photo'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _uploadReturnProof(
+    int rentalId,
+    String returnStatus,
+    XFile image,
+  ) async {
+    setState(() => _isLoading = true);
+    try {
+      final bytes = await image.readAsBytes();
+      final extension = image.name.contains('.')
+          ? image.name.split('.').last
+          : 'jpg';
+      final fileName =
+          'return_${DateTime.now().millisecondsSinceEpoch}_$rentalId.$extension';
+      await _supabase.storage.from('proof_of_collection').uploadBinary(
+        fileName,
+        bytes,
+        fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
+      );
+      final imageUrl = _supabase.storage
+          .from('proof_of_collection')
+          .getPublicUrl(fileName);
+      await _updateRentalStatus(
+        rentalId,
+        'Returned',
+        returnStatus: returnStatus,
+        proofOfStatus: imageUrl,
+      );
+    } catch (e) {
+      debugPrint('Error uploading return proof: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to upload return photo: $e'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
+    }
   }
 
   Widget _buildRentalRequests() {
@@ -268,22 +344,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 Text("Reason: ${r['custom_reason'] ?? r['rental_reason']}", style: GoogleFonts.readexPro(fontSize: 14, color: Colors.grey.shade700)),
                 const SizedBox(height: 4),
                 Text("Duration: ${r['rental_duration']} days", style: GoogleFonts.readexPro(fontSize: 14, color: Colors.grey.shade700)),
-                const SizedBox(height: 16),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.end,
-                  children: [
-                    OutlinedButton(
-                      onPressed: () => _updateRentalStatus(r['rental_record_id'], 'Rejected'),
-                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
-                      child: const Text('Reject'),
+                const SizedBox(height: 12),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 12,
+                    vertical: 8,
+                  ),
+                  decoration: BoxDecoration(
+                    color: Colors.orange.shade50,
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Text(
+                    'Awaiting physiotherapist approval',
+                    style: GoogleFonts.readexPro(
+                      color: Colors.orange.shade900,
+                      fontWeight: FontWeight.w600,
                     ),
-                    const SizedBox(width: 8),
-                    ElevatedButton(
-                      onPressed: () => _updateRentalStatus(r['rental_record_id'], 'Approved'),
-                      style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF207866), foregroundColor: Colors.white),
-                      child: const Text('Approve'),
-                    ),
-                  ],
+                  ),
                 ),
               ],
             ),
@@ -549,7 +626,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   isLabelVisible: _rentals.any((r) => r['status'] == 'Pending'),
                   child: const Icon(Icons.assignment_late),
                 ),
-                label: const Text('Requests'),
+                label: const Text('Approval Queue'),
               ),
               const NavigationRailDestination(
                 icon: Icon(Icons.assignment_turned_in_outlined),

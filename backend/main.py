@@ -298,19 +298,47 @@ class RentalStatusUpdate(BaseModel):
     admin_id: int
     return_status: Optional[str] = None
     proof_of_collection: Optional[str] = None
+    proof_of_status: Optional[str] = None
     
 @app.put("/admin/rentals/{rental_record_id}/status")
 def update_rental_status(rental_record_id: int, update_data: RentalStatusUpdate, db: Session = Depends(get_db)):
+    admin = db.query(models.Admin).filter(
+        models.Admin.admin_id == update_data.admin_id
+    ).first()
+    if not admin:
+        raise HTTPException(status_code=403, detail="Admin access required")
+
     record = db.query(models.RentalRecord).filter(models.RentalRecord.rental_record_id == rental_record_id).first()
     if not record:
         raise HTTPException(status_code=404, detail="Rental record not found")
-        
+
+    if update_data.status == "Active":
+        if record.status != "Approved":
+            raise HTTPException(status_code=400, detail="Only approved rentals can be collected")
+        if not update_data.proof_of_collection:
+            raise HTTPException(status_code=400, detail="Collection photo is required")
+    elif update_data.status == "Returned":
+        if record.status != "Active":
+            raise HTTPException(status_code=400, detail="Only active rentals can be returned")
+        if update_data.return_status not in {"Good", "Damaged", "Lost"}:
+            raise HTTPException(status_code=400, detail="Return condition is required")
+        if not update_data.proof_of_status:
+            raise HTTPException(status_code=400, detail="Return photo is required")
+        record.return_date = datetime.utcnow()
+    else:
+        raise HTTPException(
+            status_code=403,
+            detail="Admins may only confirm collection or return"
+        )
+
     record.status = update_data.status
     record.admin_id = update_data.admin_id
     if update_data.return_status:
         record.return_status = update_data.return_status
     if update_data.proof_of_collection:
         record.proof_of_collection = update_data.proof_of_collection
+    if update_data.proof_of_status:
+        record.proof_of_status = update_data.proof_of_status
         
     db.commit()
     return {"message": "Rental status updated successfully"}
@@ -1109,6 +1137,20 @@ def record_session(appointment_id: int, req: RecordSessionReq, db: Session = Dep
 
 @app.get("/physio/rentals/{physio_id}")
 def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
+    physio = db.query(models.Physiotherapist).filter(
+        models.Physiotherapist.therapist_id == physio_id
+    ).first()
+    if not physio:
+        raise HTTPException(status_code=403, detail="Physiotherapist access required")
+
+    patient_ids = {
+        student_id for (student_id,) in db.query(models.Appointment.student_id).filter(
+            models.Appointment.therapist_id == physio_id
+        ).distinct().all()
+    }
+    if not patient_ids:
+        return {"rentals": []}
+
     rentals = db.query(
         models.RentalRecord, models.User.username, models.Equipment.name, models.RentalReason.description
     ).join(
@@ -1117,6 +1159,8 @@ def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
         models.Equipment, models.RentalRecord.equipment_id == models.Equipment.equipment_id
     ).outerjoin(
         models.RentalReason, models.RentalRecord.rental_reason_id == models.RentalReason.rental_reason_id
+    ).filter(
+        models.RentalRecord.student_id.in_(patient_ids)
     ).order_by(models.RentalRecord.collection_date.desc()).all()
     
     result = []
@@ -1140,12 +1184,23 @@ def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
 
 
 @app.post("/physio/rentals/{rental_id}/approve")
-def approve_rental(rental_id: int, db: Session = Depends(get_db)):
+def approve_rental(rental_id: int, physio_id: int, db: Session = Depends(get_db)):
+    physio = db.query(models.Physiotherapist).filter(
+        models.Physiotherapist.therapist_id == physio_id
+    ).first()
+    if not physio:
+        raise HTTPException(status_code=403, detail="Physiotherapist access required")
     rental = db.query(models.RentalRecord).filter(models.RentalRecord.rental_record_id == rental_id).first()
     if not rental:
         raise HTTPException(status_code=404, detail="Rental not found")
     if rental.status != "Pending":
         raise HTTPException(status_code=400, detail="Only pending rentals can be approved")
+    relationship = db.query(models.Appointment).filter(
+        models.Appointment.therapist_id == physio_id,
+        models.Appointment.student_id == rental.student_id
+    ).first()
+    if not relationship:
+        raise HTTPException(status_code=403, detail="This patient is not assigned to you")
     
     # Check equipment stock
     equipment = db.query(models.Equipment).filter(models.Equipment.equipment_id == rental.equipment_id).first()
@@ -1153,31 +1208,27 @@ def approve_rental(rental_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Equipment out of stock")
     
     rental.status = "Approved"
-    equipment.stock -= 1
     db.commit()
     return {"status": "success", "message": "Rental approved"}
 
-
-
-@app.post("/physio/rentals/{rental_id}/active")
-def mark_rental_active(rental_id: int, db: Session = Depends(get_db)):
-    rental = db.query(models.RentalRecord).filter(models.RentalRecord.rental_record_id == rental_id).first()
-    if not rental:
-        raise HTTPException(status_code=404, detail="Rental not found")
-    if rental.status != "Approved":
-        raise HTTPException(status_code=400, detail="Only approved rentals can be marked as taken")
-    
-    rental.status = "Active"
-    db.commit()
-    return {"status": "success", "message": "Rental marked as active"}
-
 @app.post("/physio/rentals/{rental_id}/reject")
-def reject_rental(rental_id: int, db: Session = Depends(get_db)):
+def reject_rental(rental_id: int, physio_id: int, db: Session = Depends(get_db)):
+    physio = db.query(models.Physiotherapist).filter(
+        models.Physiotherapist.therapist_id == physio_id
+    ).first()
+    if not physio:
+        raise HTTPException(status_code=403, detail="Physiotherapist access required")
     rental = db.query(models.RentalRecord).filter(models.RentalRecord.rental_record_id == rental_id).first()
     if not rental:
         raise HTTPException(status_code=404, detail="Rental not found")
     if rental.status != "Pending":
         raise HTTPException(status_code=400, detail="Only pending rentals can be rejected")
+    relationship = db.query(models.Appointment).filter(
+        models.Appointment.therapist_id == physio_id,
+        models.Appointment.student_id == rental.student_id
+    ).first()
+    if not relationship:
+        raise HTTPException(status_code=403, detail="This patient is not assigned to you")
     
     rental.status = "Rejected"
     db.commit()
