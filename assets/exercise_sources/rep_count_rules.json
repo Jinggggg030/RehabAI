@@ -20,14 +20,14 @@
     "camera_guidance": "Use a side view and keep the entire active leg visible."
   },
   "9": {
-    "name": "Step-Up",
-    "detector": "step_up",
+    "name": "Lateral Step Down",
+    "detector": "lateral_step_down",
     "direction": "increasing",
-    "start_threshold": 0.10,
-    "end_threshold": 0.25,
+    "start_threshold": 0.05,
+    "end_threshold": 0.18,
     "stable_frames": 5,
     "cooldown_frames": 10,
-    "camera_guidance": "Use a side view and keep the step and both feet visible. Start with both feet on the floor."
+    "camera_guidance": "Use a front view and keep your hips, both knees, both ankles and the step visible. Start upright on the step, lower the free foot toward the floor, then return upright."
   },
   "18": {
     "name": "Standing Heel Raise",

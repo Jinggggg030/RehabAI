@@ -176,8 +176,8 @@ class MovementAnalyzer {
         return _clamshellFeature(pose);
       case 'straight_leg_raise':
         return _straightLegRaiseFeature(pose);
-      case 'step_up':
-        return _stepUpFeature(pose);
+      case 'lateral_step_down':
+        return _lateralStepDownFeature(pose);
       case 'heel_raise':
         return _baselineDeltaFeature(pose, _heelRaiseRawFeature);
       case 'toe_raise':
@@ -228,12 +228,25 @@ class MovementAnalyzer {
     return max(hipY - leftAnkle.y, hipY - rightAnkle.y) / torso;
   }
 
-  double? _stepUpFeature(Pose pose) {
+  double? _lateralStepDownFeature(Pose pose) {
     final hipY = _midHipY(pose);
     final torso = _torsoLength(pose);
-    if (hipY == null || torso == null) return null;
+    final leftKnee = _point(pose, PoseLandmarkType.leftKnee);
+    final rightKnee = _point(pose, PoseLandmarkType.rightKnee);
+    final leftAnkle = _point(pose, PoseLandmarkType.leftAnkle);
+    final rightAnkle = _point(pose, PoseLandmarkType.rightAnkle);
+    if (hipY == null ||
+        torso == null ||
+        leftKnee == null ||
+        rightKnee == null ||
+        leftAnkle == null ||
+        rightAnkle == null) {
+      return null;
+    }
     _baselineValue ??= hipY;
-    return (_baselineValue! - hipY) / torso;
+    // Image Y increases downward. A positive value therefore represents the
+    // controlled hip drop during the lowering phase of a lateral step-down.
+    return (hipY - _baselineValue!) / torso;
   }
 
   double? _heelRaiseRawFeature(Pose pose) {
