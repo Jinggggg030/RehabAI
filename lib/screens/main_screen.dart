@@ -10,7 +10,6 @@ import 'package:rehab_ai/screens/progress_page.dart';
 import 'package:rehab_ai/screens/profile_page.dart';
 import 'package:rehab_ai/utils/global_state.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:async';
 
 class MainScreen extends StatefulWidget {
@@ -23,10 +22,17 @@ class MainScreen extends StatefulWidget {
 class _MainScreenState extends State<MainScreen> {
   int _selectedIndex = 0;
   Timer? _notificationTimer;
+  late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
+    _screens = [
+      const HomePage(),
+      const ServicesPage(),
+      const ProgressPage(),
+      const ProfilePage(),
+    ];
     _startNotificationPolling();
   }
 
@@ -38,8 +44,12 @@ class _MainScreenState extends State<MainScreen> {
 
     int? myUserId;
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final userRes = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final userRes = await http.get(
+        Uri.parse('$apiUrl/users/profile/${user.id}'),
+      );
       if (userRes.statusCode == 200) {
         final userData = jsonDecode(userRes.body);
         myUserId = userData['user_id'];
@@ -61,8 +71,12 @@ class _MainScreenState extends State<MainScreen> {
 
   Future<void> _fetchNotifications(int userId) async {
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final res = await http.get(Uri.parse('$apiUrl/users/$userId/notifications'));
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final res = await http.get(
+        Uri.parse('$apiUrl/users/$userId/notifications'),
+      );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         GlobalState.notifications.value = data['notifications'] ?? [];
@@ -78,16 +92,11 @@ class _MainScreenState extends State<MainScreen> {
     super.dispose();
   }
 
-  // List of screens for each tab
-  final List<Widget> _screens = [
-    const HomePage(),
-    const ServicesPage(),
-    const ProgressPage(),
-    const ProfilePage(),
-  ];
-
   void _onItemTapped(int index) {
     setState(() {
+      if (index == 2) {
+        _screens[2] = ProgressPage(key: UniqueKey());
+      }
       _selectedIndex = index;
     });
   }
@@ -95,10 +104,7 @@ class _MainScreenState extends State<MainScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: _screens,
-      ),
+      body: IndexedStack(index: _selectedIndex, children: _screens),
       bottomNavigationBar: Container(
         decoration: BoxDecoration(
           border: Border(
@@ -111,7 +117,10 @@ class _MainScreenState extends State<MainScreen> {
           elevation: 0,
           selectedItemColor: const Color(0xFF207866),
           unselectedItemColor: Colors.black54,
-          selectedLabelStyle: GoogleFonts.readexPro(fontSize: 12, fontWeight: FontWeight.bold),
+          selectedLabelStyle: GoogleFonts.readexPro(
+            fontSize: 12,
+            fontWeight: FontWeight.bold,
+          ),
           unselectedLabelStyle: GoogleFonts.readexPro(fontSize: 12),
           currentIndex: _selectedIndex,
           onTap: _onItemTapped,
@@ -127,7 +136,9 @@ class _MainScreenState extends State<MainScreen> {
               label: 'Services',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.square_outlined), // Placeholder for Progress icon from wireframe
+              icon: Icon(
+                Icons.square_outlined,
+              ), // Placeholder for Progress icon from wireframe
               activeIcon: Icon(Icons.square),
               label: 'Progress',
             ),
