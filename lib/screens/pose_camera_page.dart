@@ -31,6 +31,9 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
   PostureAnalyzer? _analyzer;
   final VoiceCoach _voiceCoach = VoiceCoach();
   int _sensorOrientation = 0;
+  CameraLensDirection _cameraLensDirection = CameraLensDirection.front;
+  Size? _inputImageSize;
+  InputImageRotation _inputImageRotation = InputImageRotation.rotation0deg;
   double _accuracy = 0;
   double _accuracyTotal = 0;
   int _accuracySamples = 0;
@@ -131,6 +134,7 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
       );
 
       _sensorOrientation = camera.sensorOrientation;
+      _cameraLensDirection = camera.lensDirection;
 
       _cameraController = CameraController(
         camera,
@@ -322,8 +326,11 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
     final format = InputImageFormatValue.fromRawValue(image.format.raw);
     if (format == null) return null;
 
-    final rotation = InputImageRotationValue.fromRawValue(_sensorOrientation);
+    final rotation = _cameraImageRotation();
     if (rotation == null) return null;
+
+    _inputImageSize = Size(image.width.toDouble(), image.height.toDouble());
+    _inputImageRotation = rotation;
 
     final bytes = image.planes.expand((plane) => plane.bytes).toList();
 
@@ -336,6 +343,27 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
         bytesPerRow: image.planes[0].bytesPerRow,
       ),
     );
+  }
+
+  InputImageRotation? _cameraImageRotation() {
+    if (Platform.isIOS) {
+      return InputImageRotationValue.fromRawValue(_sensorOrientation);
+    }
+
+    const orientationDegrees = <DeviceOrientation, int>{
+      DeviceOrientation.portraitUp: 0,
+      DeviceOrientation.landscapeLeft: 90,
+      DeviceOrientation.portraitDown: 180,
+      DeviceOrientation.landscapeRight: 270,
+    };
+    final deviceDegrees =
+        orientationDegrees[_cameraController?.value.deviceOrientation];
+    if (deviceDegrees == null) return null;
+
+    final rotationDegrees = _cameraLensDirection == CameraLensDirection.front
+        ? (_sensorOrientation + deviceDegrees) % 360
+        : (_sensorOrientation - deviceDegrees + 360) % 360;
+    return InputImageRotationValue.fromRawValue(rotationDegrees);
   }
 
   void _showPainDialog({required bool isBefore}) {
@@ -510,11 +538,13 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
               fit: StackFit.expand,
               children: [
                 CameraPreview(_cameraController!),
-                if (_poses.isNotEmpty)
+                if (_poses.isNotEmpty && _inputImageSize != null)
                   CustomPaint(
                     painter: PosePainter(
                       _poses,
-                      _cameraController!.value.previewSize!,
+                      _inputImageSize!,
+                      _inputImageRotation,
+                      _cameraLensDirection,
                     ),
                   ),
                 Positioned(
@@ -615,8 +645,54 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
 class PosePainter extends CustomPainter {
   final List<Pose> poses;
   final Size absoluteImageSize;
+  final InputImageRotation rotation;
+  final CameraLensDirection lensDirection;
 
-  PosePainter(this.poses, this.absoluteImageSize);
+  PosePainter(
+    this.poses,
+    this.absoluteImageSize,
+    this.rotation,
+    this.lensDirection,
+  );
+
+  Offset _translate(PoseLandmark landmark, Size canvasSize) {
+    switch (rotation) {
+      case InputImageRotation.rotation90deg:
+        return Offset(
+          landmark.x *
+              canvasSize.width /
+              (Platform.isIOS
+                  ? absoluteImageSize.width
+                  : absoluteImageSize.height),
+          landmark.y *
+              canvasSize.height /
+              (Platform.isIOS
+                  ? absoluteImageSize.height
+                  : absoluteImageSize.width),
+        );
+      case InputImageRotation.rotation270deg:
+        return Offset(
+          canvasSize.width -
+              landmark.x *
+                  canvasSize.width /
+                  (Platform.isIOS
+                      ? absoluteImageSize.width
+                      : absoluteImageSize.height),
+          landmark.y *
+              canvasSize.height /
+              (Platform.isIOS
+                  ? absoluteImageSize.height
+                  : absoluteImageSize.width),
+        );
+      case InputImageRotation.rotation0deg:
+      case InputImageRotation.rotation180deg:
+        final x = landmark.x * canvasSize.width / absoluteImageSize.width;
+        return Offset(
+          lensDirection == CameraLensDirection.back ? x : canvasSize.width - x,
+          landmark.y * canvasSize.height / absoluteImageSize.height,
+        );
+    }
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -632,12 +708,7 @@ class PosePainter extends CustomPainter {
 
     for (final pose in poses) {
       pose.landmarks.forEach((_, landmark) {
-        final x =
-            size.width -
-            (landmark.x *
-                (size.width / absoluteImageSize.height)); // Mirrored X
-        final y = landmark.y * (size.height / absoluteImageSize.width);
-        canvas.drawCircle(Offset(x, y), 5, jointPaint);
+        canvas.drawCircle(_translate(landmark, size), 5, jointPaint);
       });
 
       // Helper to draw line
@@ -645,13 +716,7 @@ class PosePainter extends CustomPainter {
         final l1 = pose.landmarks[t1];
         final l2 = pose.landmarks[t2];
         if (l1 != null && l2 != null) {
-          final x1 =
-              size.width - (l1.x * (size.width / absoluteImageSize.height));
-          final y1 = l1.y * (size.height / absoluteImageSize.width);
-          final x2 =
-              size.width - (l2.x * (size.width / absoluteImageSize.height));
-          final y2 = l2.y * (size.height / absoluteImageSize.width);
-          canvas.drawLine(Offset(x1, y1), Offset(x2, y2), paint);
+          canvas.drawLine(_translate(l1, size), _translate(l2, size), paint);
         }
       }
 
@@ -678,6 +743,8 @@ class PosePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant PosePainter oldDelegate) {
     return oldDelegate.poses != poses ||
-        oldDelegate.absoluteImageSize != absoluteImageSize;
+        oldDelegate.absoluteImageSize != absoluteImageSize ||
+        oldDelegate.rotation != rotation ||
+        oldDelegate.lensDirection != lensDirection;
   }
 }
