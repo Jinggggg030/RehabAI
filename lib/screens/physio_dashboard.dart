@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/record_session_dialog.dart';
 import 'package:rehab_ai/screens/physio_progress_tab.dart';
+import '../services/teleconference_service.dart';
 
 class PhysioDashboard extends StatefulWidget {
   const PhysioDashboard({super.key});
@@ -592,7 +593,11 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
               : PhysioChatInterface(
                   sessionId: _selectedChat!['session_id'],
                   myUserId: widget.myUserId,
+                  studentName:
+                      _selectedChat!['student_name']?.toString() ?? 'Patient',
                   triageData: _selectedChat!['triage_data'],
+                  teleconferenceStatus:
+                      _selectedChat!['teleconference_status']?.toString(),
                   isClosed: _selectedChat!['session_status'] == 'Closed',
                   onChatClosed: _fetchChats,
                 ),
@@ -605,11 +610,22 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
 class PhysioChatInterface extends StatefulWidget {
   final int sessionId;
   final int myUserId;
+  final String studentName;
   final dynamic triageData;
+  final String? teleconferenceStatus;
   final bool isClosed;
   final VoidCallback onChatClosed;
 
-  const PhysioChatInterface({super.key, required this.sessionId, required this.myUserId, required this.triageData, required this.isClosed, required this.onChatClosed});
+  const PhysioChatInterface({
+    super.key,
+    required this.sessionId,
+    required this.myUserId,
+    required this.studentName,
+    required this.triageData,
+    required this.isClosed,
+    required this.onChatClosed,
+    this.teleconferenceStatus,
+  });
 
   @override
   State<PhysioChatInterface> createState() => _PhysioChatInterfaceState();
@@ -670,6 +686,48 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
             _scrollToBottom();
           },
         ).subscribe();
+  }
+
+  Future<void> _startTeleconference() async {
+    if (widget.isClosed) return;
+    final apiUrl = kIsWeb
+        ? 'http://127.0.0.1:8000'
+        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    try {
+      final response = await http.post(
+        Uri.parse('$apiUrl/physio/chats/${widget.sessionId}/teleconference'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'physio_id': widget.myUserId}),
+      );
+      if (response.statusCode != 200) throw Exception(response.body);
+      final data = jsonDecode(response.body) as Map<String, dynamic>;
+      final room = data['meeting_room']?.toString();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Video invitation sent to the student.')),
+      );
+      await TeleconferenceService.join(context: context, meetingRoom: room);
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Unable to start the video consultation.'),
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _showPrescriptionForm() async {
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) => RecordSessionDialog(
+        appointment: {'student_name': widget.studentName},
+        chatSessionId: widget.sessionId,
+        physioId: widget.myUserId,
+      ),
+    );
+    if (saved == true) widget.onChatClosed();
   }
 
   Future<void> _sendMessage() async {
@@ -740,11 +798,36 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
             children: [
               const Text("Conversation", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
               if (!widget.isClosed)
-                OutlinedButton.icon(
-                  onPressed: _endChat,
-                  icon: const Icon(Icons.close, size: 18),
-                  label: const Text("End Chat"),
-                  style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
+                Wrap(
+                  spacing: 8,
+                  children: [
+                    FilledButton.icon(
+                      onPressed: _startTeleconference,
+                      icon: const Icon(Icons.video_call_outlined, size: 18),
+                      label: Text(
+                        widget.teleconferenceStatus == null
+                            ? 'Teleconference'
+                            : 'Call: ${widget.teleconferenceStatus}',
+                      ),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: Colors.green,
+                      ),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _showPrescriptionForm,
+                      icon: const Icon(
+                        Icons.medical_information_outlined,
+                        size: 18,
+                      ),
+                      label: const Text('Record Prescription'),
+                    ),
+                    OutlinedButton.icon(
+                      onPressed: _endChat,
+                      icon: const Icon(Icons.close, size: 18),
+                      label: const Text("End Chat"),
+                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
+                    ),
+                  ],
                 )
               else
                 Chip(label: const Text("Closed", style: TextStyle(color: Colors.white)), backgroundColor: Colors.grey[600]),
@@ -775,6 +858,9 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
                   final msg = _messages[index];
                   final isMe = msg['sender_id'] == widget.myUserId;
                   final isSystem = msg['sender_id'] == null;
+                  final meetingRoom = TeleconferenceService.roomFromInvite(
+                    msg['content']?.toString(),
+                  );
                   return Align(
                     alignment: isMe ? Alignment.centerRight : (isSystem ? Alignment.center : Alignment.centerLeft),
                     child: Container(
@@ -782,7 +868,31 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
                       padding: const EdgeInsets.all(12),
                       decoration: BoxDecoration(color: isMe ? Colors.blue[600] : (isSystem ? Colors.grey[300] : Colors.white), borderRadius: BorderRadius.circular(12)),
                       constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
-                      child: Text(msg['content'] ?? '', style: TextStyle(color: isMe ? Colors.white : (isSystem ? Colors.black54 : Colors.black87), fontStyle: isSystem ? FontStyle.italic : FontStyle.normal)),
+                      child: meetingRoom == null
+                          ? Text(msg['content'] ?? '', style: TextStyle(color: isMe ? Colors.white : (isSystem ? Colors.black54 : Colors.black87), fontStyle: isSystem ? FontStyle.italic : FontStyle.normal))
+                          : Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Video consultation invitation sent.',
+                                  style: TextStyle(
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.w600,
+                                  ),
+                                ),
+                                TextButton.icon(
+                                  onPressed: () => TeleconferenceService.join(
+                                    context: context,
+                                    meetingRoom: meetingRoom,
+                                  ),
+                                  icon: const Icon(Icons.video_call_outlined),
+                                  label: const Text('Rejoin'),
+                                  style: TextButton.styleFrom(
+                                    foregroundColor: Colors.white,
+                                  ),
+                                ),
+                              ],
+                            ),
                     ),
                   );
                 },
@@ -1322,9 +1432,24 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                               ),
                               if (isScheduled) ...[
                                 const SizedBox(height: 8),
-                                Row(
-                                  mainAxisSize: MainAxisSize.min,
+                                Wrap(
+                                  spacing: 8,
+                                  runSpacing: 8,
+                                  alignment: WrapAlignment.end,
                                   children: [
+                                    ElevatedButton.icon(
+                                      onPressed: () => TeleconferenceService.join(
+                                        context: context,
+                                        meetingRoom: a['meeting_room']?.toString(),
+                                      ),
+                                      icon: const Icon(Icons.video_call_outlined, size: 16),
+                                      label: const Text("Video Call"),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.green.shade700,
+                                        foregroundColor: Colors.white,
+                                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                                      ),
+                                    ),
                                     OutlinedButton.icon(
                                       onPressed: () => _showTransferDialog(a),
                                       icon: const Icon(Icons.swap_horiz, size: 16),
@@ -1332,7 +1457,6 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                                       style: OutlinedButton.styleFrom(foregroundColor: Colors.orange.shade800, side: BorderSide(color: Colors.orange.shade200), padding: const EdgeInsets.symmetric(horizontal: 8)),
                                     ),
                                     if (isToday) ...[
-                                      const SizedBox(width: 8),
                                       ElevatedButton.icon(
                                         onPressed: () => _showRecordSessionDialog(a),
                                         icon: const Icon(Icons.edit_document, size: 16),

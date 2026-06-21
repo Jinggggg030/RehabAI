@@ -13,6 +13,7 @@ from backend.ai.pose_detector import PoseDetector
 from backend.ai.angle_calculator import calculate_angle
 from backend.ai.chatbot import chatbot_instance
 from datetime import datetime
+import secrets
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -28,6 +29,24 @@ with engine.begin() as connection:
         'ADD COLUMN IF NOT EXISTS assigned_reps INTEGER'
     ))
     connection.execute(text(
+        'ALTER TABLE "Appointment" '
+        'ADD COLUMN IF NOT EXISTS meeting_room VARCHAR(100) UNIQUE'
+    ))
+    missing_appointment_ids = connection.execute(text(
+        'SELECT appointment_id FROM "Appointment" WHERE meeting_room IS NULL'
+    )).scalars().all()
+    for appointment_id in missing_appointment_ids:
+        connection.execute(
+            text(
+                'UPDATE "Appointment" SET meeting_room = :meeting_room '
+                'WHERE appointment_id = :appointment_id'
+            ),
+            {
+                "appointment_id": appointment_id,
+                "meeting_room": f"rehab-ai-{secrets.token_hex(16)}",
+            },
+        )
+    connection.execute(text(
         'ALTER TABLE "Prescribed_Exercise" '
         'ADD COLUMN IF NOT EXISTS assigned_days INTEGER NOT NULL DEFAULT 1'
     ))
@@ -36,8 +55,32 @@ with engine.begin() as connection:
         "ADD COLUMN IF NOT EXISTS assigned_tracking_mode VARCHAR(20) "
         "NOT NULL DEFAULT 'duration'"
     ))
+    connection.execute(text(
+        'ALTER TABLE "Live_Chat_Session" '
+        'ADD COLUMN IF NOT EXISTS teleconference_room VARCHAR(100)'
+    ))
+    connection.execute(text(
+        'ALTER TABLE "Live_Chat_Session" '
+        'ADD COLUMN IF NOT EXISTS teleconference_status VARCHAR(20)'
+    ))
+    connection.execute(text(
+        'ALTER TABLE "Live_Chat_Session" '
+        'ADD COLUMN IF NOT EXISTS consultation_prescription TEXT'
+    ))
+    connection.execute(text(
+        'ALTER TABLE "Live_Chat_Session" '
+        'ADD COLUMN IF NOT EXISTS consultation_appointment_id INTEGER '
+        'REFERENCES "Appointment"(appointment_id)'
+    ))
 
 app = FastAPI(title="Rehab AI Backend")
+
+
+def ensure_meeting_room(appointment: models.Appointment) -> str:
+    """Return a non-guessable room shared only through appointment responses."""
+    if not appointment.meeting_room:
+        appointment.meeting_room = f"rehab-ai-{secrets.token_hex(16)}"
+    return appointment.meeting_room
 
 app.add_middleware(
     CORSMiddleware,
@@ -984,6 +1027,10 @@ def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
         models.LiveChatSession.discipline,
         models.LiveChatSession.session_status,
         models.LiveChatSession.triage_data,
+        models.LiveChatSession.student_id,
+        models.LiveChatSession.teleconference_room,
+        models.LiveChatSession.teleconference_status,
+        models.LiveChatSession.consultation_prescription,
         models.LiveChatSession.created_at,
         models.User.username.label("student_name")
     ).join(
@@ -1020,11 +1067,82 @@ def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
             "discipline": chat.discipline,
             "session_status": chat.session_status,
             "triage_data": chat.triage_data,
+            "student_id": chat.student_id,
+            "teleconference_room": chat.teleconference_room,
+            "teleconference_status": chat.teleconference_status,
+            "consultation_prescription": chat.consultation_prescription,
             "created_at": chat.created_at,
             "student_name": chat.student_name,
             "has_unread": has_unread
         })
     return {"chats": result}
+
+
+class StartTeleconferenceReq(BaseModel):
+    physio_id: int
+
+
+class RespondTeleconferenceReq(BaseModel):
+    user_id: int
+    accepted: bool
+
+
+@app.post("/physio/chats/{session_id}/teleconference")
+def start_chat_teleconference(
+    session_id: int,
+    req: StartTeleconferenceReq,
+    db: Session = Depends(get_db),
+):
+    session = db.query(models.LiveChatSession).filter(
+        models.LiveChatSession.session_id == session_id,
+        models.LiveChatSession.therapist_id == req.physio_id,
+        models.LiveChatSession.session_status == "Active",
+    ).first()
+    if not session:
+        raise HTTPException(status_code=403, detail="Active chat is not assigned to this physiotherapist")
+
+    room = f"rehab-ai-chat-{secrets.token_hex(16)}"
+    session.teleconference_room = room
+    session.teleconference_status = "Invited"
+    db.add(models.ChatLog(
+        session_id=session_id,
+        sender_id=req.physio_id,
+        content=f"[TELECONFERENCE_INVITE:{room}]",
+    ))
+    db.commit()
+    return {"status": "Invited", "meeting_room": room}
+
+
+@app.post("/chats/{session_id}/teleconference/respond")
+def respond_chat_teleconference(
+    session_id: int,
+    req: RespondTeleconferenceReq,
+    db: Session = Depends(get_db),
+):
+    session = db.query(models.LiveChatSession).filter(
+        models.LiveChatSession.session_id == session_id,
+        models.LiveChatSession.student_id == req.user_id,
+        models.LiveChatSession.session_status == "Active",
+    ).first()
+    if not session or not session.teleconference_room:
+        raise HTTPException(status_code=404, detail="Video consultation invitation not found")
+
+    session.teleconference_status = "Accepted" if req.accepted else "Declined"
+    response_text = (
+        "Video consultation accepted."
+        if req.accepted
+        else "Video consultation declined."
+    )
+    db.add(models.ChatLog(
+        session_id=session_id,
+        sender_id=req.user_id,
+        content=response_text,
+    ))
+    db.commit()
+    return {
+        "status": session.teleconference_status,
+        "meeting_room": session.teleconference_room if req.accepted else None,
+    }
 
 
 @app.post("/physio/chats/{session_id}/read")
@@ -1367,6 +1485,7 @@ def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
     
     result = []
     for appt, username, matric_no in appointments:
+        meeting_room = ensure_meeting_room(appt)
         result.append({
             "appointment_id": appt.appointment_id,
             "student_id": appt.student_id,
@@ -1374,8 +1493,10 @@ def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
             "matric_no": matric_no,
             "schedule_time": appt.schedule_time,
             "status": appt.status,
-            "evaluation": appt.evaluation
+            "evaluation": appt.evaluation,
+            "meeting_room": meeting_room
         })
+    db.commit()
     return {"appointments": result}
 
 class AssignedExercise(BaseModel):
@@ -1391,6 +1512,10 @@ class RecordSessionReq(BaseModel):
     prescription: str
     evaluation: str | None = None
     exercises: list[AssignedExercise]
+
+
+class TeleconsultationReq(RecordSessionReq):
+    physio_id: int
 
 @app.post("/physio/appointments/{appointment_id}/prescribe")
 def record_session(appointment_id: int, req: RecordSessionReq, db: Session = Depends(get_db)):
@@ -1429,6 +1554,79 @@ def record_session(appointment_id: int, req: RecordSessionReq, db: Session = Dep
         
     db.commit()
     return {"message": "Session recorded successfully"}
+
+
+@app.post("/physio/chats/{session_id}/prescribe")
+def record_teleconsultation(
+    session_id: int,
+    req: TeleconsultationReq,
+    db: Session = Depends(get_db),
+):
+    chat = db.query(models.LiveChatSession).filter(
+        models.LiveChatSession.session_id == session_id,
+        models.LiveChatSession.therapist_id == req.physio_id,
+    ).first()
+    if not chat:
+        raise HTTPException(status_code=404, detail="Assigned chat not found")
+
+    appointment = None
+    if chat.consultation_appointment_id:
+        appointment = db.query(models.Appointment).filter(
+            models.Appointment.appointment_id == chat.consultation_appointment_id
+        ).first()
+    if appointment is None:
+        appointment = models.Appointment(
+            student_id=chat.student_id,
+            therapist_id=chat.therapist_id,
+            schedule_time=datetime.utcnow(),
+            status="Completed",
+            meeting_room=chat.teleconference_room,
+        )
+        db.add(appointment)
+        db.flush()
+        chat.consultation_appointment_id = appointment.appointment_id
+
+    appointment.prescription = req.prescription.strip()
+    if not appointment.prescription:
+        raise HTTPException(status_code=422, detail="Prescription cannot be empty")
+    appointment.evaluation = req.evaluation
+    appointment.status = "Completed"
+    chat.consultation_prescription = appointment.prescription
+
+    db.query(models.PrescribedExercise).filter(
+        models.PrescribedExercise.appointment_id == appointment.appointment_id
+    ).delete()
+    for ex in req.exercises:
+        tracking_mode = ex.assigned_tracking_mode.strip().lower()
+        if tracking_mode not in {"duration", "reps"}:
+            raise HTTPException(status_code=422, detail="Tracking mode must be duration or reps")
+        if ex.assigned_sets < 1 or ex.assigned_days < 1:
+            raise HTTPException(status_code=422, detail="Sets and plan days must be at least 1")
+        if tracking_mode == "duration" and ex.assigned_duration < 1:
+            raise HTTPException(status_code=422, detail="Duration must be at least 1 second")
+        if tracking_mode == "reps" and (ex.assigned_reps is None or ex.assigned_reps < 1):
+            raise HTTPException(status_code=422, detail="Repetitions must be at least 1")
+        db.add(models.PrescribedExercise(
+            appointment_id=appointment.appointment_id,
+            exercise_id=ex.exercise_id,
+            assigned_sets=ex.assigned_sets,
+            assigned_duration=ex.assigned_duration,
+            assigned_reps=ex.assigned_reps,
+            assigned_days=ex.assigned_days,
+            assigned_tracking_mode=tracking_mode,
+            evaluation=ex.evaluation,
+        ))
+
+    db.add(models.ChatLog(
+        session_id=session_id,
+        sender_id=chat.therapist_id,
+        content=f"Consultation prescription:\n{appointment.prescription}",
+    ))
+    db.commit()
+    return {
+        "message": "Teleconsultation prescription recorded successfully",
+        "appointment_id": appointment.appointment_id,
+    }
 
 @app.get("/physio/rentals/{physio_id}")
 def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
@@ -1592,6 +1790,7 @@ def get_student_appointments(student_id: int, db: Session = Depends(get_db)):
     
     result = []
     for appt, physio_name, spec in appointments:
+        meeting_room = ensure_meeting_room(appt)
         reason_desc = None
         if appt.reason_id:
             reason = db.query(models.CancellationReason).filter(models.CancellationReason.reason_id == appt.reason_id).first()
@@ -1605,8 +1804,10 @@ def get_student_appointments(student_id: int, db: Session = Depends(get_db)):
             "schedule_time": appt.schedule_time,
             "status": appt.status,
             "evaluation": appt.evaluation,
-            "cancellation_reason": reason_desc
+            "cancellation_reason": reason_desc,
+            "meeting_room": meeting_room
         })
+    db.commit()
     return {"appointments": result}
 
 @app.get("/appointments/cancellation_reasons")
@@ -1648,7 +1849,8 @@ def book_appointment(req: BookAppointmentReq, db: Session = Depends(get_db)):
         student_id=req.student_id,
         therapist_id=req.therapist_id,
         schedule_time=datetime.fromisoformat(req.schedule_time),
-        status="Scheduled"
+        status="Scheduled",
+        meeting_room=f"rehab-ai-{secrets.token_hex(16)}"
     )
     db.add(appt)
     db.commit()

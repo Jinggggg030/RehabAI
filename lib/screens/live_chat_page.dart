@@ -6,13 +6,19 @@ import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:rehab_ai/utils/global_state.dart';
+import '../services/teleconference_service.dart';
+import 'dart:async';
 
 class ChatMessage {
   final String text;
   final bool isUser;
+  final String? teleconferenceRoom;
 
-  ChatMessage({required this.text, required this.isUser});
+  ChatMessage({
+    required this.text,
+    required this.isUser,
+    this.teleconferenceRoom,
+  });
 }
 
 class LiveChatPage extends StatefulWidget {
@@ -35,6 +41,8 @@ class _LiveChatPageState extends State<LiveChatPage> {
   RealtimeChannel? _sessionSubscription;
 
   int? _sessionId;
+  int? _myUserId;
+  final Set<String> _handledInvites = {};
   final SupabaseClient _supabase = Supabase.instance.client;
   
   @override
@@ -96,11 +104,10 @@ class _LiveChatPageState extends State<LiveChatPage> {
       
     final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
     final userRes = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
-    int? myUserId;
     if (userRes.statusCode == 200) {
       final userData = jsonDecode(userRes.body);
       if (userData['exists'] == true) {
-        myUserId = userData['user_id'];
+        _myUserId = userData['user_id'];
       }
     }
 
@@ -121,6 +128,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
         }
       }
       if (mounted) {
+        String? pendingInvite;
         setState(() {
           _messages.clear();
           for (var row in List<dynamic>.from(res)) {
@@ -129,13 +137,21 @@ class _LiveChatPageState extends State<LiveChatPage> {
               _isChatEnded = true;
               continue;
             }
-            _messages.add(ChatMessage(
-              text: textContent,
-              isUser: row['sender_id'] == myUserId,
-            ));
+            final message = _chatMessageFromRow(row);
+            _messages.add(message);
+            if (message.teleconferenceRoom != null && !message.isUser) {
+              pendingInvite = message.teleconferenceRoom;
+            } else if (message.isUser &&
+                (message.text == 'Video consultation accepted.' ||
+                    message.text == 'Video consultation declined.')) {
+              pendingInvite = null;
+            }
           }
         });
         _scrollToBottom();
+        if (pendingInvite != null) {
+          unawaited(_showTeleconferenceInvite(pendingInvite!));
+        }
       }
     } catch (e) {
       debugPrint("Error fetching messages: $e");
@@ -161,17 +177,18 @@ class _LiveChatPageState extends State<LiveChatPage> {
                 return;
               }
               // Prevent duplicating the user's own message that was added optimistically
-              if (newMsg['sender_id'] == myUserId) {
+              if (newMsg['sender_id'] == _myUserId) {
                 if (_messages.isNotEmpty && _messages.last.isUser && _messages.last.text == textContent) {
                   return;
                 }
               }
-              _messages.add(ChatMessage(
-                text: textContent,
-                isUser: newMsg['sender_id'] == myUserId,
-              ));
+              _messages.add(_chatMessageFromRow(newMsg));
             });
             _scrollToBottom();
+            final room = TeleconferenceService.roomFromInvite(textContent);
+            if (room != null && newMsg['sender_id'] != _myUserId) {
+              unawaited(_showTeleconferenceInvite(room));
+            }
           }
         }
       ).subscribe();
@@ -194,6 +211,106 @@ class _LiveChatPageState extends State<LiveChatPage> {
           }
         }
       ).subscribe();
+  }
+
+  ChatMessage _chatMessageFromRow(Map<String, dynamic> row) {
+    final content = row['content']?.toString() ?? '';
+    final room = TeleconferenceService.roomFromInvite(content);
+    return ChatMessage(
+      text: room == null
+          ? content
+          : 'Your physiotherapist is inviting you to a video consultation.',
+      isUser: row['sender_id'] == _myUserId,
+      teleconferenceRoom: room,
+    );
+  }
+
+  Future<void> _showTeleconferenceInvite(String room) async {
+    if (!mounted || _handledInvites.contains(room)) return;
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('teleconference_handled_$room') == true || !mounted) {
+      return;
+    }
+
+    _handledInvites.add(room);
+    final accepted = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) => AlertDialog(
+        icon: const Icon(
+          Icons.video_call_outlined,
+          size: 44,
+          color: Color(0xFF207866),
+        ),
+        title: const Text('Video consultation invitation'),
+        content: const Text(
+          'Your physiotherapist would like to start a video consultation now.',
+          textAlign: TextAlign.center,
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(dialogContext, false),
+            child: const Text('Decline'),
+          ),
+          FilledButton.icon(
+            onPressed: () => Navigator.pop(dialogContext, true),
+            icon: const Icon(Icons.video_call),
+            label: const Text('Accept & Join'),
+            style: FilledButton.styleFrom(
+              backgroundColor: const Color(0xFF207866),
+            ),
+          ),
+        ],
+      ),
+    );
+    if (accepted == null) return;
+
+    final responded = await _respondToTeleconference(accepted: accepted);
+    if (!responded) {
+      _handledInvites.remove(room);
+      return;
+    }
+    await prefs.setBool('teleconference_handled_$room', true);
+    if (accepted && mounted) {
+      await TeleconferenceService.join(context: context, meetingRoom: room);
+    }
+  }
+
+  Future<void> _joinOrRespondToInvite(String room) async {
+    final prefs = await SharedPreferences.getInstance();
+    if (prefs.getBool('teleconference_handled_$room') == true) {
+      if (mounted) {
+        await TeleconferenceService.join(context: context, meetingRoom: room);
+      }
+      return;
+    }
+    _handledInvites.remove(room);
+    await _showTeleconferenceInvite(room);
+  }
+
+  Future<bool> _respondToTeleconference({
+    required bool accepted,
+  }) async {
+    if (_sessionId == null || _myUserId == null) return false;
+    final apiUrl = kIsWeb
+        ? 'http://127.0.0.1:8000'
+        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    try {
+      final response = await http.post(
+        Uri.parse('$apiUrl/chats/$_sessionId/teleconference/respond'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'user_id': _myUserId, 'accepted': accepted}),
+      );
+      if (response.statusCode != 200 && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Unable to respond to the invitation.')),
+        );
+      }
+      return response.statusCode == 200;
+    } catch (error) {
+      debugPrint('Unable to respond to teleconference invitation: $error');
+      return false;
+    }
   }
 
   Future<void> _sendMessage() async {
@@ -484,6 +601,35 @@ class _LiveChatPageState extends State<LiveChatPage> {
   }
 
   Widget _buildChatBubble(ChatMessage message) {
+    if (message.teleconferenceRoom != null) {
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: Card(
+          margin: const EdgeInsets.only(bottom: 16),
+          color: const Color(0xFFE8F5F1),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  message.text,
+                  style: GoogleFonts.readexPro(fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(height: 8),
+                OutlinedButton.icon(
+                  onPressed: () => _joinOrRespondToInvite(
+                    message.teleconferenceRoom!,
+                  ),
+                  icon: const Icon(Icons.video_call_outlined),
+                  label: const Text('Join video consultation'),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Align(
       alignment: message.isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(

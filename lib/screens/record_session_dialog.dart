@@ -7,8 +7,15 @@ import 'package:google_fonts/google_fonts.dart';
 
 class RecordSessionDialog extends StatefulWidget {
   final Map<String, dynamic> appointment;
+  final int? chatSessionId;
+  final int? physioId;
 
-  const RecordSessionDialog({super.key, required this.appointment});
+  const RecordSessionDialog({
+    super.key,
+    required this.appointment,
+    this.chatSessionId,
+    this.physioId,
+  });
 
   @override
   State<RecordSessionDialog> createState() => _RecordSessionDialogState();
@@ -99,11 +106,14 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
             ? _evaluationController.text
             : null,
         "exercises": _selectedExercises,
+        if (widget.chatSessionId != null) "physio_id": widget.physioId,
       };
 
       final res = await http.post(
         Uri.parse(
-          '$apiUrl/physio/appointments/${widget.appointment['appointment_id']}/prescribe',
+          widget.chatSessionId == null
+              ? '$apiUrl/physio/appointments/${widget.appointment['appointment_id']}/prescribe'
+              : '$apiUrl/physio/chats/${widget.chatSessionId}/prescribe',
         ),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
@@ -166,7 +176,9 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  "Record Session",
+                  widget.chatSessionId == null
+                      ? "Record Session"
+                      : "Record Teleconsultation Prescription",
                   style: GoogleFonts.readexPro(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -447,7 +459,11 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                             color: Colors.white,
                           ),
                         )
-                      : const Text("Submit Session"),
+                      : Text(
+                          widget.chatSessionId == null
+                              ? "Submit Session"
+                              : "Save Prescription",
+                        ),
                 ),
               ],
             ),

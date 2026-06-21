@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:rehab_ai/screens/live_chat_page.dart';
+import '../services/teleconference_service.dart';
 
 
 class MyAppointmentsPage extends StatefulWidget {
@@ -456,10 +457,24 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
                 const SizedBox(height: 16),
                 _buildDialogDetailRow('Details', appointment['specialization'] ?? 'Physiotherapy'),
                 const SizedBox(height: 16),
-                _buildDialogDetailRow('Location', 'PKU UTeM'),
+                _buildDialogDetailRow('Location', 'PKU UTeM / Online'),
                 const SizedBox(height: 16),
                 _buildDialogDetailRow('Reminder', 'Please Bring Your Matric Card\nAnd IC'),
                 const SizedBox(height: 32),
+
+                FilledButton.icon(
+                  onPressed: () => TeleconferenceService.join(
+                    context: context,
+                    meetingRoom: appointment['meeting_room']?.toString(),
+                  ),
+                  icon: const Icon(Icons.video_call_outlined),
+                  label: const Text('Join Video Consultation'),
+                  style: FilledButton.styleFrom(
+                    backgroundColor: const Color(0xFF207866),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 12),
                 
                 // Cancel Button
                 Align(

@@ -153,6 +153,7 @@ class Appointment(Base):
     status = Column(String(50), default="Scheduled")
     evaluation = Column(Text, nullable=True)
     prescription = Column(Text, nullable=True)
+    meeting_room = Column(String(100), nullable=True, unique=True)
 
     __table_args__ = (
         CheckConstraint("status IN ('Scheduled', 'Cancelled', 'Completed')", name="check_appointment_status"),
@@ -220,6 +221,14 @@ class LiveChatSession(Base):
     subject = Column(String(100), nullable=False)
     session_status = Column(String(10), default="Triage")
     triage_data = Column(JSON, nullable=True)
+    teleconference_room = Column(String(100), nullable=True)
+    teleconference_status = Column(String(20), nullable=True)
+    consultation_prescription = Column(Text, nullable=True)
+    consultation_appointment_id = Column(
+        Integer,
+        ForeignKey("Appointment.appointment_id"),
+        nullable=True,
+    )
     created_at = Column(DateTime, default=datetime.utcnow)
 
     __table_args__ = (
