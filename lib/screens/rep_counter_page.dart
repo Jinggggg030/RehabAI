@@ -6,6 +6,7 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import '../services/movement_analyzer.dart';
+import '../services/voice_coach.dart';
 import 'ai_session_setup_dialog.dart';
 import 'session_summary_page.dart';
 
@@ -28,6 +29,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
   List<Pose> _poses = [];
   String _feedbackText = "Initializing Camera...";
   MovementAnalyzer? _analyzer;
+  final VoiceCoach _voiceCoach = VoiceCoach();
   int _sensorOrientation = 0;
   AiTrackingMode _trackingMode = AiTrackingMode.reps;
   int _targetPerSet = 10;
@@ -147,7 +149,15 @@ class _RepCounterPageState extends State<RepCounterPage> {
               _feedbackText = analyzer.lastFeedback;
             }
           });
-          if (reachedTarget) _finishSet();
+          if (reachedTarget) {
+            _finishSet();
+          } else if (_setActive && repCompleted) {
+            unawaited(
+              _voiceCoach.speak('Rep $_setRepCount completed.', force: true),
+            );
+          } else if (_setActive && analyzer != null) {
+            unawaited(_voiceCoach.speak(analyzer.lastFeedback));
+          }
         }
       } else {
         if (mounted) {
@@ -155,6 +165,9 @@ class _RepCounterPageState extends State<RepCounterPage> {
             _poses = [];
             _feedbackText = "Step into the frame";
           });
+          if (_setActive) {
+            unawaited(_voiceCoach.speak('Step into the frame.'));
+          }
         }
       }
     } catch (e) {
@@ -185,6 +198,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
       analyzer?.reset();
       _feedbackText = 'Set $_currentSet started. Keep going!';
     });
+    unawaited(_voiceCoach.speak(_feedbackText, force: true));
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || !_setActive) return;
       var shouldFinish = false;
@@ -207,6 +221,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
       _completedSets++;
       _feedbackText = 'Set $_currentSet of $_totalSets complete.';
     });
+    unawaited(_voiceCoach.speak(_feedbackText, force: true));
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _showSetCompleteDialog(),
     );
@@ -396,6 +411,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
     _cameraController?.stopImageStream();
     _cameraController?.dispose();
     _poseDetector.close();
+    unawaited(_voiceCoach.dispose());
     super.dispose();
   }
 

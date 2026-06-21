@@ -6,6 +6,7 @@ import 'package:google_mlkit_pose_detection/google_mlkit_pose_detection.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter/services.dart';
 import '../services/posture_analyzer.dart';
+import '../services/voice_coach.dart';
 import 'ai_session_setup_dialog.dart';
 import 'session_summary_page.dart';
 
@@ -28,6 +29,7 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
   List<Pose> _poses = [];
   String _feedbackText = "Initializing AI...";
   PostureAnalyzer? _analyzer;
+  final VoiceCoach _voiceCoach = VoiceCoach();
   int _sensorOrientation = 0;
   double _accuracy = 0;
   double _accuracyTotal = 0;
@@ -146,6 +148,7 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
         final result = analyzer.analyzePose(poses.first);
         if (mounted) {
           var reachedTarget = false;
+          var repCompleted = false;
           if (_setActive && result.accuracy > 0) {
             _accuracyTotal += result.accuracy;
             _accuracySamples++;
@@ -158,6 +161,7 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
               if (_postureRepReady && _correctFrames >= 5) {
                 _setRepCount++;
                 _totalRepCount++;
+                repCompleted = true;
                 _postureRepReady = false;
                 reachedTarget = _setRepCount >= _targetPerSet;
               }
@@ -173,7 +177,15 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
             _feedbackText = result.feedback;
             _accuracy = result.accuracy;
           });
-          if (reachedTarget) _finishSet();
+          if (reachedTarget) {
+            _finishSet();
+          } else if (_setActive && repCompleted) {
+            unawaited(
+              _voiceCoach.speak('Rep $_setRepCount completed.', force: true),
+            );
+          } else if (_setActive) {
+            unawaited(_voiceCoach.speak(result.feedback));
+          }
         }
       } else {
         if (mounted) {
@@ -181,6 +193,9 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
             _poses = [];
             _feedbackText = "Step into the frame";
           });
+          if (_setActive) {
+            unawaited(_voiceCoach.speak('Step into the frame.'));
+          }
         }
       }
     } catch (e) {
@@ -213,6 +228,7 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
       _incorrectFrames = 0;
       _feedbackText = 'Set $_currentSet started. Hold the correct posture.';
     });
+    unawaited(_voiceCoach.speak(_feedbackText, force: true));
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
       if (!mounted || !_setActive) return;
       var shouldFinish = false;
@@ -235,6 +251,7 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
       _completedSets++;
       _feedbackText = 'Set $_currentSet of $_totalSets complete.';
     });
+    unawaited(_voiceCoach.speak(_feedbackText, force: true));
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _showSetCompleteDialog(),
     );
@@ -426,6 +443,7 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
     _cameraController?.stopImageStream();
     _cameraController?.dispose();
     _poseDetector.close();
+    unawaited(_voiceCoach.dispose());
     super.dispose();
   }
 
