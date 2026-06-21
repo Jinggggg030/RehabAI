@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:image_picker/image_picker.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -16,8 +17,16 @@ class ProfilePage extends StatefulWidget {
 }
 
 class _ProfilePageState extends State<ProfilePage> {
+  static const _profilePictureBucket = 'profile_picture';
   bool _isLoading = true;
+  bool _isUploadingPicture = false;
   Map<String, dynamic>? _profileData;
+  String? _resolvedProfilePictureUrl;
+  final ImagePicker _imagePicker = ImagePicker();
+
+  String get _apiUrl => kIsWeb
+      ? 'http://127.0.0.1:8000'
+      : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
 
   @override
   void initState() {
@@ -32,16 +41,18 @@ class _ProfilePageState extends State<ProfilePage> {
         setState(() => _isLoading = false);
         return;
       }
-      
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final response = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
-      
+
+      final response = await http.get(
+        Uri.parse('$_apiUrl/users/profile/${user.id}'),
+      );
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['exists'] == true) {
           setState(() {
             _profileData = data;
           });
+          await _resolveProfilePicture(data['profile_picture']?.toString());
         }
       }
     } catch (e) {
@@ -50,6 +61,116 @@ class _ProfilePageState extends State<ProfilePage> {
       if (mounted) {
         setState(() => _isLoading = false);
       }
+    }
+  }
+
+  Future<void> _resolveProfilePicture(String? storedValue) async {
+    final value = storedValue?.trim() ?? '';
+    if (value.isEmpty) {
+      if (mounted) setState(() => _resolvedProfilePictureUrl = null);
+      return;
+    }
+    try {
+      final url = value.startsWith('http://') || value.startsWith('https://')
+          ? value
+          : await Supabase.instance.client.storage
+                .from(_profilePictureBucket)
+                .createSignedUrl(value, 60 * 60);
+      if (mounted) setState(() => _resolvedProfilePictureUrl = url);
+    } catch (error) {
+      debugPrint('Unable to load profile picture: $error');
+      if (mounted) setState(() => _resolvedProfilePictureUrl = null);
+    }
+  }
+
+  Future<void> _uploadProfilePicture() async {
+    if (_isUploadingPicture) return;
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    final image = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 75,
+      maxWidth: 1024,
+      maxHeight: 1024,
+    );
+    if (image == null || !mounted) return;
+
+    setState(() => _isUploadingPicture = true);
+    try {
+      final bytes = await image.readAsBytes();
+      if (bytes.length > 5 * 1024 * 1024) {
+        throw Exception('Please choose an image smaller than 5 MB.');
+      }
+      var extension = image.name.contains('.')
+          ? image.name.split('.').last.toLowerCase()
+          : 'jpg';
+      if (extension == 'jpeg') extension = 'jpg';
+      if (!{'jpg', 'png', 'webp'}.contains(extension)) {
+        throw Exception('Please choose a JPG, PNG, or WebP image.');
+      }
+      final contentType = extension == 'jpg'
+          ? 'image/jpeg'
+          : 'image/$extension';
+      final storagePath =
+          '${user.id}/profile_${DateTime.now().millisecondsSinceEpoch}.$extension';
+      final storage = Supabase.instance.client.storage.from(
+        _profilePictureBucket,
+      );
+      await storage.uploadBinary(
+        storagePath,
+        bytes,
+        fileOptions: FileOptions(
+          cacheControl: '3600',
+          contentType: contentType,
+          upsert: false,
+        ),
+      );
+
+      final response = await http.put(
+        Uri.parse('$_apiUrl/users/profile/${user.id}'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'profile_picture': storagePath}),
+      );
+      if (response.statusCode != 200) {
+        await storage.remove([storagePath]);
+        throw Exception('Unable to save the profile picture.');
+      }
+      final oldPath = _profileData?['profile_picture']?.toString() ?? '';
+      final signedUrl = await storage.createSignedUrl(storagePath, 60 * 60);
+      if (!mounted) return;
+      setState(() {
+        _profileData = {...?_profileData, 'profile_picture': storagePath};
+        _resolvedProfilePictureUrl = signedUrl;
+      });
+      if (oldPath.isNotEmpty &&
+          !oldPath.startsWith('http://') &&
+          !oldPath.startsWith('https://') &&
+          oldPath != storagePath) {
+        try {
+          await storage.remove([oldPath]);
+        } catch (error) {
+          debugPrint('Unable to remove the previous profile picture: $error');
+        }
+      }
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile picture updated successfully.'),
+          backgroundColor: Color(0xFF207866),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingPicture = false);
     }
   }
 
@@ -67,147 +188,179 @@ class _ProfilePageState extends State<ProfilePage> {
     return Scaffold(
       backgroundColor: const Color(0xFFF8F9FA),
       body: SafeArea(
-        child: _isLoading 
-          ? const Center(child: CircularProgressIndicator(color: Color(0xFF207866))) 
-          : SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              // Header
-              SizedBox(
-                height: 48,
-                child: Center(
-                  child: Text(
-                    'Account',
-                    style: GoogleFonts.readexPro(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF207866),
-                    ),
-                  ),
+        child: _isLoading
+            ? const Center(
+                child: CircularProgressIndicator(color: Color(0xFF207866)),
+              )
+            : SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 24.0,
+                  vertical: 24.0,
                 ),
-              ),
-              const SizedBox(height: 32),
-
-              // Profile Picture
-              Center(
-                child: Stack(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: [
-                    Container(
-                      width: 120,
-                      height: 120,
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFF0F2F5),
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.08),
-                            blurRadius: 15,
-                            spreadRadius: 2,
-                            offset: const Offset(0, 5),
-                          ),
-                        ],
-                      ),
-                      child: const Icon(Icons.person, size: 60, color: Colors.grey),
-                    ),
-                    Positioned(
-                      bottom: 0,
-                      right: 0,
-                      child: GestureDetector(
-                        onTap: () {
-                          // Handle profile picture update
-                        },
-                        child: Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            shape: BoxShape.circle,
-                            boxShadow: [
-                              BoxShadow(
-                                color: Colors.black.withOpacity(0.1),
-                                blurRadius: 8,
-                                offset: const Offset(0, 2),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.camera_alt_outlined,
-                            size: 18,
-                            color: Colors.black87,
+                    // Header
+                    SizedBox(
+                      height: 48,
+                      child: Center(
+                        child: Text(
+                          'Account',
+                          style: GoogleFonts.readexPro(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: const Color(0xFF207866),
                           ),
                         ),
                       ),
                     ),
+                    const SizedBox(height: 32),
+
+                    // Profile Picture
+                    Center(
+                      child: Stack(
+                        children: [
+                          Container(
+                            width: 120,
+                            height: 120,
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0F2F5),
+                              shape: BoxShape.circle,
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withValues(alpha: 0.08),
+                                  blurRadius: 15,
+                                  spreadRadius: 2,
+                                  offset: const Offset(0, 5),
+                                ),
+                              ],
+                            ),
+                            child: ClipOval(
+                              child: _resolvedProfilePictureUrl == null
+                                  ? const Icon(
+                                      Icons.person,
+                                      size: 60,
+                                      color: Colors.grey,
+                                    )
+                                  : Image.network(
+                                      _resolvedProfilePictureUrl!,
+                                      width: 120,
+                                      height: 120,
+                                      fit: BoxFit.cover,
+                                      errorBuilder: (_, _, _) => const Icon(
+                                        Icons.person,
+                                        size: 60,
+                                        color: Colors.grey,
+                                      ),
+                                    ),
+                            ),
+                          ),
+                          Positioned(
+                            bottom: 0,
+                            right: 0,
+                            child: GestureDetector(
+                              onTap: _uploadProfilePicture,
+                              child: Container(
+                                padding: const EdgeInsets.all(8),
+                                decoration: BoxDecoration(
+                                  color: Colors.white,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [
+                                    BoxShadow(
+                                      color: Colors.black.withValues(
+                                        alpha: 0.1,
+                                      ),
+                                      blurRadius: 8,
+                                      offset: const Offset(0, 2),
+                                    ),
+                                  ],
+                                ),
+                                child: _isUploadingPicture
+                                    ? const SizedBox(
+                                        width: 18,
+                                        height: 18,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                          color: Color(0xFF207866),
+                                        ),
+                                      )
+                                    : const Icon(
+                                        Icons.upload_outlined,
+                                        size: 18,
+                                        color: Colors.black87,
+                                      ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 40),
+
+                    // Public Info Box
+                    _buildInfoBox([
+                      _buildInfoRow('Name', name),
+                      _buildInfoRow('Matric Number', matricNo, isLast: true),
+                    ]),
+                    const SizedBox(height: 32),
+
+                    // Private Information Title
+                    Text(
+                      'Private Information',
+                      style: GoogleFonts.readexPro(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Private Info Box
+                    _buildInfoBox([
+                      _buildInfoRow('Gender', gender),
+                      _buildInfoRow('Email', email),
+                      _buildInfoRow('Identity Number', identityNumber),
+                      _buildInfoRow('Contact Number', contactNumber),
+                      _buildInfoRow('Address', address, isLast: true),
+                    ]),
+                    const SizedBox(height: 24),
+
+                    // Action Buttons
+                    _buildActionBox(
+                      title: 'Edit Profile',
+                      icon: Icons.edit_outlined,
+                      onTap: () async {
+                        final result = await Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const EditProfilePage(),
+                          ),
+                        );
+                        if (result == true) {
+                          setState(() {
+                            _isLoading = true;
+                          });
+                          _fetchProfile();
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 16),
+                    _buildActionBox(
+                      title: 'Settings',
+                      icon: Icons.settings_outlined,
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const SettingsPage(),
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 40),
                   ],
                 ),
               ),
-              const SizedBox(height: 40),
-
-              // Public Info Box
-              _buildInfoBox([
-                _buildInfoRow('Name', name),
-                _buildInfoRow('Matric Number', matricNo, isLast: true),
-              ]),
-              const SizedBox(height: 32),
-
-              // Private Information Title
-              Text(
-                'Private Information',
-                style: GoogleFonts.readexPro(
-                  fontSize: 16,
-                  fontWeight: FontWeight.bold,
-                  color: Colors.black87,
-                ),
-              ),
-              const SizedBox(height: 16),
-
-              // Private Info Box
-              _buildInfoBox([
-                _buildInfoRow('Gender', gender),
-                _buildInfoRow('Email', email),
-                _buildInfoRow('Identity Number', identityNumber),
-                _buildInfoRow('Contact Number', contactNumber),
-                _buildInfoRow('Address', address, isLast: true),
-              ]),
-              const SizedBox(height: 24),
-
-              // Action Buttons
-              _buildActionBox(
-                title: 'Edit Profile',
-                icon: Icons.edit_outlined,
-                onTap: () async {
-                  final result = await Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const EditProfilePage(),
-                    ),
-                  );
-                  if (result == true) {
-                    setState(() {
-                      _isLoading = true;
-                    });
-                    _fetchProfile();
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-              _buildActionBox(
-                title: 'Settings',
-                icon: Icons.settings_outlined,
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const SettingsPage(),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 40),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -220,7 +373,7 @@ class _ProfilePageState extends State<ProfilePage> {
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.03),
+            color: Colors.black.withValues(alpha: 0.03),
             blurRadius: 10,
             spreadRadius: 1,
             offset: const Offset(0, 4),
@@ -260,16 +413,16 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         const SizedBox(height: 16),
         if (!isLast)
-          Divider(
-            height: 1,
-            thickness: 1,
-            color: Colors.grey.shade100,
-          ),
+          Divider(height: 1, thickness: 1, color: Colors.grey.shade100),
       ],
     );
   }
 
-  Widget _buildActionBox({required String title, required IconData icon, required VoidCallback onTap}) {
+  Widget _buildActionBox({
+    required String title,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -279,7 +432,7 @@ class _ProfilePageState extends State<ProfilePage> {
           borderRadius: BorderRadius.circular(16),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
+              color: Colors.black.withValues(alpha: 0.04),
               blurRadius: 10,
               spreadRadius: 1,
               offset: const Offset(0, 4),
@@ -288,18 +441,11 @@ class _ProfilePageState extends State<ProfilePage> {
         ),
         child: Row(
           children: [
-            Icon(
-              icon,
-              color: Colors.black87,
-              size: 24,
-            ),
+            Icon(icon, color: Colors.black87, size: 24),
             const SizedBox(width: 16),
             Text(
               title,
-              style: GoogleFonts.readexPro(
-                fontSize: 14,
-                color: Colors.black87,
-              ),
+              style: GoogleFonts.readexPro(fontSize: 14, color: Colors.black87),
             ),
           ],
         ),

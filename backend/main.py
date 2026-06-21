@@ -60,6 +60,10 @@ with engine.begin() as connection:
         'ADD COLUMN IF NOT EXISTS teleconference_room VARCHAR(100)'
     ))
     connection.execute(text(
+        'ALTER TABLE "Student" '
+        'ADD COLUMN IF NOT EXISTS profile_picture VARCHAR(255)'
+    ))
+    connection.execute(text(
         'ALTER TABLE "Live_Chat_Session" '
         'ADD COLUMN IF NOT EXISTS teleconference_status VARCHAR(20)'
     ))
@@ -74,7 +78,6 @@ with engine.begin() as connection:
     ))
 
 app = FastAPI(title="Rehab AI Backend")
-
 
 def ensure_meeting_room(appointment: models.Appointment) -> str:
     """Return a non-guessable room shared only through appointment responses."""
@@ -145,6 +148,7 @@ class UserProfileUpdate(BaseModel):
     address: str = None
     accommodation_type: str = None
     matric_no: str = None
+    profile_picture: str = None
 
 @app.put("/users/profile/{supabase_id}")
 def update_user_profile(supabase_id: str, profile: UserProfileUpdate, db: Session = Depends(get_db)):
@@ -167,14 +171,17 @@ def update_user_profile(supabase_id: str, profile: UserProfileUpdate, db: Sessio
     if profile.accommodation_type is not None:
         user.accommodation_type = profile.accommodation_type
         
-    db.commit()
-    
-    if user.role == 'S' and profile.matric_no is not None:
+    if user.role == 'S' and (
+        profile.matric_no is not None or profile.profile_picture is not None
+    ):
         student = db.query(models.Student).filter(models.Student.student_id == user.user_id).first()
         if student:
-            student.matric_no = profile.matric_no
-            db.commit()
-            
+            if profile.matric_no is not None:
+                student.matric_no = profile.matric_no
+            if profile.profile_picture is not None:
+                student.profile_picture = profile.profile_picture
+    db.commit()
+
     return {"message": "Profile updated successfully"}
 
 @app.get("/users/profile/{supabase_id}")
@@ -193,6 +200,7 @@ def check_user_profile(supabase_id: str, db: Session = Depends(get_db)):
             "contact_number": user.contact_number,
             "address": user.address,
             "accommodation_type": user.accommodation_type,
+            "profile_picture": student.profile_picture if student else None,
             "matric_no": student.matric_no if student else None
         }
     return {"exists": False}

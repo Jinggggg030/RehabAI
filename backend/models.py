@@ -28,6 +28,7 @@ class Student(Base):
 
     student_id = Column(Integer, ForeignKey("User.user_id"), primary_key=True)
     matric_no = Column(String(15), nullable=True)
+    profile_picture = Column(String(255), nullable=True)
 
 class Physiotherapist(Base):
     __tablename__ = "Physiotherapist"
