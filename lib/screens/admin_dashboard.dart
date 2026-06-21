@@ -27,6 +27,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
   List<dynamic> _equipment = [];
   bool _isLoading = false;
   final ImagePicker _picker = ImagePicker();
+  TextEditingController? _rentalSearchController = TextEditingController();
+  String? _rentalSearch = '';
   Timer? _pollingTimer;
 
   @override
@@ -43,6 +45,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   @override
   void dispose() {
     _pollingTimer?.cancel();
+    _rentalSearchController?.dispose();
     super.dispose();
   }
   
@@ -322,16 +325,63 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Widget _buildActiveRentals() {
-    final active = _rentals.where((r) => r['status'] == 'Approved' || r['status'] == 'Active').toList();
-    if (_isLoading && active.isEmpty) return const Center(child: CircularProgressIndicator());
-    if (active.isEmpty) return Center(child: Text("No active rentals.", style: GoogleFonts.readexPro()));
+    final allActive = _rentals
+        .where((r) => r['status'] == 'Approved' || r['status'] == 'Active')
+        .toList();
+    final query = (_rentalSearch ?? '').trim().toLowerCase();
+    final active = query.isEmpty
+        ? <dynamic>[]
+        : allActive.where((r) {
+            final matric = r['matric_no']?.toString().toLowerCase() ?? '';
+            return matric.contains(query);
+          }).toList();
 
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: active.length,
-      itemBuilder: (context, index) {
-        final r = active[index];
-        return Card(
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.all(16),
+          child: TextField(
+            controller: _rentalSearchController,
+            onChanged: (value) => setState(() => _rentalSearch = value),
+            decoration: InputDecoration(
+              labelText: 'Search by matric number',
+              hintText: 'Enter student matric number',
+              prefixIcon: const Icon(Icons.badge_outlined),
+              suffixIcon: (_rentalSearch ?? '').isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _rentalSearchController?.clear();
+                        setState(() => _rentalSearch = '');
+                      },
+                    ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+        ),
+        if (_isLoading)
+          const Expanded(child: Center(child: CircularProgressIndicator()))
+        else if (query.isEmpty)
+          const Expanded(
+            child: Center(
+              child: Text('Enter a matric number to find student rentals.'),
+            ),
+          )
+        else if (active.isEmpty)
+          const Expanded(
+            child: Center(child: Text('No matching active rentals found.')),
+          )
+        else
+          Expanded(
+            child: ListView.builder(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              itemCount: active.length,
+              itemBuilder: (context, index) {
+                final r = active[index];
+                return Card(
           margin: const EdgeInsets.only(bottom: 12),
           child: Padding(
             padding: const EdgeInsets.all(16),
@@ -352,6 +402,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     ),
                   ],
                 ),
+                const SizedBox(height: 4),
+                Text("Matric No: ${r['matric_no'] ?? 'Not provided'}", style: GoogleFonts.readexPro(fontSize: 13, color: Colors.blueGrey.shade700)),
                 const SizedBox(height: 4),
                 Text("Equipment: ${r['equipment_name']}", style: GoogleFonts.readexPro(fontSize: 14, color: Colors.black87)),
                 const SizedBox(height: 4),
@@ -377,8 +429,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
               ],
             ),
           ),
-        );
-      },
+                );
+              },
+            ),
+          ),
+      ],
     );
   }
 

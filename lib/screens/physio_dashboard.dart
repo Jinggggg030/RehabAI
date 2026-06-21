@@ -928,11 +928,42 @@ class PhysioAppointmentsTab extends StatefulWidget {
 class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
   List<dynamic> _appointments = [];
   bool _isLoading = true;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchTerm = '';
 
   @override
   void initState() {
     super.initState();
     _fetchAppointments();
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  List<dynamic> get _visibleAppointments {
+    final query = _searchTerm.trim().toLowerCase();
+    final visible = query.isEmpty
+        ? List<dynamic>.from(_appointments)
+        : _appointments.where((appointment) {
+            final name =
+                appointment['student_name']?.toString().toLowerCase() ?? '';
+            final matric =
+                appointment['matric_no']?.toString().toLowerCase() ?? '';
+            return name.contains(query) || matric.contains(query);
+          }).toList();
+    visible.sort((a, b) {
+      final aScheduled = a['status'] == 'Scheduled';
+      final bScheduled = b['status'] == 'Scheduled';
+      if (aScheduled != bScheduled) return aScheduled ? -1 : 1;
+      final aDate = DateTime.tryParse(a['schedule_time']?.toString() ?? '');
+      final bDate = DateTime.tryParse(b['schedule_time']?.toString() ?? '');
+      if (aDate == null || bDate == null) return 0;
+      return aScheduled ? aDate.compareTo(bDate) : bDate.compareTo(aDate);
+    });
+    return visible;
   }
 
   Future<void> _fetchAppointments() async {
@@ -1203,15 +1234,37 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
               )
             ],
           ),
-          const SizedBox(height: 24),
-          if (_appointments.isEmpty)
-             const Expanded(child: Center(child: Text("No appointments scheduled.")))
+          const SizedBox(height: 16),
+          TextField(
+            controller: _searchController,
+            onChanged: (value) => setState(() => _searchTerm = value),
+            decoration: InputDecoration(
+              labelText: 'Search appointment',
+              hintText: 'Student name or matric number',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _searchTerm.isEmpty
+                  ? null
+                  : IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        _searchController.clear();
+                        setState(() => _searchTerm = '');
+                      },
+                    ),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (_visibleAppointments.isEmpty)
+             Expanded(child: Center(child: Text(_searchTerm.isEmpty ? "No appointments scheduled." : "No matching appointments found.")))
           else
             Expanded(
               child: ListView.builder(
-                itemCount: _appointments.length,
+                itemCount: _visibleAppointments.length,
                 itemBuilder: (context, index) {
-                  final a = _appointments[index];
+                  final a = _visibleAppointments[index];
                   final parsedDate = DateTime.tryParse(a['schedule_time'] ?? '');
                   final date = parsedDate?.toLocal().toString().split('.')[0] ?? 'Unknown';
                   final isScheduled = a['status'] == 'Scheduled';
@@ -1240,6 +1293,14 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
                                 Text(a['student_name'] ?? 'Unknown', style: GoogleFonts.readexPro(fontSize: 16, fontWeight: FontWeight.bold)),
+                                const SizedBox(height: 4),
+                                Text(
+                                  "Student ID: ${a['student_id'] ?? '—'}  •  Matric No: ${a['matric_no'] ?? 'Not provided'}",
+                                  style: GoogleFonts.readexPro(
+                                    fontSize: 13,
+                                    color: Colors.blueGrey.shade700,
+                                  ),
+                                ),
                                 const SizedBox(height: 4),
                                 Row(
                                   children: [
@@ -1401,6 +1462,14 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text("${r['student_name']} - ${r['equipment_name']}", style: GoogleFonts.readexPro(fontSize: 16, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 4),
+                      Text(
+                        "Student ID: ${r['student_id'] ?? '—'}  •  Matric No: ${r['matric_no'] ?? 'Not provided'}",
+                        style: GoogleFonts.readexPro(
+                          fontSize: 13,
+                          color: Colors.blueGrey.shade700,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Row(
                         children: [

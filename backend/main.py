@@ -467,6 +467,9 @@ def get_admin_rentals(db: Session = Depends(get_db)):
     result = []
     for r in rentals:
         student_user = db.query(models.User).filter(models.User.user_id == r.student_id).first()
+        student = db.query(models.Student).filter(
+            models.Student.student_id == r.student_id
+        ).first()
         equipment = db.query(models.Equipment).filter(models.Equipment.equipment_id == r.equipment_id).first()
         reason = db.query(models.RentalReason).filter(models.RentalReason.rental_reason_id == r.rental_reason_id).first()
         
@@ -474,6 +477,7 @@ def get_admin_rentals(db: Session = Depends(get_db)):
             "rental_record_id": r.rental_record_id,
             "student_id": r.student_id,
             "student_name": student_user.username if student_user else "Unknown",
+            "matric_no": student.matric_no if student else None,
             "admin_id": r.admin_id,
             "equipment_id": r.equipment_id,
             "equipment_name": equipment.name if equipment else "Unknown",
@@ -1329,18 +1333,22 @@ def get_physio_patient_progress(
 @app.get("/physio/appointments/{physio_id}")
 def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
     appointments = db.query(
-        models.Appointment, models.User.username
+        models.Appointment, models.User.username, models.Student.matric_no
     ).join(
         models.User, models.Appointment.student_id == models.User.user_id
+    ).join(
+        models.Student, models.Appointment.student_id == models.Student.student_id
     ).filter(
         models.Appointment.therapist_id == physio_id
     ).order_by(models.Appointment.schedule_time).all()
     
     result = []
-    for appt, username in appointments:
+    for appt, username, matric_no in appointments:
         result.append({
             "appointment_id": appt.appointment_id,
+            "student_id": appt.student_id,
             "student_name": username,
+            "matric_no": matric_no,
             "schedule_time": appt.schedule_time,
             "status": appt.status,
             "evaluation": appt.evaluation
@@ -1401,9 +1409,15 @@ def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
         return {"rentals": []}
 
     rentals = db.query(
-        models.RentalRecord, models.User.username, models.Equipment.name, models.RentalReason.description
+        models.RentalRecord,
+        models.User.username,
+        models.Student.matric_no,
+        models.Equipment.name,
+        models.RentalReason.description
     ).join(
         models.User, models.RentalRecord.student_id == models.User.user_id
+    ).join(
+        models.Student, models.RentalRecord.student_id == models.Student.student_id
     ).join(
         models.Equipment, models.RentalRecord.equipment_id == models.Equipment.equipment_id
     ).outerjoin(
@@ -1413,14 +1427,16 @@ def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
     ).order_by(models.RentalRecord.collection_date.desc()).all()
     
     result = []
-    for r, username, eq_name, reason_desc in rentals:
+    for r, username, matric_no, eq_name, reason_desc in rentals:
         final_reason = reason_desc if reason_desc else "No reason provided"
         if r.custom_reason:
             final_reason = f"{final_reason}: {r.custom_reason}"
             
         result.append({
             "rental_record_id": r.rental_record_id,
+            "student_id": r.student_id,
             "student_name": username,
+            "matric_no": matric_no,
             "equipment_name": eq_name,
             "collection_date": r.collection_date,
             "collection_method": r.collection_method,
