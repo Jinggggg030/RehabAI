@@ -17,9 +17,9 @@ class RecordSessionDialog extends StatefulWidget {
 class _RecordSessionDialogState extends State<RecordSessionDialog> {
   final _prescriptionController = TextEditingController();
   final _evaluationController = TextEditingController();
-  
+
   List<dynamic> _availableExercises = [];
-  List<Map<String, dynamic>> _selectedExercises = [];
+  final List<Map<String, dynamic>> _selectedExercises = [];
   bool _isLoading = true;
   bool _isSubmitting = false;
 
@@ -31,7 +31,9 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
 
   Future<void> _fetchExercises() async {
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
       final res = await http.get(Uri.parse('$apiUrl/exercises'));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -52,40 +54,70 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
       _selectedExercises.add({
         "exercise_id": _availableExercises.first['exercise_id'],
         "assigned_sets": 3,
-        "assigned_duration": 15,
-        "evaluation": ""
+        "assigned_duration": 30,
+        "assigned_reps": 10,
+        "assigned_days": 7,
+        "assigned_tracking_mode": "duration",
+        "evaluation": "",
       });
     });
   }
 
   Future<void> _submitSession() async {
     if (_prescriptionController.text.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please enter a prescription/diagnosis.')));
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please enter a prescription/diagnosis.')),
+      );
+      return;
+    }
+    final invalidExercise = _selectedExercises.any((exercise) {
+      final mode = exercise['assigned_tracking_mode']?.toString() ?? 'duration';
+      final target = mode == 'reps'
+          ? exercise['assigned_reps']
+          : exercise['assigned_duration'];
+      return (exercise['assigned_sets'] as int? ?? 0) < 1 ||
+          (exercise['assigned_days'] as int? ?? 0) < 1 ||
+          (target as int? ?? 0) < 1;
+    });
+    if (invalidExercise) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Exercise days, sets, and target must be at least 1.'),
+        ),
+      );
       return;
     }
 
     setState(() => _isSubmitting = true);
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
       final payload = {
         "prescription": _prescriptionController.text,
-        "evaluation": _evaluationController.text.isNotEmpty ? _evaluationController.text : null,
-        "exercises": _selectedExercises
+        "evaluation": _evaluationController.text.isNotEmpty
+            ? _evaluationController.text
+            : null,
+        "exercises": _selectedExercises,
       };
-      
+
       final res = await http.post(
-        Uri.parse('$apiUrl/physio/appointments/${widget.appointment['appointment_id']}/prescribe'),
+        Uri.parse(
+          '$apiUrl/physio/appointments/${widget.appointment['appointment_id']}/prescribe',
+        ),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(payload),
       );
-      
+
       if (res.statusCode == 200) {
         if (mounted) {
           Navigator.pop(context, true); // Return true to indicate success
         }
       } else {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed: ${res.body}')));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Failed: ${res.body}')));
         }
       }
     } catch (e) {
@@ -95,10 +127,30 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
     }
   }
 
+  Map<String, dynamic>? _exerciseDetails(int? exerciseId) {
+    for (final item in _availableExercises) {
+      if (item['exercise_id'] == exerciseId) {
+        return Map<String, dynamic>.from(item);
+      }
+    }
+    return null;
+  }
+
+  bool _supportsTrackingChoice(Map<String, dynamic>? exercise) {
+    final aiType = exercise?['ai_type']?.toString().toLowerCase();
+    return exercise?['requires_ai'] == true &&
+        (aiType == 'rep_count' || aiType == 'rep_counter');
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) {
-      return const AlertDialog(content: SizedBox(height: 100, child: Center(child: CircularProgressIndicator())));
+      return const AlertDialog(
+        content: SizedBox(
+          height: 100,
+          child: Center(child: CircularProgressIndicator()),
+        ),
+      );
     }
 
     return Dialog(
@@ -113,12 +165,25 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text("Record Session", style: GoogleFonts.readexPro(fontSize: 22, fontWeight: FontWeight.bold, color: Colors.blue.shade900)),
-                IconButton(icon: const Icon(Icons.close), onPressed: () => Navigator.pop(context)),
+                Text(
+                  "Record Session",
+                  style: GoogleFonts.readexPro(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.blue.shade900,
+                  ),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.close),
+                  onPressed: () => Navigator.pop(context),
+                ),
               ],
             ),
             const SizedBox(height: 8),
-            Text("Patient: ${widget.appointment['student_name']}", style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+            Text(
+              "Patient: ${widget.appointment['student_name']}",
+              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
             const Divider(),
             Expanded(
               child: SingleChildScrollView(
@@ -148,24 +213,45 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text("Assigned Exercises", style: GoogleFonts.readexPro(fontSize: 18, fontWeight: FontWeight.bold)),
+                        Text(
+                          "Assigned Exercises",
+                          style: GoogleFonts.readexPro(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                         TextButton.icon(
                           onPressed: _addExercise,
                           icon: const Icon(Icons.add),
                           label: const Text("Add Exercise"),
-                        )
+                        ),
                       ],
                     ),
                     const SizedBox(height: 8),
                     if (_selectedExercises.isEmpty)
-                      const Text("No exercises assigned yet.", style: TextStyle(color: Colors.grey))
+                      const Text(
+                        "No exercises assigned yet.",
+                        style: TextStyle(color: Colors.grey),
+                      )
                     else
                       ..._selectedExercises.asMap().entries.map((entry) {
                         int index = entry.key;
                         Map<String, dynamic> ex = entry.value;
+                        final exerciseDetails = _exerciseDetails(
+                          ex['exercise_id'] as int?,
+                        );
+                        final canChooseTracking = _supportsTrackingChoice(
+                          exerciseDetails,
+                        );
+                        final trackingMode = canChooseTracking
+                            ? (ex['assigned_tracking_mode']?.toString() ??
+                                  'duration')
+                            : 'duration';
                         return Card(
                           margin: const EdgeInsets.only(bottom: 12),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                           child: Padding(
                             padding: const EdgeInsets.all(12),
                             child: Column(
@@ -174,25 +260,49 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                                   children: [
                                     Expanded(
                                       child: DropdownButtonFormField<int>(
-                                        decoration: const InputDecoration(labelText: 'Select Exercise', isDense: true),
-                                        value: ex['exercise_id'],
-                                        items: _availableExercises.map<DropdownMenuItem<int>>((a) {
-                                          return DropdownMenuItem<int>(
-                                            value: a['exercise_id'],
-                                            child: Text(a['name'] ?? 'Unknown'),
-                                          );
-                                        }).toList(),
+                                        key: ValueKey('exercise-$index'),
+                                        decoration: const InputDecoration(
+                                          labelText: 'Select Exercise',
+                                          isDense: true,
+                                        ),
+                                        initialValue: ex['exercise_id'],
+                                        items: _availableExercises
+                                            .map<DropdownMenuItem<int>>((a) {
+                                              return DropdownMenuItem<int>(
+                                                value: a['exercise_id'],
+                                                child: Text(
+                                                  a['name'] ?? 'Unknown',
+                                                ),
+                                              );
+                                            })
+                                            .toList(),
                                         onChanged: (val) {
-                                          setState(() => _selectedExercises[index]['exercise_id'] = val!);
+                                          setState(() {
+                                            _selectedExercises[index]['exercise_id'] =
+                                                val!;
+                                            if (!_supportsTrackingChoice(
+                                              _exerciseDetails(val),
+                                            )) {
+                                              _selectedExercises[index]['assigned_tracking_mode'] =
+                                                  'duration';
+                                            }
+                                          });
                                         },
                                       ),
                                     ),
                                     IconButton(
-                                      icon: const Icon(Icons.delete, color: Colors.red),
+                                      icon: const Icon(
+                                        Icons.delete,
+                                        color: Colors.red,
+                                      ),
                                       onPressed: () {
-                                        setState(() => _selectedExercises.removeAt(index));
+                                        setState(
+                                          () => _selectedExercises.removeAt(
+                                            index,
+                                          ),
+                                        );
                                       },
-                                    )
+                                    ),
                                   ],
                                 ),
                                 const SizedBox(height: 12),
@@ -200,29 +310,110 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                                   children: [
                                     Expanded(
                                       child: TextFormField(
-                                        initialValue: ex['assigned_sets'].toString(),
-                                        decoration: const InputDecoration(labelText: 'Sets', isDense: true),
+                                        key: ValueKey(
+                                          'days-$index-${ex['exercise_id']}',
+                                        ),
+                                        initialValue: ex['assigned_days']
+                                            .toString(),
+                                        decoration: const InputDecoration(
+                                          labelText: 'Plan length (days)',
+                                          isDense: true,
+                                        ),
                                         keyboardType: TextInputType.number,
-                                        onChanged: (val) => _selectedExercises[index]['assigned_sets'] = int.tryParse(val) ?? 0,
+                                        onChanged: (val) =>
+                                            _selectedExercises[index]['assigned_days'] =
+                                                int.tryParse(val) ?? 0,
                                       ),
                                     ),
                                     const SizedBox(width: 12),
                                     Expanded(
                                       child: TextFormField(
-                                        initialValue: ex['assigned_duration'].toString(),
-                                        decoration: const InputDecoration(labelText: 'Duration (secs)', isDense: true),
+                                        key: ValueKey(
+                                          'sets-$index-${ex['exercise_id']}',
+                                        ),
+                                        initialValue: ex['assigned_sets']
+                                            .toString(),
+                                        decoration: const InputDecoration(
+                                          labelText: 'Sets',
+                                          isDense: true,
+                                        ),
                                         keyboardType: TextInputType.number,
-                                        onChanged: (val) => _selectedExercises[index]['assigned_duration'] = int.tryParse(val) ?? 0,
+                                        onChanged: (val) =>
+                                            _selectedExercises[index]['assigned_sets'] =
+                                                int.tryParse(val) ?? 0,
                                       ),
                                     ),
                                   ],
                                 ),
                                 const SizedBox(height: 12),
+                                if (canChooseTracking) ...[
+                                  DropdownButtonFormField<String>(
+                                    key: ValueKey(
+                                      'mode-$index-${ex['exercise_id']}-$trackingMode',
+                                    ),
+                                    initialValue: trackingMode,
+                                    decoration: const InputDecoration(
+                                      labelText: 'Track each set by',
+                                      isDense: true,
+                                    ),
+                                    items: const [
+                                      DropdownMenuItem(
+                                        value: 'reps',
+                                        child: Text('Repetitions'),
+                                      ),
+                                      DropdownMenuItem(
+                                        value: 'duration',
+                                        child: Text('Duration'),
+                                      ),
+                                    ],
+                                    onChanged: (value) {
+                                      if (value != null) {
+                                        setState(
+                                          () =>
+                                              _selectedExercises[index]['assigned_tracking_mode'] =
+                                                  value,
+                                        );
+                                      }
+                                    },
+                                  ),
+                                  const SizedBox(height: 12),
+                                ],
+                                TextFormField(
+                                  key: ValueKey(
+                                    'target-$index-$trackingMode-${ex['exercise_id']}',
+                                  ),
+                                  initialValue: trackingMode == 'reps'
+                                      ? ex['assigned_reps'].toString()
+                                      : ex['assigned_duration'].toString(),
+                                  decoration: InputDecoration(
+                                    labelText: trackingMode == 'reps'
+                                        ? 'Repetitions per set'
+                                        : 'Duration per set (seconds)',
+                                    isDense: true,
+                                  ),
+                                  keyboardType: TextInputType.number,
+                                  onChanged: (val) {
+                                    final parsed = int.tryParse(val) ?? 0;
+                                    if (trackingMode == 'reps') {
+                                      _selectedExercises[index]['assigned_reps'] =
+                                          parsed;
+                                    } else {
+                                      _selectedExercises[index]['assigned_duration'] =
+                                          parsed;
+                                    }
+                                  },
+                                ),
+                                const SizedBox(height: 12),
                                 TextFormField(
                                   initialValue: ex['evaluation'],
-                                  decoration: const InputDecoration(labelText: 'Exercise Notes/Goals', isDense: true),
-                                  onChanged: (val) => _selectedExercises[index]['evaluation'] = val,
-                                )
+                                  decoration: const InputDecoration(
+                                    labelText: 'Exercise Notes/Goals',
+                                    isDense: true,
+                                  ),
+                                  onChanged: (val) =>
+                                      _selectedExercises[index]['evaluation'] =
+                                          val,
+                                ),
                               ],
                             ),
                           ),
@@ -243,11 +434,23 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                 const SizedBox(width: 16),
                 ElevatedButton(
                   onPressed: _isSubmitting ? null : _submitSession,
-                  style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade800, foregroundColor: Colors.white),
-                  child: _isSubmitting ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white)) : const Text("Submit Session"),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blue.shade800,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: _isSubmitting
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                            color: Colors.white,
+                          ),
+                        )
+                      : const Text("Submit Session"),
                 ),
               ],
-            )
+            ),
           ],
         ),
       ),

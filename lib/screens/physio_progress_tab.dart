@@ -532,21 +532,23 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
                   final last = DateTime.tryParse(
                     exercise['last_completed']?.toString() ?? '',
                   );
-                  final source =
-                      exercise['source']?.toString() ?? 'Assigned';
+                  final source = exercise['source']?.toString() ?? 'Assigned';
                   return DataRow(
                     cells: [
                       DataCell(
                         Text(exercise['name']?.toString() ?? 'Exercise'),
                       ),
-                      DataCell(
-                        _SourceChip(source),
-                      ),
+                      DataCell(_SourceChip(source)),
                       DataCell(
                         Text(
                           source == 'Assigned'
-                              ? '${exercise['assigned_sets'] ?? 0} × '
-                                    '${exercise['assigned_duration'] ?? 0}s'
+                              ? exercise['assigned_tracking_mode'] == 'reps'
+                                    ? '${exercise['assigned_sets'] ?? 0} × '
+                                          '${exercise['assigned_reps'] ?? 0} reps '
+                                          'for ${exercise['assigned_days'] ?? 1} days'
+                                    : '${exercise['assigned_sets'] ?? 0} × '
+                                          '${exercise['assigned_duration'] ?? 0}s '
+                                          'for ${exercise['assigned_days'] ?? 1} days'
                               : 'Patient selected',
                         ),
                       ),

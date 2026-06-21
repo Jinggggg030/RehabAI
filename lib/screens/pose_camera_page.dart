@@ -61,9 +61,25 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
   }
 
   Future<void> _configureSession() async {
+    final prescribed =
+        widget.exercise['session_origin']?.toString().toLowerCase() ==
+        'assigned';
+    final prescribedMode =
+        widget.exercise['assigned_tracking_mode']?.toString().toLowerCase() ==
+            'reps'
+        ? AiTrackingMode.reps
+        : AiTrackingMode.duration;
+    final prescribedTarget = prescribedMode == AiTrackingMode.reps
+        ? _readPositiveInt(widget.exercise['assigned_reps'])
+        : _readPositiveInt(widget.exercise['assigned_duration']);
     final config = await showAiSessionSetupDialog(
       context,
-      defaultMode: AiTrackingMode.duration,
+      defaultMode: prescribed ? prescribedMode : AiTrackingMode.duration,
+      initialTarget: prescribed ? prescribedTarget : null,
+      initialSets: prescribed
+          ? _readPositiveInt(widget.exercise['assigned_sets'])
+          : null,
+      prescribedSettings: prescribed,
     );
     if (!mounted || config == null) return;
     final exerciseId = _readExerciseId();
@@ -94,6 +110,13 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
         widget.exercise['id'];
     if (rawId is num) return rawId.toInt();
     return int.tryParse(rawId?.toString().trim() ?? '');
+  }
+
+  int? _readPositiveInt(dynamic value) {
+    final parsed = value is num
+        ? value.toInt()
+        : int.tryParse(value?.toString() ?? '');
+    return parsed != null && parsed > 0 ? parsed : null;
   }
 
   Future<void> _initializeCamera() async {

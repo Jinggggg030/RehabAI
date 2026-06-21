@@ -565,48 +565,33 @@ class _RehabilitationExercisesPageState
           if (tabType == 'MyExercises' &&
               exercise['_source'] == 'assigned') ...[
             const SizedBox(height: 8),
-            Row(
+            Wrap(
+              spacing: 14,
+              runSpacing: 8,
               children: [
-                Icon(
+                _buildInfoItem(
                   Icons.calendar_today,
-                  size: 12,
-                  color: Colors.grey.shade600,
-                ),
-                const SizedBox(width: 4),
-                Text(
                   exercise['assigned_date'] != null
                       ? DateFormat(
                           'MMM dd, yyyy',
                         ).format(DateTime.parse(exercise['assigned_date']))
                       : 'Unknown date',
-                  style: GoogleFonts.readexPro(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
                 ),
-                const SizedBox(width: 12),
-                Icon(Icons.repeat, size: 12, color: Colors.grey.shade600),
-                const SizedBox(width: 4),
-                Text(
+                _buildInfoItem(
+                  Icons.date_range_outlined,
+                  '${exercise['assigned_days'] ?? 1} days',
+                ),
+                _buildInfoItem(
+                  Icons.layers_outlined,
                   '${exercise['assigned_sets'] ?? 0} Sets',
-                  style: GoogleFonts.readexPro(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
                 ),
-                const SizedBox(width: 12),
-                Icon(
-                  Icons.timer_outlined,
-                  size: 12,
-                  color: Colors.grey.shade600,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  '${exercise['assigned_duration'] ?? 0} Reps/Mins',
-                  style: GoogleFonts.readexPro(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                  ),
+                _buildInfoItem(
+                  exercise['assigned_tracking_mode'] == 'reps'
+                      ? Icons.repeat
+                      : Icons.timer_outlined,
+                  exercise['assigned_tracking_mode'] == 'reps'
+                      ? '${exercise['assigned_reps'] ?? 0} reps per set'
+                      : '${exercise['assigned_duration'] ?? 0} sec per set',
                 ),
               ],
             ),

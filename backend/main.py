@@ -23,6 +23,19 @@ with engine.begin() as connection:
         'ALTER TABLE "Session_Log" '
         'ADD COLUMN IF NOT EXISTS session_origin VARCHAR(20)'
     ))
+    connection.execute(text(
+        'ALTER TABLE "Prescribed_Exercise" '
+        'ADD COLUMN IF NOT EXISTS assigned_reps INTEGER'
+    ))
+    connection.execute(text(
+        'ALTER TABLE "Prescribed_Exercise" '
+        'ADD COLUMN IF NOT EXISTS assigned_days INTEGER NOT NULL DEFAULT 1'
+    ))
+    connection.execute(text(
+        'ALTER TABLE "Prescribed_Exercise" '
+        "ADD COLUMN IF NOT EXISTS assigned_tracking_mode VARCHAR(20) "
+        "NOT NULL DEFAULT 'duration'"
+    ))
 
 app = FastAPI(title="Rehab AI Backend")
 
@@ -664,6 +677,9 @@ def get_prescribed_exercises(student_id: int, db: Session = Depends(get_db)):
                 "prescribed_exercise_id": pe.prescribed_exercise_id,
                 "assigned_sets": pe.assigned_sets,
                 "assigned_duration": pe.assigned_duration,
+                "assigned_reps": pe.assigned_reps,
+                "assigned_days": pe.assigned_days,
+                "assigned_tracking_mode": pe.assigned_tracking_mode,
                 "assigned_date": active_appointment.schedule_time.isoformat() if active_appointment.schedule_time else None
             })
     return {"exercises": result}
@@ -1081,6 +1097,10 @@ def get_physio_patients(physio_id: int, db: Session = Depends(get_db)):
                     "id": px.prescribed_exercise_id,
                     "name": ename,
                     "assigned_sets": px.assigned_sets,
+                    "assigned_duration": px.assigned_duration,
+                    "assigned_reps": px.assigned_reps,
+                    "assigned_days": px.assigned_days,
+                    "assigned_tracking_mode": px.assigned_tracking_mode,
                     "evaluation": px.evaluation
                 })
                 
@@ -1131,6 +1151,9 @@ def get_physio_patient_progress(
             "name": exercise.name,
             "assigned_sets": prescribed.assigned_sets,
             "assigned_duration": prescribed.assigned_duration,
+            "assigned_reps": prescribed.assigned_reps,
+            "assigned_days": prescribed.assigned_days,
+            "assigned_tracking_mode": prescribed.assigned_tracking_mode,
             "evaluation": prescribed.evaluation
         }
 
@@ -1359,6 +1382,9 @@ class AssignedExercise(BaseModel):
     exercise_id: int
     assigned_sets: int
     assigned_duration: int
+    assigned_reps: int | None = None
+    assigned_days: int = 1
+    assigned_tracking_mode: str = "duration"
     evaluation: str | None = None
 
 class RecordSessionReq(BaseModel):
@@ -1380,11 +1406,23 @@ def record_session(appointment_id: int, req: RecordSessionReq, db: Session = Dep
     db.query(models.PrescribedExercise).filter(models.PrescribedExercise.appointment_id == appointment_id).delete()
     
     for ex in req.exercises:
+        tracking_mode = ex.assigned_tracking_mode.strip().lower()
+        if tracking_mode not in {"duration", "reps"}:
+            raise HTTPException(status_code=422, detail="Tracking mode must be duration or reps")
+        if ex.assigned_sets < 1 or ex.assigned_days < 1:
+            raise HTTPException(status_code=422, detail="Sets and plan days must be at least 1")
+        if tracking_mode == "duration" and ex.assigned_duration < 1:
+            raise HTTPException(status_code=422, detail="Duration must be at least 1 second")
+        if tracking_mode == "reps" and (ex.assigned_reps is None or ex.assigned_reps < 1):
+            raise HTTPException(status_code=422, detail="Repetitions must be at least 1")
         pe = models.PrescribedExercise(
             appointment_id=appointment_id,
             exercise_id=ex.exercise_id,
             assigned_sets=ex.assigned_sets,
             assigned_duration=ex.assigned_duration,
+            assigned_reps=ex.assigned_reps,
+            assigned_days=ex.assigned_days,
+            assigned_tracking_mode=tracking_mode,
             evaluation=ex.evaluation
         )
         db.add(pe)

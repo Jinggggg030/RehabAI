@@ -192,6 +192,9 @@ class PrescribedExercise(Base):
     
     assigned_sets = Column(Integer, nullable=False)
     assigned_duration = Column(Integer, nullable=False)
+    assigned_reps = Column(Integer, nullable=True)
+    assigned_days = Column(Integer, nullable=False, default=1)
+    assigned_tracking_mode = Column(String(20), nullable=False, default="duration")
     evaluation = Column(Text, nullable=True)
 
 class AIFeedback(Base):

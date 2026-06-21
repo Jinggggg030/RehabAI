@@ -55,9 +55,25 @@ class _RepCounterPageState extends State<RepCounterPage> {
   }
 
   Future<void> _configureSession() async {
+    final prescribed =
+        widget.exercise['session_origin']?.toString().toLowerCase() ==
+        'assigned';
+    final prescribedMode =
+        widget.exercise['assigned_tracking_mode']?.toString().toLowerCase() ==
+            'reps'
+        ? AiTrackingMode.reps
+        : AiTrackingMode.duration;
+    final prescribedTarget = prescribedMode == AiTrackingMode.duration
+        ? _readPositiveInt(widget.exercise['assigned_duration'])
+        : _readPositiveInt(widget.exercise['assigned_reps']);
     final config = await showAiSessionSetupDialog(
       context,
-      defaultMode: AiTrackingMode.reps,
+      defaultMode: prescribed ? prescribedMode : AiTrackingMode.reps,
+      initialTarget: prescribed ? prescribedTarget : null,
+      initialSets: prescribed
+          ? _readPositiveInt(widget.exercise['assigned_sets'])
+          : null,
+      prescribedSettings: prescribed,
     );
     if (!mounted || config == null) return;
     final analyzer = await MovementAnalyzer.create(
@@ -77,6 +93,13 @@ class _RepCounterPageState extends State<RepCounterPage> {
           : 'No automatic rep rule is configured for this exercise.';
     });
     await _initializeCamera();
+  }
+
+  int? _readPositiveInt(dynamic value) {
+    final parsed = value is num
+        ? value.toInt()
+        : int.tryParse(value?.toString() ?? '');
+    return parsed != null && parsed > 0 ? parsed : null;
   }
 
   Future<void> _initializeCamera() async {

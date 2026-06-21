@@ -20,11 +20,16 @@ class AiSessionConfig {
 Future<AiSessionConfig?> showAiSessionSetupDialog(
   BuildContext context, {
   required AiTrackingMode defaultMode,
+  int? initialTarget,
+  int? initialSets,
+  bool prescribedSettings = false,
 }) {
   var mode = defaultMode;
-  var durationSeconds = 30;
-  var targetReps = 10;
-  var sets = 3;
+  var durationSeconds = mode == AiTrackingMode.duration
+      ? (initialTarget ?? 30)
+      : 30;
+  var targetReps = mode == AiTrackingMode.reps ? (initialTarget ?? 10) : 10;
+  var sets = initialSets ?? 3;
   var painBefore = 0;
 
   return showDialog<AiSessionConfig>(
@@ -49,8 +54,8 @@ Future<AiSessionConfig?> showAiSessionSetupDialog(
         Widget stepper({
           required String label,
           required String value,
-          required VoidCallback decrease,
-          required VoidCallback increase,
+          required VoidCallback? decrease,
+          required VoidCallback? increase,
         }) {
           return Column(
             children: [
@@ -98,6 +103,21 @@ Future<AiSessionConfig?> showAiSessionSetupDialog(
                   style: GoogleFonts.readexPro(fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(height: 10),
+                if (prescribedSettings) ...[
+                  Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF207866).withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Text(
+                      'These exercise targets were set by your physiotherapist.',
+                      textAlign: TextAlign.center,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                ],
                 SegmentedButton<AiTrackingMode>(
                   segments: const [
                     ButtonSegment(
@@ -112,31 +132,45 @@ Future<AiSessionConfig?> showAiSessionSetupDialog(
                     ),
                   ],
                   selected: {mode},
-                  onSelectionChanged: (selection) {
-                    setDialogState(() => mode = selection.first);
-                  },
+                  onSelectionChanged: prescribedSettings
+                      ? null
+                      : (selection) {
+                          setDialogState(() => mode = selection.first);
+                        },
                 ),
                 const SizedBox(height: 20),
                 if (mode == AiTrackingMode.duration)
                   stepper(
                     label: 'Duration per set',
                     value: '$durationSeconds sec',
-                    decrease: () => updateValue('duration', -15),
-                    increase: () => updateValue('duration', 15),
+                    decrease: prescribedSettings
+                        ? null
+                        : () => updateValue('duration', -15),
+                    increase: prescribedSettings
+                        ? null
+                        : () => updateValue('duration', 15),
                   )
                 else
                   stepper(
                     label: 'Repetitions per set',
                     value: '$targetReps reps',
-                    decrease: () => updateValue('reps', -1),
-                    increase: () => updateValue('reps', 1),
+                    decrease: prescribedSettings
+                        ? null
+                        : () => updateValue('reps', -1),
+                    increase: prescribedSettings
+                        ? null
+                        : () => updateValue('reps', 1),
                   ),
                 const Divider(height: 28),
                 stepper(
                   label: 'Number of sets',
                   value: '$sets sets',
-                  decrease: () => updateValue('sets', -1),
-                  increase: () => updateValue('sets', 1),
+                  decrease: prescribedSettings
+                      ? null
+                      : () => updateValue('sets', -1),
+                  increase: prescribedSettings
+                      ? null
+                      : () => updateValue('sets', 1),
                 ),
                 const Divider(height: 28),
                 Text(
