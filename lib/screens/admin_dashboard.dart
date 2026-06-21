@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:rehab_ai/screens/login_page.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
@@ -320,56 +321,6 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
-  Widget _buildRentalRequests() {
-    final pending = _rentals.where((r) => r['status'] == 'Pending').toList();
-    if (_isLoading && pending.isEmpty) return const Center(child: CircularProgressIndicator());
-    if (pending.isEmpty) return Center(child: Text("No pending rental requests.", style: GoogleFonts.readexPro()));
-
-    return ListView.builder(
-      padding: const EdgeInsets.all(16),
-      itemCount: pending.length,
-      itemBuilder: (context, index) {
-        final r = pending[index];
-        return Card(
-          margin: const EdgeInsets.only(bottom: 12),
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text("Student: ${r['student_name']}", style: GoogleFonts.readexPro(fontSize: 16, fontWeight: FontWeight.bold)),
-                const SizedBox(height: 4),
-                Text("Equipment: ${r['equipment_name']}", style: GoogleFonts.readexPro(fontSize: 14, color: Colors.black87)),
-                const SizedBox(height: 4),
-                Text("Reason: ${r['custom_reason'] ?? r['rental_reason']}", style: GoogleFonts.readexPro(fontSize: 14, color: Colors.grey.shade700)),
-                const SizedBox(height: 4),
-                Text("Duration: ${r['rental_duration']} days", style: GoogleFonts.readexPro(fontSize: 14, color: Colors.grey.shade700)),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 8,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.orange.shade50,
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    'Awaiting physiotherapist approval',
-                    style: GoogleFonts.readexPro(
-                      color: Colors.orange.shade900,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   Widget _buildActiveRentals() {
     final active = _rentals.where((r) => r['status'] == 'Approved' || r['status'] == 'Active').toList();
     if (_isLoading && active.isEmpty) return const Center(child: CircularProgressIndicator());
@@ -435,16 +386,67 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final nameController = TextEditingController(text: eq?['name'] ?? '');
     final descController = TextEditingController(text: eq?['description'] ?? '');
     final stockController = TextEditingController(text: (eq?['stock'] ?? 0).toString());
+    XFile? selectedImage;
+    Uint8List? selectedImageBytes;
 
     showDialog(
       context: context,
       builder: (context) {
-        return AlertDialog(
-          title: Text(eq == null ? 'Add Equipment' : 'Edit Equipment', style: GoogleFonts.readexPro(fontWeight: FontWeight.bold)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
+        return StatefulBuilder(
+          builder: (context, setDialogState) => AlertDialog(
+            title: Text(eq == null ? 'Add Equipment' : 'Edit Equipment', style: GoogleFonts.readexPro(fontWeight: FontWeight.bold)),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    height: 150,
+                    width: double.infinity,
+                    clipBehavior: Clip.antiAlias,
+                    decoration: BoxDecoration(
+                      color: Colors.grey.shade100,
+                      borderRadius: BorderRadius.circular(10),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: selectedImageBytes != null
+                        ? Image.memory(selectedImageBytes!, fit: BoxFit.cover)
+                        : eq?['image'] != null &&
+                              eq!['image'].toString().isNotEmpty
+                        ? Image.network(
+                            eq['image'],
+                            fit: BoxFit.cover,
+                            errorBuilder: (_, _, _) => const Icon(
+                              Icons.image_not_supported_outlined,
+                              size: 42,
+                              color: Colors.grey,
+                            ),
+                          )
+                        : const Icon(
+                            Icons.inventory_2_outlined,
+                            size: 48,
+                            color: Colors.grey,
+                          ),
+                  ),
+                  const SizedBox(height: 8),
+                  OutlinedButton.icon(
+                    onPressed: () async {
+                      final image = await _picker.pickImage(
+                        source: ImageSource.gallery,
+                        imageQuality: 80,
+                      );
+                      if (image == null) return;
+                      final bytes = await image.readAsBytes();
+                      setDialogState(() {
+                        selectedImage = image;
+                        selectedImageBytes = bytes;
+                      });
+                    },
+                    icon: const Icon(Icons.upload_file),
+                    label: Text(
+                      eq == null ? 'Upload Equipment Photo' : 'Replace Photo',
+                    ),
+                  ),
+                  const SizedBox(height: 8),
                 TextField(
                   controller: nameController,
                   decoration: const InputDecoration(labelText: 'Name'),
@@ -461,10 +463,10 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   decoration: const InputDecoration(labelText: 'Stock'),
                   keyboardType: TextInputType.number,
                 ),
-              ],
+                ],
+              ),
             ),
-          ),
-          actions: [
+            actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
               child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
@@ -475,11 +477,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 setState(() => _isLoading = true);
                 try {
                   final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+                  var imageUrl = eq?['image']?.toString();
+                  if (selectedImage != null) {
+                    imageUrl = await _uploadEquipmentImage(selectedImage!);
+                  }
                   final body = jsonEncode({
                     'name': nameController.text,
                     'description': descController.text,
                     'stock': int.tryParse(stockController.text) ?? 0,
                     'admin_id': _myUserId,
+                    'image': imageUrl,
                   });
                   http.Response res;
                   if (eq == null) {
@@ -500,9 +507,28 @@ class _AdminDashboardState extends State<AdminDashboard> {
               style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF207866), foregroundColor: Colors.white),
               child: const Text('Save'),
             ),
-          ],
+            ],
+          ),
         );
       }
+    );
+  }
+
+  Future<String> _uploadEquipmentImage(XFile image) async {
+    final bytes = await image.readAsBytes();
+    final extension = image.name.contains('.')
+        ? image.name.split('.').last
+        : 'jpg';
+    final fileName =
+        'equipment_${DateTime.now().millisecondsSinceEpoch}.$extension';
+    await _supabase.storage.from('equipment_image').uploadBinary(
+      fileName,
+      bytes,
+      fileOptions: const FileOptions(cacheControl: '3600', upsert: false),
+    );
+    return _supabase.storage.from('equipment_image').createSignedUrl(
+      fileName,
+      60 * 60 * 24 * 365 * 10,
     );
   }
 
@@ -534,6 +560,42 @@ class _AdminDashboardState extends State<AdminDashboard> {
             return Card(
               margin: const EdgeInsets.only(bottom: 12),
               child: ListTile(
+                leading: Container(
+                  width: 64,
+                  height: 64,
+                  clipBehavior: Clip.antiAlias,
+                  decoration: BoxDecoration(
+                    color: Colors.grey.shade100,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(color: Colors.grey.shade300),
+                  ),
+                  child: eq['image'] != null &&
+                          eq['image'].toString().isNotEmpty
+                      ? Image.network(
+                          eq['image'],
+                          fit: BoxFit.cover,
+                          loadingBuilder: (context, child, progress) =>
+                              progress == null
+                                  ? child
+                                  : const Center(
+                                      child: SizedBox(
+                                        width: 20,
+                                        height: 20,
+                                        child: CircularProgressIndicator(
+                                          strokeWidth: 2,
+                                        ),
+                                      ),
+                                    ),
+                          errorBuilder: (_, _, _) => const Icon(
+                            Icons.image_not_supported_outlined,
+                            color: Colors.grey,
+                          ),
+                        )
+                      : const Icon(
+                          Icons.inventory_2_outlined,
+                          color: Colors.grey,
+                        ),
+                ),
                 title: Text(eq['name'], style: GoogleFonts.readexPro(fontWeight: FontWeight.bold)),
                 subtitle: Text("Stock: ${eq['stock']}\n${eq['description'] ?? ''}", style: GoogleFonts.readexPro(fontSize: 12, color: Colors.grey.shade600)),
                 isThreeLine: true,
@@ -616,19 +678,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
             unselectedIconTheme: const IconThemeData(color: Colors.black54),
             selectedLabelTextStyle: GoogleFonts.readexPro(color: const Color(0xFF207866), fontWeight: FontWeight.bold),
             unselectedLabelTextStyle: GoogleFonts.readexPro(color: Colors.black54, fontWeight: FontWeight.w500),
-            destinations: [
+            destinations: const [
               NavigationRailDestination(
-                icon: Badge(
-                  isLabelVisible: _rentals.any((r) => r['status'] == 'Pending'),
-                  child: const Icon(Icons.assignment_late_outlined),
-                ),
-                selectedIcon: Badge(
-                  isLabelVisible: _rentals.any((r) => r['status'] == 'Pending'),
-                  child: const Icon(Icons.assignment_late),
-                ),
-                label: const Text('Approval Queue'),
-              ),
-              const NavigationRailDestination(
                 icon: Icon(Icons.assignment_turned_in_outlined),
                 selectedIcon: Icon(Icons.assignment_turned_in),
                 label: Text('Active Rentals'),
@@ -643,10 +694,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
           const VerticalDivider(thickness: 1, width: 1),
           Expanded(
             child: _selectedIndex == 0
-                ? _buildRentalRequests()
-                : _selectedIndex == 1
-                    ? _buildActiveRentals()
-                    : _buildInventory(),
+                ? _buildActiveRentals()
+                : _buildInventory(),
           ),
         ],
       ),

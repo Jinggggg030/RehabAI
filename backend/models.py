@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, CheckConstraint, JSON, Boolean
+from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, CheckConstraint, JSON, Boolean, UniqueConstraint
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
 
@@ -93,6 +93,45 @@ class RentalRecord(Base):
     __table_args__ = (
         CheckConstraint("status IN ('Pending', 'Approved', 'Active', 'Returned', 'Lost', 'Rejected')", name="check_rental_status"),
         CheckConstraint("return_status IN ('Good', 'Damaged', 'Lost')", name="check_return_status"),
+    )
+
+
+class NotificationRead(Base):
+    __tablename__ = "Notification_Read"
+
+    notification_read_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("User.user_id"), nullable=False)
+    notification_key = Column(String(150), nullable=False)
+    read_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "notification_key",
+            name="uq_notification_read_user_key",
+        ),
+    )
+
+
+class ChatReadReceipt(Base):
+    __tablename__ = "Chat_Read_Receipt"
+
+    chat_read_receipt_id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("User.user_id"), nullable=False)
+    session_id = Column(
+        Integer,
+        ForeignKey("Live_Chat_Session.session_id"),
+        nullable=False,
+    )
+    last_read_chat_id = Column(Integer, ForeignKey("Chat_Log.chat_id"), nullable=False)
+    read_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "session_id",
+            name="uq_chat_read_receipt_user_session",
+        ),
     )
 
 

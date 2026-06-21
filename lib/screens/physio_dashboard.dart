@@ -25,6 +25,12 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
   List<int> _assignedSessionIds = [];
   Set<String> _unreadChats = {};
   RealtimeChannel? _globalNotificationSub;
+  List<dynamic> _notifications = [];
+  Timer? _notificationTimer;
+  Set<String> _knownNotificationIds = {};
+  bool _notificationsInitialized = false;
+  bool _notificationFetchInProgress = false;
+  int _pageRefreshVersion = 0;
   
   @override
   void initState() {
@@ -47,6 +53,11 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
         });
         _fetchAssignedSessions();
         _setupGlobalNotifications();
+        _fetchPhysioNotifications();
+        _notificationTimer = Timer.periodic(
+          const Duration(seconds: 1),
+          (_) => _fetchPhysioNotifications(),
+        );
       }
     }
   }
@@ -75,12 +86,14 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
       .onPostgresChanges(event: PostgresChangeEvent.insert, schema: 'public', table: 'Chat_Log',
         callback: (payload) {
           final newRecord = payload.newRecord;
-          if (newRecord['sender_id'] != _myUserId) {
+          if (newRecord['sender_id'] != null &&
+              newRecord['sender_id'] != _myUserId) {
             final sessionId = newRecord['session_id'] as int;
             if (_assignedSessionIds.contains(sessionId)) {
               setState(() {
                 _unreadChats.add(sessionId.toString());
               });
+              _fetchPhysioNotifications(showSnackBar: false);
               if (mounted) {
                 ScaffoldMessenger.of(context).showSnackBar(
                   const SnackBar(
@@ -114,11 +127,151 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
           }
         }
       )
+      .onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'Rental_Record',
+        callback: (_) => _fetchPhysioNotifications(),
+      )
+      .onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'Appointment',
+        callback: (_) => _fetchPhysioNotifications(),
+      )
+      .onPostgresChanges(
+        event: PostgresChangeEvent.insert,
+        schema: 'public',
+        table: 'Session_Log',
+        callback: (_) => _fetchPhysioNotifications(),
+      )
+      .onPostgresChanges(
+        event: PostgresChangeEvent.update,
+        schema: 'public',
+        table: 'Session_Log',
+        callback: (_) => _fetchPhysioNotifications(),
+      )
       .subscribe();
+  }
+
+  Future<void> _fetchPhysioNotifications({bool showSnackBar = true}) async {
+    if (_myUserId == null || _notificationFetchInProgress) return;
+    _notificationFetchInProgress = true;
+    try {
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final response = await http.get(
+        Uri.parse('$apiUrl/physio/$_myUserId/notifications'),
+      );
+      if (response.statusCode == 200 && mounted) {
+        final fetched = List<dynamic>.from(
+          jsonDecode(response.body)['notifications'] ?? [],
+        );
+        final fetchedIds = fetched
+            .map((notification) => notification['notification_id'].toString())
+            .toSet();
+        final newNotifications = _notificationsInitialized
+            ? fetched
+                  .where(
+                    (notification) => !_knownNotificationIds.contains(
+                      notification['notification_id'].toString(),
+                    ),
+                  )
+                  .toList()
+            : <dynamic>[];
+        final unreadChatIds = fetched
+            .where((notification) => notification['type'] == 'chat')
+            .map((notification) => notification['reference_id'].toString())
+            .toSet();
+        final shouldRefreshCurrentPage = newNotifications.any(
+          (notification) =>
+              (notification['type'] == 'exercise' && _selectedIndex == 1) ||
+              (notification['type'] == 'appointment' && _selectedIndex == 2) ||
+              (notification['type'] == 'rental' && _selectedIndex == 3),
+        );
+        setState(() {
+          _notifications = fetched;
+          _unreadChats = unreadChatIds;
+          _knownNotificationIds = fetchedIds;
+          _notificationsInitialized = true;
+          if (shouldRefreshCurrentPage) _pageRefreshVersion++;
+        });
+        if (showSnackBar && newNotifications.isNotEmpty && mounted) {
+          final notification = newNotifications.first;
+          ScaffoldMessenger.of(context)
+            ..hideCurrentSnackBar()
+            ..showSnackBar(
+              SnackBar(
+                content: Text(
+                  notification['message']?.toString() ??
+                      'You have a new update.',
+                ),
+                duration: const Duration(seconds: 3),
+                behavior: SnackBarBehavior.floating,
+              ),
+            );
+        }
+      }
+    } catch (error) {
+      debugPrint('Unable to fetch physiotherapist notifications: $error');
+    } finally {
+      _notificationFetchInProgress = false;
+    }
+  }
+
+  void _refreshCurrentPage() {
+    setState(() => _pageRefreshVersion++);
+    _fetchAssignedSessions();
+    _fetchPhysioNotifications(showSnackBar: false);
+  }
+
+  bool _hasNotification(String type) =>
+      _notifications.any((notification) => notification['type'] == type);
+
+  Future<void> _openDashboardSection(int index) async {
+    final type = switch (index) {
+      1 => 'exercise',
+      2 => 'appointment',
+      3 => 'rental',
+      _ => null,
+    };
+    final notificationsToRead = type == null
+        ? <dynamic>[]
+        : _notifications
+              .where((notification) => notification['type'] == type)
+              .toList();
+    setState(() {
+      _selectedIndex = index;
+      if (type != null) {
+        _notifications = _notifications
+            .where((notification) => notification['type'] != type)
+            .toList();
+      }
+    });
+
+    if (_myUserId == null) return;
+    final apiUrl = kIsWeb
+        ? 'http://127.0.0.1:8000'
+        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    for (final notification in notificationsToRead) {
+      try {
+        await http.post(
+          Uri.parse('$apiUrl/users/$_myUserId/notifications/read'),
+          headers: {'Content-Type': 'application/json'},
+          body: jsonEncode({
+            'notification_id': notification['notification_id'],
+          }),
+        );
+      } catch (error) {
+        debugPrint('Unable to mark dashboard notification read: $error');
+      }
+    }
   }
 
   @override
   void dispose() {
+    _notificationTimer?.cancel();
     if (_globalNotificationSub != null) _supabase.removeChannel(_globalNotificationSub!);
     super.dispose();
   }
@@ -131,6 +284,11 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
         title: const Text('Physiotherapist Portal', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
         backgroundColor: Colors.blue[800],
         actions: [
+          IconButton(
+            tooltip: 'Refresh current page',
+            icon: const Icon(Icons.refresh, color: Colors.white),
+            onPressed: _refreshCurrentPage,
+          ),
           IconButton(
             icon: const Icon(Icons.logout, color: Colors.white),
             onPressed: () async {
@@ -146,11 +304,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
         children: [
           NavigationRail(
             selectedIndex: _selectedIndex,
-            onDestinationSelected: (int index) {
-              setState(() {
-                _selectedIndex = index;
-              });
-            },
+            onDestinationSelected: _openDashboardSection,
             labelType: NavigationRailLabelType.all,
             backgroundColor: Colors.white,
             selectedIconTheme: IconThemeData(color: Colors.blue[800]),
@@ -158,29 +312,49 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
             destinations: [
               NavigationRailDestination(
                 icon: Badge(
-                  isLabelVisible: _unreadChats.isNotEmpty,
+                  isLabelVisible:
+                      _unreadChats.isNotEmpty || _hasNotification('chat'),
                   child: const Icon(Icons.chat_bubble_outline),
                 ),
                 selectedIcon: Badge(
-                  isLabelVisible: _unreadChats.isNotEmpty,
+                  isLabelVisible:
+                      _unreadChats.isNotEmpty || _hasNotification('chat'),
                   child: const Icon(Icons.chat_bubble),
                 ),
                 label: const Text('Live Chat'),
               ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.trending_up),
-                selectedIcon: Icon(Icons.trending_up, size: 28),
-                label: Text('Progress'),
+              NavigationRailDestination(
+                icon: Badge(
+                  isLabelVisible: _hasNotification('exercise'),
+                  child: const Icon(Icons.trending_up),
+                ),
+                selectedIcon: Badge(
+                  isLabelVisible: _hasNotification('exercise'),
+                  child: const Icon(Icons.trending_up, size: 28),
+                ),
+                label: const Text('Progress'),
               ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.calendar_today_outlined),
-                selectedIcon: Icon(Icons.calendar_today),
-                label: Text('Appointments'),
+              NavigationRailDestination(
+                icon: Badge(
+                  isLabelVisible: _hasNotification('appointment'),
+                  child: const Icon(Icons.calendar_today_outlined),
+                ),
+                selectedIcon: Badge(
+                  isLabelVisible: _hasNotification('appointment'),
+                  child: const Icon(Icons.calendar_today),
+                ),
+                label: const Text('Appointments'),
               ),
-              const NavigationRailDestination(
-                icon: Icon(Icons.medical_services_outlined),
-                selectedIcon: Icon(Icons.medical_services),
-                label: Text('Rentals'),
+              NavigationRailDestination(
+                icon: Badge(
+                  isLabelVisible: _hasNotification('rental'),
+                  child: const Icon(Icons.medical_services_outlined),
+                ),
+                selectedIcon: Badge(
+                  isLabelVisible: _hasNotification('rental'),
+                  child: const Icon(Icons.medical_services),
+                ),
+                label: const Text('Rentals'),
               ),
             ],
           ),
@@ -201,20 +375,34 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
     switch (_selectedIndex) {
       case 0:
         return PhysioLiveChatTab(
+          key: ValueKey('chat-$_pageRefreshVersion'),
           myUserId: _myUserId!, 
           unreadChats: _unreadChats, 
           onChatRead: (sessionId) {
             setState(() {
               _unreadChats.remove(sessionId);
+              _notifications = _notifications.where((notification) {
+                return notification['type'] != 'chat' ||
+                    notification['reference_id'].toString() != sessionId;
+              }).toList();
             });
           }
         );
       case 1:
-        return PhysioProgressTab(physioId: _myUserId!);
+        return PhysioProgressTab(
+          key: ValueKey('progress-$_pageRefreshVersion'),
+          physioId: _myUserId!,
+        );
       case 2:
-        return PhysioAppointmentsTab(myUserId: _myUserId!);
+        return PhysioAppointmentsTab(
+          key: ValueKey('appointments-$_pageRefreshVersion'),
+          myUserId: _myUserId!,
+        );
       case 3:
-        return PhysioRentalsTab(myUserId: _myUserId!);
+        return PhysioRentalsTab(
+          key: ValueKey('rentals-$_pageRefreshVersion'),
+          myUserId: _myUserId!,
+        );
       default:
         return const Center(child: Text('Unknown Tab'));
     }
@@ -271,6 +459,23 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
       debugPrint("Error fetching chats: $e");
     } finally {
       if (!isBackground && mounted) setState(() => _isLoading = false);
+    }
+  }
+
+  Future<void> _markChatRead(int sessionId) async {
+    widget.onChatRead(sessionId.toString());
+    try {
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      await http.post(
+        Uri.parse(
+          '$apiUrl/physio/chats/$sessionId/read'
+          '?physio_id=${widget.myUserId}',
+        ),
+      );
+    } catch (error) {
+      debugPrint('Unable to mark chat as read: $error');
     }
   }
 
@@ -341,7 +546,7 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
                                 setState(() {
                                   _selectedChat = chat;
                                 });
-                                widget.onChatRead(chat['session_id'].toString());
+                                _markChatRead(chat['session_id'] as int);
                               },
                             );
                           }),

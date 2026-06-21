@@ -158,14 +158,18 @@ def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
     ).all()
     for session in active_sessions:
         last_log = db.query(models.ChatLog).filter(models.ChatLog.session_id == session.session_id).order_by(models.ChatLog.timestamp.desc()).first()
-        if last_log and last_log.sender_id != user_id:
+        if (
+            last_log
+            and last_log.sender_id is not None
+            and last_log.sender_id != user_id
+        ):
             notifications.append({
+                "notification_id": f"chat:{session.session_id}:{last_log.chat_id}",
                 "type": "chat",
                 "title": "New Message",
                 "message": "You have a new message from the physiotherapist.",
                 "reference_id": session.session_id
             })
-            break
 
     # 2. Rental Notifications (Approved -> Pending Collection)
     approved_rentals = db.query(models.RentalRecord).filter(
@@ -176,6 +180,7 @@ def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
         eq = db.query(models.Equipment).filter(models.Equipment.equipment_id == rental.equipment_id).first()
         eq_name = eq.name if eq else "Equipment"
         notifications.append({
+            "notification_id": f"rental:{rental.rental_record_id}:approved",
             "type": "rental",
             "title": "Rental Approved",
             "message": f"Your request for {eq_name} is approved. Ready for collection!",
@@ -193,27 +198,219 @@ def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
     ).all()
     for appt in upcoming_appointments:
         notifications.append({
+            "notification_id": f"appointment:{appt.appointment_id}",
             "type": "appointment",
             "title": "Upcoming Appointment",
             "message": f"You have an appointment on {appt.schedule_time.strftime('%b %d, %Y at %I:%M %p')}.",
             "reference_id": appt.appointment_id
         })
 
-    # 4. Exercise Notifications
-    pending_exercises = db.query(models.SessionLog).filter(
-        models.SessionLog.student_id == user_id,
-        models.SessionLog.status == 'Pending',
-        models.SessionLog.completion_date <= now
+    # 4. Physiotherapist-assigned exercise notifications
+    assigned_exercises = db.query(
+        models.PrescribedExercise,
+        models.Exercise.name
+    ).join(
+        models.Appointment,
+        models.PrescribedExercise.appointment_id == models.Appointment.appointment_id
+    ).join(
+        models.Exercise,
+        models.PrescribedExercise.exercise_id == models.Exercise.exercise_id
+    ).filter(
+        models.Appointment.student_id == user_id
     ).all()
-    if pending_exercises:
+    for prescribed, exercise_name in assigned_exercises:
         notifications.append({
+            "notification_id": f"assigned:{prescribed.prescribed_exercise_id}",
             "type": "exercise",
-            "title": "Exercises Pending",
-            "message": f"You have {len(pending_exercises)} exercise(s) scheduled for today. Don't forget to complete them!",
-            "reference_id": None
+            "title": "Exercise Assigned",
+            "message": f"Your physiotherapist assigned {exercise_name} to you.",
+            "reference_id": prescribed.prescribed_exercise_id
         })
 
-    return {"notifications": notifications}
+    # 5. Patient-scheduled exercise notifications
+    scheduled_exercises = db.query(
+        models.SessionLog,
+        models.Exercise.name
+    ).join(
+        models.Exercise,
+        models.SessionLog.exercise_id == models.Exercise.exercise_id
+    ).filter(
+        models.SessionLog.student_id == user_id,
+        models.SessionLog.status == 'Pending'
+    ).all()
+    for scheduled, exercise_name in scheduled_exercises:
+        notifications.append({
+            "notification_id": f"scheduled:{scheduled.schedule_id}",
+            "type": "exercise",
+            "title": "Exercise Scheduled",
+            "message": (
+                f"{exercise_name} is scheduled for "
+                f"{scheduled.completion_date.strftime('%b %d, %Y at %I:%M %p')}."
+            ),
+            "reference_id": scheduled.schedule_id
+        })
+
+    read_keys = {
+        key for (key,) in db.query(models.NotificationRead.notification_key).filter(
+            models.NotificationRead.user_id == user_id
+        ).all()
+    }
+    unread_notifications = [
+        notification for notification in notifications
+        if notification["notification_id"] not in read_keys
+    ]
+    return {"notifications": unread_notifications}
+
+
+class NotificationReadRequest(BaseModel):
+    notification_id: str
+
+
+@app.post("/users/{user_id}/notifications/read")
+def mark_notification_read(
+    user_id: int,
+    request: NotificationReadRequest,
+    db: Session = Depends(get_db)
+):
+    if not request.notification_id or len(request.notification_id) > 150:
+        raise HTTPException(status_code=400, detail="Invalid notification ID")
+
+    existing = db.query(models.NotificationRead).filter(
+        models.NotificationRead.user_id == user_id,
+        models.NotificationRead.notification_key == request.notification_id
+    ).first()
+    if not existing:
+        db.add(models.NotificationRead(
+            user_id=user_id,
+            notification_key=request.notification_id
+        ))
+        db.commit()
+    return {"status": "success"}
+
+
+@app.get("/physio/{physio_id}/notifications")
+def get_physio_notifications(physio_id: int, db: Session = Depends(get_db)):
+    from datetime import timedelta
+
+    physio = db.query(models.Physiotherapist).filter(
+        models.Physiotherapist.therapist_id == physio_id
+    ).first()
+    if not physio:
+        raise HTTPException(status_code=403, detail="Physiotherapist access required")
+
+    patient_ids = {
+        student_id for (student_id,) in db.query(models.Appointment.student_id).filter(
+            models.Appointment.therapist_id == physio_id
+        ).distinct().all()
+    }
+    notifications = []
+
+    active_chats = db.query(models.LiveChatSession).filter(
+        models.LiveChatSession.therapist_id == physio_id,
+        models.LiveChatSession.session_status == "Active"
+    ).all()
+    for session in active_chats:
+        last_incoming = db.query(models.ChatLog).filter(
+            models.ChatLog.session_id == session.session_id,
+            models.ChatLog.sender_id == session.student_id
+        ).order_by(models.ChatLog.chat_id.desc()).first()
+        receipt = db.query(models.ChatReadReceipt).filter(
+            models.ChatReadReceipt.user_id == physio_id,
+            models.ChatReadReceipt.session_id == session.session_id
+        ).first()
+        if last_incoming and (
+            receipt is None or receipt.last_read_chat_id < last_incoming.chat_id
+        ):
+            student = db.query(models.User).filter(
+                models.User.user_id == session.student_id
+            ).first()
+            notifications.append({
+                "notification_id": f"physio-chat:{session.session_id}:{last_incoming.chat_id}",
+                "type": "chat",
+                "title": "New Patient Message",
+                "message": f"{student.username if student else 'A patient'} sent you a message.",
+                "reference_id": session.session_id
+            })
+
+    if patient_ids:
+        pending_rentals = db.query(
+            models.RentalRecord,
+            models.User.username,
+            models.Equipment.name
+        ).join(
+            models.User, models.RentalRecord.student_id == models.User.user_id
+        ).join(
+            models.Equipment,
+            models.RentalRecord.equipment_id == models.Equipment.equipment_id
+        ).filter(
+            models.RentalRecord.student_id.in_(patient_ids),
+            models.RentalRecord.status == "Pending"
+        ).all()
+        for rental, student_name, equipment_name in pending_rentals:
+            notifications.append({
+                "notification_id": f"physio-rental:{rental.rental_record_id}:pending",
+                "type": "rental",
+                "title": "New Rental Request",
+                "message": f"{student_name} requested {equipment_name}.",
+                "reference_id": rental.rental_record_id
+            })
+
+        recent_sessions = db.query(
+            models.SessionLog,
+            models.User.username,
+            models.Exercise.name
+        ).join(
+            models.User, models.SessionLog.student_id == models.User.user_id
+        ).join(
+            models.Exercise,
+            models.SessionLog.exercise_id == models.Exercise.exercise_id
+        ).filter(
+            models.SessionLog.student_id.in_(patient_ids),
+            models.SessionLog.status == "Completed",
+            models.SessionLog.completion_date >= datetime.utcnow() - timedelta(days=7)
+        ).order_by(models.SessionLog.completion_date.desc()).limit(50).all()
+        for session, student_name, exercise_name in recent_sessions:
+            notifications.append({
+                "notification_id": f"physio-exercise:{session.schedule_id}:completed",
+                "type": "exercise",
+                "title": "Exercise Completed",
+                "message": f"{student_name} completed {exercise_name}.",
+                "reference_id": session.schedule_id
+            })
+
+        upcoming_appointments = db.query(
+            models.Appointment,
+            models.User.username
+        ).join(
+            models.User, models.Appointment.student_id == models.User.user_id
+        ).filter(
+            models.Appointment.therapist_id == physio_id,
+            models.Appointment.status == "Scheduled",
+            models.Appointment.schedule_time >= datetime.utcnow()
+        ).order_by(models.Appointment.schedule_time).all()
+        for appointment, student_name in upcoming_appointments:
+            notifications.append({
+                "notification_id": f"physio-appointment:{appointment.appointment_id}:scheduled",
+                "type": "appointment",
+                "title": "Upcoming Appointment",
+                "message": (
+                    f"Appointment with {student_name} on "
+                    f"{appointment.schedule_time.strftime('%b %d, %Y at %I:%M %p')}."
+                ),
+                "reference_id": appointment.appointment_id
+            })
+
+    read_keys = {
+        key for (key,) in db.query(models.NotificationRead.notification_key).filter(
+            models.NotificationRead.user_id == physio_id
+        ).all()
+    }
+    return {
+        "notifications": [
+            notification for notification in notifications
+            if notification["notification_id"] not in read_keys
+        ]
+    }
 
 @app.get("/students")
 def get_all_students(db: Session = Depends(get_db)):
@@ -348,6 +545,7 @@ class EquipmentCreate(BaseModel):
     description: Optional[str] = None
     stock: int
     admin_id: Optional[int] = None
+    image: Optional[str] = None
 
 @app.post("/admin/equipment")
 def create_equipment(eq: EquipmentCreate, db: Session = Depends(get_db)):
@@ -355,7 +553,8 @@ def create_equipment(eq: EquipmentCreate, db: Session = Depends(get_db)):
         name=eq.name,
         description=eq.description,
         stock=eq.stock,
-        admin_id=eq.admin_id
+        admin_id=eq.admin_id,
+        image=eq.image
     )
     db.add(new_eq)
     db.commit()
@@ -371,6 +570,8 @@ def update_equipment(equipment_id: int, eq: EquipmentCreate, db: Session = Depen
     equipment.name = eq.name
     equipment.description = eq.description
     equipment.stock = eq.stock
+    if eq.image is not None:
+        equipment.image = eq.image
     if eq.admin_id is not None:
         equipment.admin_id = eq.admin_id
         
@@ -775,13 +976,23 @@ def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
     
     result = []
     for chat in chats:
-        last_msg = db.query(models.ChatLog).filter(
-            models.ChatLog.session_id == chat.session_id
-        ).order_by(models.ChatLog.timestamp.desc()).first()
-        
-        has_unread = False
-        if last_msg and last_msg.sender_id is not None and last_msg.sender_id != physio_id:
-            has_unread = True
+        last_incoming = db.query(models.ChatLog).filter(
+            models.ChatLog.session_id == chat.session_id,
+            models.ChatLog.sender_id.isnot(None),
+            models.ChatLog.sender_id != physio_id
+        ).order_by(models.ChatLog.chat_id.desc()).first()
+        receipt = db.query(models.ChatReadReceipt).filter(
+            models.ChatReadReceipt.user_id == physio_id,
+            models.ChatReadReceipt.session_id == chat.session_id
+        ).first()
+        has_unread = bool(
+            chat.session_status == "Active"
+            and last_incoming
+            and (
+                receipt is None
+                or receipt.last_read_chat_id < last_incoming.chat_id
+            )
+        )
             
         result.append({
             "session_id": chat.session_id,
@@ -794,6 +1005,44 @@ def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
             "has_unread": has_unread
         })
     return {"chats": result}
+
+
+@app.post("/physio/chats/{session_id}/read")
+def mark_physio_chat_read(
+    session_id: int,
+    physio_id: int,
+    db: Session = Depends(get_db)
+):
+    session = db.query(models.LiveChatSession).filter(
+        models.LiveChatSession.session_id == session_id,
+        models.LiveChatSession.therapist_id == physio_id
+    ).first()
+    if not session:
+        raise HTTPException(status_code=403, detail="Chat is not assigned to this physiotherapist")
+
+    last_incoming = db.query(models.ChatLog).filter(
+        models.ChatLog.session_id == session_id,
+        models.ChatLog.sender_id.isnot(None),
+        models.ChatLog.sender_id != physio_id
+    ).order_by(models.ChatLog.chat_id.desc()).first()
+    if not last_incoming:
+        return {"status": "success"}
+
+    receipt = db.query(models.ChatReadReceipt).filter(
+        models.ChatReadReceipt.user_id == physio_id,
+        models.ChatReadReceipt.session_id == session_id
+    ).first()
+    if receipt:
+        receipt.last_read_chat_id = last_incoming.chat_id
+        receipt.read_at = datetime.utcnow()
+    else:
+        db.add(models.ChatReadReceipt(
+            user_id=physio_id,
+            session_id=session_id,
+            last_read_chat_id=last_incoming.chat_id
+        ))
+    db.commit()
+    return {"status": "success"}
 
 @app.put("/physio/chats/{session_id}/close")
 def close_chat(session_id: int, db: Session = Depends(get_db)):

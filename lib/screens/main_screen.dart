@@ -19,14 +19,17 @@ class MainScreen extends StatefulWidget {
   State<MainScreen> createState() => _MainScreenState();
 }
 
-class _MainScreenState extends State<MainScreen> {
+class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
   int _selectedIndex = 0;
   Timer? _notificationTimer;
+  RealtimeChannel? _notificationChannel;
+  int? _notificationUserId;
   late final List<Widget> _screens;
 
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     _screens = [
       const HomePage(),
       const ServicesPage(),
@@ -59,14 +62,50 @@ class _MainScreenState extends State<MainScreen> {
     }
 
     if (myUserId == null) return;
+    _notificationUserId = myUserId;
 
     // Fetch immediately
     _fetchNotifications(myUserId);
 
-    // Poll every 30 seconds
-    _notificationTimer = Timer.periodic(const Duration(seconds: 30), (timer) {
+    _notificationChannel = supabase
+        .channel('patient-notifications-${user.id}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'Chat_Log',
+          callback: (_) => _fetchNotifications(myUserId!),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'Rental_Record',
+          callback: (_) => _fetchNotifications(myUserId!),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'Prescribed_Exercise',
+          callback: (_) => _fetchNotifications(myUserId!),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'Session_Log',
+          callback: (_) => _fetchNotifications(myUserId!),
+        )
+        .subscribe();
+
+    // Polling remains as a fallback if a table is not enabled for Realtime.
+    _notificationTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
       _fetchNotifications(myUserId!);
     });
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _notificationUserId != null) {
+      _fetchNotifications(_notificationUserId!);
+    }
   }
 
   Future<void> _fetchNotifications(int userId) async {
@@ -89,6 +128,10 @@ class _MainScreenState extends State<MainScreen> {
   @override
   void dispose() {
     _notificationTimer?.cancel();
+    WidgetsBinding.instance.removeObserver(this);
+    if (_notificationChannel != null) {
+      Supabase.instance.client.removeChannel(_notificationChannel!);
+    }
     super.dispose();
   }
 
