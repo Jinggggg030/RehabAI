@@ -299,6 +299,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final compactNavigation = MediaQuery.sizeOf(context).width < 1400;
     return Scaffold(
       backgroundColor: RehabColors.portalBackground,
       body: PortalBackdrop(
@@ -306,8 +307,8 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
         child: Row(
           children: [
             Container(
-              width: 236,
-              margin: const EdgeInsets.all(14),
+              width: compactNavigation ? 82 : 236,
+              margin: EdgeInsets.all(compactNavigation ? 10 : 14),
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 gradient: RehabColors.darkGradient,
@@ -325,6 +326,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                   _portalBrand(
                     accent: RehabColors.physio,
                     role: 'Physio Portal',
+                    compact: compactNavigation,
                   ),
                   const SizedBox(height: 12),
                   Expanded(
@@ -335,6 +337,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                           0,
                           Icons.forum_outlined,
                           'Live Chat',
+                          compact: compactNavigation,
                           showBadge:
                               _unreadChats.isNotEmpty ||
                               _hasNotification('chat'),
@@ -343,24 +346,40 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                           1,
                           Icons.insights_outlined,
                           'Patient Progress',
+                          compact: compactNavigation,
                           showBadge: _hasNotification('exercise'),
                         ),
                         _portalNavItem(
                           2,
                           Icons.calendar_month_outlined,
                           'Appointments',
+                          compact: compactNavigation,
                           showBadge: _hasNotification('appointment'),
                         ),
                         _portalNavItem(
                           3,
                           Icons.medical_services_outlined,
                           'Equipment',
+                          compact: compactNavigation,
                           showBadge: _hasNotification('rental'),
                         ),
                       ],
                     ),
                   ),
-                  const PortalSystemStatus(label: 'Clinical network online'),
+                  if (!compactNavigation)
+                    const PortalSystemStatus(label: 'Clinical network online')
+                  else
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Tooltip(
+                        message: 'Clinical network online',
+                        child: Icon(
+                          Icons.circle,
+                          color: Color(0xFF4ADE80),
+                          size: 9,
+                        ),
+                      ),
+                    ),
                   Padding(
                     padding: const EdgeInsets.all(12),
                     child: TextButton.icon(
@@ -375,7 +394,9 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                         }
                       },
                       icon: const Icon(Icons.logout_rounded),
-                      label: const Text('Exit Portal'),
+                      label: compactNavigation
+                          ? const SizedBox.shrink()
+                          : const Text('Exit Portal'),
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.white70,
                         backgroundColor: Colors.white.withValues(alpha: 0.08),
@@ -447,12 +468,22 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                             ],
                           ),
                         ),
-                        PortalMetric(
-                          icon: Icons.notifications_active_outlined,
-                          value: '${_notifications.length}',
-                          label: 'NEW UPDATES',
-                          accent: RehabColors.cyan,
-                        ),
+                        if (!compactNavigation)
+                          PortalMetric(
+                            icon: Icons.notifications_active_outlined,
+                            value: '${_notifications.length}',
+                            label: 'NEW UPDATES',
+                            accent: RehabColors.cyan,
+                          )
+                        else
+                          Badge.count(
+                            count: _notifications.length,
+                            isLabelVisible: _notifications.isNotEmpty,
+                            child: const Icon(
+                              Icons.notifications_active_outlined,
+                              color: RehabColors.cyan,
+                            ),
+                          ),
                         const SizedBox(width: 10),
                         IconButton.filledTonal(
                           tooltip: 'Refresh current page',
@@ -460,38 +491,39 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                           icon: const Icon(Icons.refresh_rounded),
                         ),
                         const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF0FDF4),
-                            borderRadius: BorderRadius.circular(13),
-                            border: Border.all(color: RehabColors.border),
-                          ),
-                          child: const Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 12,
-                                backgroundColor: RehabColors.physio,
-                                child: Icon(
-                                  Icons.person,
-                                  size: 14,
-                                  color: Colors.white,
+                        if (!compactNavigation)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF0FDF4),
+                              borderRadius: BorderRadius.circular(13),
+                              border: Border.all(color: RehabColors.border),
+                            ),
+                            child: const Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: RehabColors.physio,
+                                  child: Icon(
+                                    Icons.person,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
                                 ),
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                'Physiotherapist',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
+                                SizedBox(width: 8),
+                                Text(
+                                  'Physiotherapist',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -516,10 +548,14 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
     );
   }
 
-  Widget _portalBrand({required Color accent, required String role}) {
+  Widget _portalBrand({
+    required Color accent,
+    required String role,
+    required bool compact,
+  }) {
     return Container(
       height: 74,
-      padding: const EdgeInsets.symmetric(horizontal: 18),
+      padding: EdgeInsets.symmetric(horizontal: compact ? 15 : 18),
       decoration: BoxDecoration(
         border: Border(
           bottom: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
@@ -540,30 +576,32 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
               size: 20,
             ),
           ),
-          const SizedBox(width: 11),
-          Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'RehabAI',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w900,
-                  color: Colors.white,
-                  letterSpacing: 0.3,
+          if (!compact) ...[
+            const SizedBox(width: 11),
+            Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'RehabAI',
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w900,
+                    color: Colors.white,
+                    letterSpacing: 0.3,
+                  ),
                 ),
-              ),
-              Text(
-                role,
-                style: TextStyle(
-                  fontSize: 10,
-                  color: Colors.white60,
-                  fontWeight: FontWeight.w700,
+                Text(
+                  role,
+                  style: const TextStyle(
+                    fontSize: 10,
+                    color: Colors.white60,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
+          ],
         ],
       ),
     );
@@ -574,6 +612,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
     IconData icon,
     String label, {
     bool showBadge = false,
+    bool compact = false,
   }) {
     final selected = _selectedIndex == index;
     return Padding(
@@ -589,23 +628,33 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
           child: Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
+              mainAxisAlignment: compact
+                  ? MainAxisAlignment.center
+                  : MainAxisAlignment.start,
               children: [
-                Icon(
-                  icon,
-                  size: 19,
-                  color: selected ? Colors.cyanAccent : Colors.white54,
-                ),
-                const SizedBox(width: 11),
-                Expanded(
-                  child: Text(
-                    label,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                      color: selected ? Colors.white : Colors.white60,
-                    ),
+                Tooltip(
+                  message: compact ? label : '',
+                  child: Icon(
+                    icon,
+                    size: 19,
+                    color: selected ? Colors.cyanAccent : Colors.white54,
                   ),
                 ),
+                if (!compact) ...[
+                  const SizedBox(width: 11),
+                  Expanded(
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: selected
+                            ? FontWeight.w800
+                            : FontWeight.w600,
+                        color: selected ? Colors.white : Colors.white60,
+                      ),
+                    ),
+                  ),
+                ],
                 if (showBadge)
                   Container(
                     width: 8,
@@ -769,11 +818,12 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
         .where((c) => c['session_status'] == 'Closed')
         .toList();
 
+    final compact = MediaQuery.sizeOf(context).width < 1400;
     return Row(
       children: [
         // Left Sidebar: Chat List
         Container(
-          width: 320,
+          width: compact ? 270 : 320,
           decoration: const BoxDecoration(
             color: Colors.white,
             border: Border(right: BorderSide(color: Colors.black12)),
@@ -1339,6 +1389,10 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
                 Expanded(
                   child: TextField(
                     controller: _messageController,
+                    minLines: 1,
+                    maxLines: 4,
+                    keyboardType: TextInputType.multiline,
+                    textInputAction: TextInputAction.newline,
                     decoration: InputDecoration(
                       hintText: "Type a message...",
                       border: OutlineInputBorder(
@@ -1349,7 +1403,6 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
                         vertical: 12,
                       ),
                     ),
-                    onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
                 const SizedBox(width: 8),

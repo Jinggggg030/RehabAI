@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
@@ -32,9 +32,13 @@ class LiveChatPage extends StatefulWidget {
 class _LiveChatPageState extends State<LiveChatPage> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  
+
   final List<ChatMessage> _messages = [
-    ChatMessage(text: "Hello! I'm your Rehab AI assistant. How can I help you with your therapy today?", isUser: false),
+    ChatMessage(
+      text:
+          "Hello! I'm your Rehab AI assistant. How can I help you with your therapy today?",
+      isUser: false,
+    ),
   ];
   bool _isTyping = false;
   bool _isChatEnded = false;
@@ -44,7 +48,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
   int? _myUserId;
   final Set<String> _handledInvites = {};
   final SupabaseClient _supabase = Supabase.instance.client;
-  
+
   @override
   void initState() {
     super.initState();
@@ -58,12 +62,16 @@ class _LiveChatPageState extends State<LiveChatPage> {
 
     try {
       // Find the user_id from the FastAPI using supabase_id to bypass RLS
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final userRes = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final userRes = await http.get(
+        Uri.parse('$apiUrl/users/profile/${user.id}'),
+      );
       if (userRes.statusCode != 200) return;
       final userData = jsonDecode(userRes.body);
       if (userData['exists'] != true) return;
-      
+
       final userId = userData['user_id'];
 
       // Check if there is an active session
@@ -80,7 +88,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
         setState(() {
           _sessionId = sessionRes['session_id'];
           // Clear initial welcome message as we will load history
-          _messages.clear(); 
+          _messages.clear();
         });
         _subscribeToMessages();
       }
@@ -101,9 +109,13 @@ class _LiveChatPageState extends State<LiveChatPage> {
 
     final user = _supabase.auth.currentUser;
     if (user == null) return;
-      
-    final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-    final userRes = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
+
+    final apiUrl = kIsWeb
+        ? 'http://127.0.0.1:8000'
+        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final userRes = await http.get(
+      Uri.parse('$apiUrl/users/profile/${user.id}'),
+    );
     if (userRes.statusCode == 200) {
       final userData = jsonDecode(userRes.body);
       if (userData['exists'] == true) {
@@ -120,7 +132,11 @@ class _LiveChatPageState extends State<LiveChatPage> {
 
     // 1. Fetch initial data via REST
     try {
-      final res = await _supabase.from('Chat_Log').select().eq('session_id', _sessionId!).order('timestamp', ascending: true);
+      final res = await _supabase
+          .from('Chat_Log')
+          .select()
+          .eq('session_id', _sessionId!)
+          .order('timestamp', ascending: true);
       if (res.isNotEmpty) {
         final lastMsg = List<dynamic>.from(res).last;
         if (lastMsg['timestamp'] != null) {
@@ -158,59 +174,73 @@ class _LiveChatPageState extends State<LiveChatPage> {
     }
 
     // 2. Subscribe to realtime updates
-    _subscription = _supabase.channel('public:Chat_Log:session_$_sessionId')
-      .onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'Chat_Log',
-        filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'session_id', value: _sessionId!),
-        callback: (payload) {
-          final newMsg = payload.newRecord;
-          if (newMsg['timestamp'] != null) {
-            _updateLastReadTimestamp(newMsg['timestamp'].toString());
-          }
-          final textContent = newMsg['content'] ?? '';
-          if (mounted) {
-            setState(() {
-              if (textContent == '[SYSTEM: CHAT_CLOSED]') {
-                _isChatEnded = true;
-                return;
-              }
-              // Prevent duplicating the user's own message that was added optimistically
-              if (newMsg['sender_id'] == _myUserId) {
-                if (_messages.isNotEmpty && _messages.last.isUser && _messages.last.text == textContent) {
+    _subscription = _supabase
+        .channel('public:Chat_Log:session_$_sessionId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'Chat_Log',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'session_id',
+            value: _sessionId!,
+          ),
+          callback: (payload) {
+            final newMsg = payload.newRecord;
+            if (newMsg['timestamp'] != null) {
+              _updateLastReadTimestamp(newMsg['timestamp'].toString());
+            }
+            final textContent = newMsg['content'] ?? '';
+            if (mounted) {
+              setState(() {
+                if (textContent == '[SYSTEM: CHAT_CLOSED]') {
+                  _isChatEnded = true;
                   return;
                 }
+                // Prevent duplicating the user's own message that was added optimistically
+                if (newMsg['sender_id'] == _myUserId) {
+                  if (_messages.isNotEmpty &&
+                      _messages.last.isUser &&
+                      _messages.last.text == textContent) {
+                    return;
+                  }
+                }
+                _messages.add(_chatMessageFromRow(newMsg));
+              });
+              _scrollToBottom();
+              final room = TeleconferenceService.roomFromInvite(textContent);
+              if (room != null && newMsg['sender_id'] != _myUserId) {
+                unawaited(_showTeleconferenceInvite(room));
               }
-              _messages.add(_chatMessageFromRow(newMsg));
-            });
-            _scrollToBottom();
-            final room = TeleconferenceService.roomFromInvite(textContent);
-            if (room != null && newMsg['sender_id'] != _myUserId) {
-              unawaited(_showTeleconferenceInvite(room));
             }
-          }
-        }
-      ).subscribe();
+          },
+        )
+        .subscribe();
 
     // 3. Subscribe to session status updates
-    _sessionSubscription = _supabase.channel('public:Live_Chat_Session:session_$_sessionId')
-      .onPostgresChanges(
-        event: PostgresChangeEvent.update,
-        schema: 'public',
-        table: 'Live_Chat_Session',
-        filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'session_id', value: _sessionId!),
-        callback: (payload) {
-          if (mounted) {
-            final updatedRecord = payload.newRecord;
-            if (updatedRecord['session_status'] == 'Ended') {
-              setState(() {
-                _isChatEnded = true;
-              });
+    _sessionSubscription = _supabase
+        .channel('public:Live_Chat_Session:session_$_sessionId')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'Live_Chat_Session',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'session_id',
+            value: _sessionId!,
+          ),
+          callback: (payload) {
+            if (mounted) {
+              final updatedRecord = payload.newRecord;
+              if (updatedRecord['session_status'] == 'Ended') {
+                setState(() {
+                  _isChatEnded = true;
+                });
+              }
             }
-          }
-        }
-      ).subscribe();
+          },
+        )
+        .subscribe();
   }
 
   ChatMessage _chatMessageFromRow(Map<String, dynamic> row) {
@@ -288,9 +318,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
     await _showTeleconferenceInvite(room);
   }
 
-  Future<bool> _respondToTeleconference({
-    required bool accepted,
-  }) async {
+  Future<bool> _respondToTeleconference({required bool accepted}) async {
     if (_sessionId == null || _myUserId == null) return false;
     final apiUrl = kIsWeb
         ? 'http://127.0.0.1:8000'
@@ -319,19 +347,25 @@ class _LiveChatPageState extends State<LiveChatPage> {
 
     final user = _supabase.auth.currentUser;
     if (user == null) {
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Not logged in")));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text("Not logged in")));
       return;
     }
 
     _messageController.clear();
 
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final userRes = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final userRes = await http.get(
+        Uri.parse('$apiUrl/users/profile/${user.id}'),
+      );
       if (userRes.statusCode != 200) return;
       final userData = jsonDecode(userRes.body);
       if (userData['exists'] != true) return;
-      
+
       final userId = userData['user_id'];
 
       if (_sessionId == null) {
@@ -342,7 +376,9 @@ class _LiveChatPageState extends State<LiveChatPage> {
         });
         _scrollToBottom();
 
-        final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+        final apiUrl = kIsWeb
+            ? 'http://127.0.0.1:8000'
+            : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
         final response = await http.post(
           Uri.parse('$apiUrl/chat/start'),
           headers: {'Content-Type': 'application/json'},
@@ -359,7 +395,9 @@ class _LiveChatPageState extends State<LiveChatPage> {
         } else {
           setState(() {
             _isTyping = false;
-            _messages.add(ChatMessage(text: "Failed to start chat session.", isUser: false));
+            _messages.add(
+              ChatMessage(text: "Failed to start chat session.", isUser: false),
+            );
           });
         }
       } else {
@@ -370,21 +408,25 @@ class _LiveChatPageState extends State<LiveChatPage> {
         });
         _scrollToBottom();
 
-        final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+        final apiUrl = kIsWeb
+            ? 'http://127.0.0.1:8000'
+            : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
         final response = await http.post(
           Uri.parse('$apiUrl/chat/send'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({
             "session_id": _sessionId,
             "user_id": userId,
-            "message": text
+            "message": text,
           }),
         );
-        
+
         if (response.statusCode != 200) {
           setState(() {
             _isTyping = false;
-            _messages.add(ChatMessage(text: "Failed to send message.", isUser: false));
+            _messages.add(
+              ChatMessage(text: "Failed to send message.", isUser: false),
+            );
           });
         } else {
           setState(() {
@@ -401,7 +443,6 @@ class _LiveChatPageState extends State<LiveChatPage> {
       }
     }
   }
-  
 
   Future<void> _updateLastReadTimestamp(String timestamp) async {
     final prefs = await SharedPreferences.getInstance();
@@ -409,7 +450,6 @@ class _LiveChatPageState extends State<LiveChatPage> {
   }
 
   void _scrollToBottom() {
-
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
         _scrollController.animateTo(
@@ -420,7 +460,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
       }
     });
   }
-  
+
   @override
   void dispose() {
     _subscription?.unsubscribe();
@@ -439,7 +479,10 @@ class _LiveChatPageState extends State<LiveChatPage> {
           children: [
             // Header
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 24.0,
+                vertical: 24.0,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -457,7 +500,11 @@ class _LiveChatPageState extends State<LiveChatPage> {
                         borderRadius: BorderRadius.circular(12),
                         border: Border.all(color: Colors.grey.shade200),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black54),
+                      child: const Icon(
+                        Icons.arrow_back_ios_new,
+                        size: 16,
+                        color: Colors.black54,
+                      ),
                     ),
                   ),
                   Text(
@@ -526,70 +573,69 @@ class _LiveChatPageState extends State<LiveChatPage> {
                       Padding(
                         padding: const EdgeInsets.all(16.0),
                         child: Column(
-                        children: [
-                          // Quick Replies (Optional)
-                          SingleChildScrollView(
-                            scrollDirection: Axis.horizontal,
-                            child: Row(
-                              children: [
-                                _buildQuickReply('Need assistance'),
-                                const SizedBox(width: 8),
-                                _buildQuickReply('Check progress'),
-                                const SizedBox(width: 8),
-                                _buildQuickReply('Book session'),
-                              ],
+                          children: [
+                            // Quick Replies (Optional)
+                            SingleChildScrollView(
+                              scrollDirection: Axis.horizontal,
+                              child: Row(
+                                children: [
+                                  _buildQuickReply('Need assistance'),
+                                  const SizedBox(width: 8),
+                                  _buildQuickReply('Book session'),
+                                ],
+                              ),
                             ),
-                          ),
-                          const SizedBox(height: 12),
-                          
-                          // Input Field
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFF8FAFF),
-                              borderRadius: BorderRadius.circular(24),
-                              border: Border.all(color: Colors.grey.shade200),
-                            ),
-                            child: Row(
-                              children: [
-                                IconButton(
-                                  onPressed: () {},
-                                  icon: const Icon(Icons.attach_file, color: Colors.black54, size: 20),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: TextField(
-                                    controller: _messageController,
-                                    style: GoogleFonts.readexPro(fontSize: 14),
-                                    decoration: InputDecoration(
-                                      hintText: 'Type your message...',
-                                      hintStyle: GoogleFonts.readexPro(
-                                        color: Colors.grey.shade400,
+                            const SizedBox(height: 12),
+
+                            // Input Field
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 16,
+                                vertical: 4,
+                              ),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF8FAFF),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: Colors.grey.shade200),
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _messageController,
+                                      minLines: 1,
+                                      maxLines: 4,
+                                      keyboardType: TextInputType.multiline,
+                                      textInputAction: TextInputAction.newline,
+                                      style: GoogleFonts.readexPro(
                                         fontSize: 14,
                                       ),
-                                      border: InputBorder.none,
+                                      decoration: InputDecoration(
+                                        hintText: 'Type your message...',
+                                        hintStyle: GoogleFonts.readexPro(
+                                          color: Colors.grey.shade400,
+                                          fontSize: 14,
+                                        ),
+                                        border: InputBorder.none,
+                                      ),
                                     ),
-                                    onSubmitted: (_) => _sendMessage(),
                                   ),
-                                ),
-                                IconButton(
-                                  onPressed: _sendMessage,
-                                  icon: const Icon(
-                                    Icons.send_rounded,
-                                    color: Color(0xFF1565C0),
-                                    size: 24,
+                                  IconButton(
+                                    onPressed: _sendMessage,
+                                    icon: const Icon(
+                                      Icons.send_rounded,
+                                      color: Color(0xFF1565C0),
+                                      size: 24,
+                                    ),
+                                    padding: EdgeInsets.zero,
+                                    constraints: const BoxConstraints(),
                                   ),
-                                  padding: EdgeInsets.zero,
-                                  constraints: const BoxConstraints(),
-                                ),
-                              ],
+                                ],
+                              ),
                             ),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
                   ],
                 ),
               ),
@@ -618,9 +664,8 @@ class _LiveChatPageState extends State<LiveChatPage> {
                 ),
                 const SizedBox(height: 8),
                 OutlinedButton.icon(
-                  onPressed: () => _joinOrRespondToInvite(
-                    message.teleconferenceRoom!,
-                  ),
+                  onPressed: () =>
+                      _joinOrRespondToInvite(message.teleconferenceRoom!),
                   icon: const Icon(Icons.video_call_outlined),
                   label: const Text('Join video consultation'),
                 ),
@@ -639,12 +684,18 @@ class _LiveChatPageState extends State<LiveChatPage> {
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         decoration: BoxDecoration(
-          color: message.isUser ? const Color(0xFF1565C0) : const Color(0xFFF1F5FF),
+          color: message.isUser
+              ? const Color(0xFF1565C0)
+              : const Color(0xFFF1F5FF),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
-            bottomLeft: message.isUser ? const Radius.circular(16) : const Radius.circular(4),
-            bottomRight: message.isUser ? const Radius.circular(4) : const Radius.circular(16),
+            bottomLeft: message.isUser
+                ? const Radius.circular(16)
+                : const Radius.circular(4),
+            bottomRight: message.isUser
+                ? const Radius.circular(4)
+                : const Radius.circular(16),
           ),
         ),
         child: Text(

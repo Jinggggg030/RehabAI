@@ -872,6 +872,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   @override
   Widget build(BuildContext context) {
+    final compactNavigation = MediaQuery.sizeOf(context).width < 1400;
     return Scaffold(
       backgroundColor: RehabColors.portalBackground,
       body: PortalBackdrop(
@@ -879,8 +880,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
         child: Row(
           children: [
             Container(
-              width: 236,
-              margin: const EdgeInsets.all(14),
+              width: compactNavigation ? 82 : 236,
+              margin: EdgeInsets.all(compactNavigation ? 10 : 14),
               clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
@@ -901,7 +902,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 children: [
                   Container(
                     height: 74,
-                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    padding: EdgeInsets.symmetric(
+                      horizontal: compactNavigation ? 15 : 18,
+                    ),
                     decoration: BoxDecoration(
                       border: Border(
                         bottom: BorderSide(
@@ -909,33 +912,35 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         ),
                       ),
                     ),
-                    child: const Row(
+                    child: Row(
                       children: [
-                        _AdminLogo(),
-                        SizedBox(width: 11),
-                        Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'RehabAI',
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w900,
-                                color: Colors.white,
-                                letterSpacing: 0.3,
+                        const _AdminLogo(),
+                        if (!compactNavigation) ...[
+                          const SizedBox(width: 11),
+                          const Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'RehabAI',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w900,
+                                  color: Colors.white,
+                                  letterSpacing: 0.3,
+                                ),
                               ),
-                            ),
-                            Text(
-                              'Admin Panel',
-                              style: TextStyle(
-                                fontSize: 10,
-                                color: Colors.white60,
-                                fontWeight: FontWeight.w700,
+                              Text(
+                                'Admin Panel',
+                                style: TextStyle(
+                                  fontSize: 10,
+                                  color: Colors.white60,
+                                  fontWeight: FontWeight.w700,
+                                ),
                               ),
-                            ),
-                          ],
-                        ),
+                            ],
+                          ),
+                        ],
                       ],
                     ),
                   ),
@@ -944,14 +949,29 @@ class _AdminDashboardState extends State<AdminDashboard> {
                     0,
                     Icons.assignment_turned_in_outlined,
                     'Active Rentals',
+                    compact: compactNavigation,
                   ),
                   _adminNavItem(
                     1,
                     Icons.inventory_2_outlined,
                     'Equipment Inventory',
+                    compact: compactNavigation,
                   ),
                   const Spacer(),
-                  const PortalSystemStatus(label: 'Operations network online'),
+                  if (!compactNavigation)
+                    const PortalSystemStatus(label: 'Operations network online')
+                  else
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 12),
+                      child: Tooltip(
+                        message: 'Operations network online',
+                        child: Icon(
+                          Icons.circle,
+                          color: Color(0xFF4ADE80),
+                          size: 9,
+                        ),
+                      ),
+                    ),
                   Padding(
                     padding: const EdgeInsets.all(12),
                     child: TextButton.icon(
@@ -966,7 +986,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         }
                       },
                       icon: const Icon(Icons.logout_rounded),
-                      label: const Text('Exit Portal'),
+                      label: compactNavigation
+                          ? const SizedBox.shrink()
+                          : const Text('Exit Portal'),
                       style: TextButton.styleFrom(
                         foregroundColor: Colors.white70,
                         backgroundColor: Colors.white.withValues(alpha: 0.08),
@@ -1035,20 +1057,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             ],
                           ),
                         ),
-                        PortalMetric(
-                          icon: Icons.local_shipping_outlined,
-                          value:
-                              '${_rentals.where((r) => r['status'] == 'Approved' || r['status'] == 'Active').length}',
-                          label: 'ACTIVE RENTALS',
-                          accent: RehabColors.purple,
-                        ),
-                        const SizedBox(width: 8),
-                        PortalMetric(
-                          icon: Icons.inventory_2_outlined,
-                          value: '${_equipment.length}',
-                          label: 'ASSET TYPES',
-                          accent: RehabColors.cyan,
-                        ),
+                        if (!compactNavigation) ...[
+                          PortalMetric(
+                            icon: Icons.local_shipping_outlined,
+                            value:
+                                '${_rentals.where((r) => r['status'] == 'Approved' || r['status'] == 'Active').length}',
+                            label: 'ACTIVE RENTALS',
+                            accent: RehabColors.purple,
+                          ),
+                          const SizedBox(width: 8),
+                          PortalMetric(
+                            icon: Icons.inventory_2_outlined,
+                            value: '${_equipment.length}',
+                            label: 'ASSET TYPES',
+                            accent: RehabColors.cyan,
+                          ),
+                        ],
                         const SizedBox(width: 10),
                         IconButton.filledTonal(
                           tooltip: 'Refresh data',
@@ -1059,37 +1083,38 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           icon: const Icon(Icons.refresh_rounded),
                         ),
                         const SizedBox(width: 10),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFFF3F0FF),
-                            borderRadius: BorderRadius.circular(13),
-                          ),
-                          child: const Row(
-                            children: [
-                              CircleAvatar(
-                                radius: 12,
-                                backgroundColor: RehabColors.admin,
-                                child: Icon(
-                                  Icons.admin_panel_settings,
-                                  size: 14,
-                                  color: Colors.white,
+                        if (!compactNavigation)
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFF3F0FF),
+                              borderRadius: BorderRadius.circular(13),
+                            ),
+                            child: const Row(
+                              children: [
+                                CircleAvatar(
+                                  radius: 12,
+                                  backgroundColor: RehabColors.admin,
+                                  child: Icon(
+                                    Icons.admin_panel_settings,
+                                    size: 14,
+                                    color: Colors.white,
+                                  ),
                                 ),
-                              ),
-                              SizedBox(width: 8),
-                              Text(
-                                'Administrator',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
+                                SizedBox(width: 8),
+                                Text(
+                                  'Administrator',
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
                       ],
                     ),
                   ),
@@ -1116,7 +1141,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Widget _adminNavItem(int index, IconData icon, String label) {
+  Widget _adminNavItem(
+    int index,
+    IconData icon,
+    String label, {
+    bool compact = false,
+  }) {
     final selected = _selectedIndex == index;
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 5),
@@ -1125,25 +1155,44 @@ class _AdminDashboardState extends State<AdminDashboard> {
             ? Colors.white.withValues(alpha: 0.14)
             : Colors.transparent,
         borderRadius: BorderRadius.circular(13),
-        child: ListTile(
-          dense: true,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(13),
-          ),
-          leading: Icon(
-            icon,
-            color: selected ? const Color(0xFFC4B5FD) : Colors.white54,
-            size: 19,
-          ),
-          title: Text(
-            label,
-            style: TextStyle(
-              color: selected ? Colors.white : Colors.white60,
-              fontSize: 12,
-              fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+        child: Tooltip(
+          message: compact ? label : '',
+          child: ListTile(
+            dense: true,
+            contentPadding: compact
+                ? EdgeInsets.zero
+                : const EdgeInsets.symmetric(horizontal: 16),
+            horizontalTitleGap: compact ? 0 : 12,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(13),
             ),
+            leading: compact
+                ? null
+                : Icon(
+                    icon,
+                    color: selected ? const Color(0xFFC4B5FD) : Colors.white54,
+                    size: 19,
+                  ),
+            title: compact
+                ? Center(
+                    child: Icon(
+                      icon,
+                      color: selected
+                          ? const Color(0xFFC4B5FD)
+                          : Colors.white54,
+                      size: 19,
+                    ),
+                  )
+                : Text(
+                    label,
+                    style: TextStyle(
+                      color: selected ? Colors.white : Colors.white60,
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                    ),
+                  ),
+            onTap: () => setState(() => _selectedIndex = index),
           ),
-          onTap: () => setState(() => _selectedIndex = index),
         ),
       ),
     );

@@ -128,18 +128,19 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).width < 1400;
     return Row(
       children: [
-        _buildPatientSidebar(),
+        _buildPatientSidebar(compact: compact),
         const VerticalDivider(width: 1, thickness: 1),
         Expanded(child: _buildAnalysisArea()),
       ],
     );
   }
 
-  Widget _buildPatientSidebar() {
+  Widget _buildPatientSidebar({required bool compact}) {
     return Container(
-      width: 310,
+      width: compact ? 260 : 310,
       color: Colors.white,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -304,7 +305,7 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
   Widget _buildPatientHeader(Map<String, dynamic> progress) {
     final patient = Map<String, dynamic>.from(progress['patient'] as Map);
     final prescription = _selectedPatient?['active_prescription'];
-    return Row(
+    Widget identity() => Row(
       children: [
         CircleAvatar(
           radius: 28,
@@ -318,6 +319,8 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
             children: [
               Text(
                 patient['student_name']?.toString() ?? 'Patient',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: GoogleFonts.readexPro(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -326,27 +329,58 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
               const SizedBox(height: 3),
               Text(
                 patient['email']?.toString() ?? '',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
                 style: const TextStyle(color: Colors.black54),
               ),
             ],
           ),
         ),
-        if (prescription != null)
-          Container(
-            constraints: const BoxConstraints(maxWidth: 340),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
-            decoration: BoxDecoration(
-              color: Colors.blue.withValues(alpha: 0.08),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Text(
-              'Prescription: $prescription',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: Colors.blue[900]),
-            ),
-          ),
       ],
+    );
+
+    Widget prescriptionCard() => Container(
+      constraints: const BoxConstraints(maxWidth: 340),
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 9),
+      decoration: BoxDecoration(
+        color: Colors.blue.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Text(
+        'Prescription: $prescription',
+        maxLines: 2,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(color: Colors.blue[900]),
+      ),
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < 700) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              identity(),
+              if (prescription != null) ...[
+                const SizedBox(height: 12),
+                Align(
+                  alignment: Alignment.centerLeft,
+                  child: prescriptionCard(),
+                ),
+              ],
+            ],
+          );
+        }
+        return Row(
+          children: [
+            Expanded(child: identity()),
+            if (prescription != null) ...[
+              const SizedBox(width: 16),
+              prescriptionCard(),
+            ],
+          ],
+        );
+      },
     );
   }
 
@@ -355,41 +389,44 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
     final accuracy = (summary['average_accuracy'] as num?)?.toDouble();
     final pain = (summary['average_pain_change'] as num?)?.toDouble();
     final seconds = (summary['total_duration_seconds'] as num?)?.toInt() ?? 0;
-    return GridView.count(
-      crossAxisCount: 4,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.65,
-      children: [
-        _AnalysisCard(
-          label: 'Completed Sessions',
-          value: '${summary['total_sessions'] ?? 0}',
-          icon: Icons.check_circle_outline,
-          color: Colors.blue,
-        ),
-        _AnalysisCard(
-          label: 'Active Minutes',
-          value: (seconds / 60).toStringAsFixed(1),
-          icon: Icons.timer_outlined,
-          color: Colors.indigo,
-        ),
-        _AnalysisCard(
-          label: 'Average Accuracy',
-          value: accuracy == null ? '—' : '${accuracy.toStringAsFixed(0)}%',
-          icon: Icons.auto_awesome,
-          color: Colors.orange,
-        ),
-        _AnalysisCard(
-          label: 'Pain Change',
-          value: pain == null
-              ? '—'
-              : '${pain >= 0 ? '↓' : '↑'}${pain.abs().toStringAsFixed(1)}',
-          icon: Icons.monitor_heart_outlined,
-          color: pain == null || pain >= 0 ? Colors.green : Colors.red,
-        ),
-      ],
+    final cards = [
+      _AnalysisCard(
+        label: 'Completed Sessions',
+        value: '${summary['total_sessions'] ?? 0}',
+        icon: Icons.check_circle_outline,
+        color: Colors.blue,
+      ),
+      _AnalysisCard(
+        label: 'Active Minutes',
+        value: (seconds / 60).toStringAsFixed(1),
+        icon: Icons.timer_outlined,
+        color: Colors.indigo,
+      ),
+      _AnalysisCard(
+        label: 'Average Accuracy',
+        value: accuracy == null ? '—' : '${accuracy.toStringAsFixed(0)}%',
+        icon: Icons.auto_awesome,
+        color: Colors.orange,
+      ),
+      _AnalysisCard(
+        label: 'Pain Change',
+        value: pain == null
+            ? '—'
+            : '${pain >= 0 ? '↓' : '↑'}${pain.abs().toStringAsFixed(1)}',
+        icon: Icons.monitor_heart_outlined,
+        color: pain == null || pain >= 0 ? Colors.green : Colors.red,
+      ),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) => GridView.count(
+        crossAxisCount: constraints.maxWidth < 700 ? 2 : 4,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: constraints.maxWidth < 700 ? 1.8 : 1.65,
+        children: cards,
+      ),
     );
   }
 
