@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:rehab_ai/screens/contact_us_page.dart';
 import 'package:rehab_ai/screens/equipment_rental_page.dart';
+import 'package:rehab_ai/screens/help_support_page.dart';
 import 'package:rehab_ai/screens/live_chat_page.dart';
 import 'package:rehab_ai/screens/my_appointments_page.dart';
 import 'package:rehab_ai/screens/rehabilitation_exercises_page.dart';
@@ -46,7 +46,7 @@ class ServicesPage extends StatelessWidget {
         description: 'Contact the RehabAI support team',
         icon: Icons.support_agent_rounded,
         colors: const [Color(0xFFF59E0B), Color(0xFFF97316)],
-        destination: const ContactUsPage(),
+        destination: const HelpSupportPage(),
       ),
     ];
 
@@ -132,25 +132,6 @@ class ServicesPage extends StatelessWidget {
             padding: const EdgeInsets.fromLTRB(20, 20, 20, 32),
             sliver: SliverList.list(
               children: [
-                TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search care services',
-                    prefixIcon: const Icon(Icons.search_rounded),
-                    suffixIcon: Container(
-                      margin: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: RehabColors.primary,
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      child: const Icon(
-                        Icons.tune_rounded,
-                        color: Colors.white,
-                        size: 18,
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 22),
                 const Text(
                   'Available Services',
                   style: TextStyle(fontSize: 18, fontWeight: FontWeight.w900),

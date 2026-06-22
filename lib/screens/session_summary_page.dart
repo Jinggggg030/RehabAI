@@ -208,22 +208,42 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
                   child: CircularProgressIndicator(color: Color(0xFF1565C0)),
                 )
               else if (_saveSuccess)
-                Text(
-                  'âœ“ Progress securely saved',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.readexPro(
-                    color: const Color(0xFF1565C0),
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.check_circle_outline_rounded,
+                      color: Color(0xFF1565C0),
+                      size: 18,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Progress securely saved',
+                      style: GoogleFonts.readexPro(
+                        color: const Color(0xFF1565C0),
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 )
               else
-                Text(
-                  'âŒ Failed to save progress to cloud',
-                  textAlign: TextAlign.center,
-                  style: GoogleFonts.readexPro(
-                    color: Colors.red,
-                    fontWeight: FontWeight.bold,
-                  ),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    const Icon(
+                      Icons.error_outline_rounded,
+                      color: Colors.red,
+                      size: 18,
+                    ),
+                    const SizedBox(width: 6),
+                    Text(
+                      'Failed to save progress to cloud',
+                      style: GoogleFonts.readexPro(
+                        color: Colors.red,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ],
                 ),
 
               const Spacer(),
