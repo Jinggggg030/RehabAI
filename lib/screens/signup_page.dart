@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/main_screen.dart';
 import 'package:rehab_ai/screens/profile_setup_page.dart';
@@ -163,7 +163,7 @@ class _SignupPageState extends State<SignupPage> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF207866)),
+                    borderSide: const BorderSide(color: Color(0xFF1565C0)),
                   ),
                 ),
               ),
@@ -184,7 +184,7 @@ class _SignupPageState extends State<SignupPage> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF207866)),
+                    borderSide: const BorderSide(color: Color(0xFF1565C0)),
                   ),
                 ),
               ),
@@ -217,7 +217,7 @@ class _SignupPageState extends State<SignupPage> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF207866)),
+                    borderSide: const BorderSide(color: Color(0xFF1565C0)),
                   ),
                 ),
               ),
@@ -250,7 +250,7 @@ class _SignupPageState extends State<SignupPage> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF207866)),
+                    borderSide: const BorderSide(color: Color(0xFF1565C0)),
                   ),
                 ),
               ),
@@ -270,7 +270,7 @@ class _SignupPageState extends State<SignupPage> {
                           _agreedToTerms = value ?? false;
                         });
                       },
-                      activeColor: const Color(0xFF207866),
+                      activeColor: const Color(0xFF1565C0),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(4),
                       ),
@@ -286,12 +286,12 @@ class _SignupPageState extends State<SignupPage> {
                           TextSpan(text: 'I agree to the '),
                           TextSpan(
                             text: 'Terms of Service',
-                            style: GoogleFonts.readexPro(color: Color(0xFF207866), fontWeight: FontWeight.w600),
+                            style: GoogleFonts.readexPro(color: Color(0xFF1565C0), fontWeight: FontWeight.w600),
                           ),
                           TextSpan(text: ' and '),
                           TextSpan(
                             text: 'Privacy Policy',
-                            style: GoogleFonts.readexPro(color: Color(0xFF207866), fontWeight: FontWeight.w600),
+                            style: GoogleFonts.readexPro(color: Color(0xFF1565C0), fontWeight: FontWeight.w600),
                           ),
                         ],
                       ),
@@ -305,7 +305,7 @@ class _SignupPageState extends State<SignupPage> {
               ElevatedButton(
                 onPressed: _isLoading ? null : _signUp,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF207866),
+                  backgroundColor: const Color(0xFF1565C0),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(

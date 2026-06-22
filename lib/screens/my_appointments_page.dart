@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
@@ -8,11 +8,18 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:rehab_ai/screens/live_chat_page.dart';
-import '../services/teleconference_service.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 
 class MyAppointmentsPage extends StatefulWidget {
-  const MyAppointmentsPage({super.key});
+  const MyAppointmentsPage({
+    super.key,
+    this.openBookingOnStart = false,
+    this.closeAfterBooking = false,
+  });
+
+  final bool openBookingOnStart;
+  final bool closeAfterBooking;
 
   @override
   State<MyAppointmentsPage> createState() => _MyAppointmentsPageState();
@@ -33,7 +40,17 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
-    _initData();
+    _initData().then((_) {
+      if (!mounted || !widget.openBookingOnStart) return;
+      WidgetsBinding.instance.addPostFrameCallback((_) async {
+        if (!mounted) return;
+        final launcherRoute = ModalRoute.of(context);
+        await _showBookAppointmentBottomSheet(context);
+        if (mounted && widget.closeAfterBooking && launcherRoute != null) {
+          Navigator.of(context).removeRoute(launcherRoute);
+        }
+      });
+    });
   }
 
   Future<void> _initData() async {
@@ -117,67 +134,103 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
 
   @override
   Widget build(BuildContext context) {
+    if (widget.closeAfterBooking) {
+      return const Scaffold(backgroundColor: Colors.transparent);
+    }
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA), // Match HomePage background
+      backgroundColor: const Color(0xFFF8FAFF), // Match HomePage background
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                        border: Border.all(color: Colors.grey.shade100),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              child: Container(
+                height: 138,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  gradient: RehabColors.patientGradient,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: RehabColors.primary.withValues(alpha: 0.24),
+                      blurRadius: 24,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      right: -32,
+                      top: -44,
+                      child: Container(
+                        width: 130,
+                        height: 130,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.09),
+                        ),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black54),
                     ),
-                  ),
-                  Text(
-                    'My Appointments',
-                    style: GoogleFonts.readexPro(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF207866),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            IconButton.filledTonal(
+                              onPressed: () => Navigator.pop(context),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.white.withValues(alpha: 0.15),
+                                foregroundColor: Colors.white,
+                              ),
+                              icon: const Icon(Icons.arrow_back_rounded),
+                            ),
+                            const Spacer(),
+                          ],
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Care Schedule',
+                          style: GoogleFonts.readexPro(
+                            color: Colors.white,
+                            fontSize: 23,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const Text(
+                          'Your physiotherapy appointments in one place.',
+                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                        ),
+                      ],
                     ),
-                  ),
-                  IconButton(
-                    onPressed: () {},
-                    icon: const Icon(Icons.calendar_today_outlined, color: Color(0xFF207866)),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
 
             // Tab Bar
             Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: Colors.grey.shade300, width: 1),
-                ),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: RehabColors.border),
               ),
               child: TabBar(
                 controller: _tabController,
-                indicatorColor: const Color(0xFF207866),
-                indicatorWeight: 3,
-                labelColor: Colors.black87,
-                labelStyle: GoogleFonts.readexPro(fontWeight: FontWeight.bold, fontSize: 16),
-                unselectedLabelColor: Colors.grey,
-                unselectedLabelStyle: GoogleFonts.readexPro(fontWeight: FontWeight.normal, fontSize: 15),
+                dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(
+                  color: RehabColors.primary,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                labelColor: Colors.white,
+                labelStyle: GoogleFonts.readexPro(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+                unselectedLabelColor: RehabColors.muted,
                 tabs: const [
                   Tab(text: 'Upcoming'),
                   Tab(text: 'Past'),
@@ -203,11 +256,16 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
           ],
         ),
       ),
-      floatingActionButton: FloatingActionButton(
+      floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _showBookAppointmentBottomSheet(context),
-        backgroundColor: const Color(0xFF207866),
-        shape: const CircleBorder(),
-        child: const Icon(Icons.add, color: Colors.white, size: 32),
+        backgroundColor: const Color(0xFF1565C0),
+        foregroundColor: Colors.white,
+        elevation: 8,
+        icon: const Icon(Icons.add_rounded),
+        label: const Text(
+          'Book appointment',
+          style: TextStyle(fontWeight: FontWeight.w700),
+        ),
       ),
     );
   }
@@ -239,16 +297,16 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
     return GestureDetector(
       onTap: isUpcoming ? () => _showAppointmentDialog(context, appointment) : null,
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
           color: Colors.white,
-          borderRadius: BorderRadius.circular(8),
+          borderRadius: BorderRadius.circular(22),
+          border: Border.all(color: RehabColors.border),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.04),
-              blurRadius: 10,
-              spreadRadius: 1,
-              offset: const Offset(0, 4),
+              color: RehabColors.primary.withValues(alpha: 0.08),
+              blurRadius: 20,
+              offset: const Offset(0, 8),
             ),
           ],
         ),
@@ -258,17 +316,21 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Image Placeholder
                 Container(
-                  width: 80,
-                  height: 80,
+                  width: 5,
+                  height: 84,
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.black87, width: 1), // Black border
-                    borderRadius: BorderRadius.circular(4),
+                    gradient: isCancelled
+                        ? const LinearGradient(
+                            colors: [Color(0xFFEF4444), Color(0xFFF97316)],
+                            begin: Alignment.topCenter,
+                            end: Alignment.bottomCenter,
+                          )
+                        : RehabColors.patientGradient,
+                    borderRadius: BorderRadius.circular(8),
                   ),
                 ),
-                const SizedBox(width: 16),
+                const SizedBox(width: 14),
                 // Appointment Details
                 Expanded(
                   child: Column(
@@ -282,31 +344,60 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
                           color: Colors.black87,
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      Row(
-                        children: [
-                          const Icon(Icons.calendar_today_outlined, size: 14, color: Colors.black87),
-                          const SizedBox(width: 4),
-                          Text(
-                            DateFormat('EEE, MMM d').format(DateTime.tryParse(appointment['schedule_time'] ?? '') ?? DateTime.now()),
-                            style: GoogleFonts.readexPro(
-                              fontSize: 12,
-                              color: Colors.black87,
-                              fontWeight: FontWeight.w500,
+                      const SizedBox(height: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: RehabColors.primaryLight,
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.calendar_today_outlined,
+                              size: 13,
+                              color: RehabColors.primary,
                             ),
-                          ),
-                          const SizedBox(width: 12),
-                          const Icon(Icons.access_time, size: 14, color: Colors.black87),
-                          const SizedBox(width: 4),
-                          Text(
-                            DateFormat('hh:mm a').format(DateTime.tryParse(appointment['schedule_time'] ?? '') ?? DateTime.now()),
-                            style: GoogleFonts.readexPro(
-                              fontSize: 12,
-                              color: Colors.black87,
-                              fontWeight: FontWeight.w500,
+                            const SizedBox(width: 5),
+                            Text(
+                              DateFormat('EEE, MMM d').format(
+                                DateTime.tryParse(
+                                      appointment['schedule_time'] ?? '',
+                                    ) ??
+                                    DateTime.now(),
+                              ),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: RehabColors.ink,
+                                fontWeight: FontWeight.w600,
+                              ),
                             ),
-                          ),
-                        ],
+                            const SizedBox(width: 9),
+                            const Icon(
+                              Icons.schedule_rounded,
+                              size: 14,
+                              color: RehabColors.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              DateFormat('hh:mm a').format(
+                                DateTime.tryParse(
+                                      appointment['schedule_time'] ?? '',
+                                    ) ??
+                                    DateTime.now(),
+                              ),
+                              style: const TextStyle(
+                                fontSize: 11,
+                                color: RehabColors.ink,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
                       ),
                       const SizedBox(height: 8),
                       Text(
@@ -387,7 +478,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
         return Dialog(
           backgroundColor: Colors.white,
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(8),
+            borderRadius: BorderRadius.circular(24),
           ),
           child: Padding(
             padding: const EdgeInsets.all(20.0),
@@ -443,7 +534,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
                     availableGestures: AvailableGestures.none, // Disable swiping
                     calendarStyle: const CalendarStyle(
                       todayDecoration: BoxDecoration(
-                        color: Color(0xFF207866),
+                        color: Color(0xFF1565C0),
                         shape: BoxShape.circle,
                       ),
                       todayTextStyle: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
@@ -462,20 +553,6 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
                 _buildDialogDetailRow('Reminder', 'Please Bring Your Matric Card\nAnd IC'),
                 const SizedBox(height: 32),
 
-                FilledButton.icon(
-                  onPressed: () => TeleconferenceService.join(
-                    context: context,
-                    meetingRoom: appointment['meeting_room']?.toString(),
-                  ),
-                  icon: const Icon(Icons.video_call_outlined),
-                  label: const Text('Join Video Consultation'),
-                  style: FilledButton.styleFrom(
-                    backgroundColor: const Color(0xFF207866),
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                  ),
-                ),
-                const SizedBox(height: 12),
-                
                 // Cancel Button
                 Align(
                   alignment: Alignment.centerRight,
@@ -629,7 +706,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
                         _showAppointmentDialog(context, appointment);
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF207866),
+                        backgroundColor: const Color(0xFF1565C0),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                         shape: RoundedRectangleBorder(
@@ -725,7 +802,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text("Book Appointment", style: GoogleFonts.readexPro(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF207866))),
+                  Text("Book Appointment", style: GoogleFonts.readexPro(fontSize: 20, fontWeight: FontWeight.bold, color: const Color(0xFF1565C0))),
                   const SizedBox(height: 24),
                   
                   Text("Select Physiotherapist", style: GoogleFonts.readexPro(fontWeight: FontWeight.bold)),
@@ -760,7 +837,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
                         items: _availablePhysios.map<DropdownMenuItem<int>>((p) {
                           return DropdownMenuItem<int>(
                             value: p['therapist_id'],
-                            child: Text("${p['name']} (${p['specialization']}) ${p['recommended'] ? '⭐' : ''}"),
+                            child: Text("${p['name']} (${p['specialization']}) ${p['recommended'] ? 'â­' : ''}"),
                           );
                         }).toList(),
                         onChanged: (val) => setModalState(() => selectedPhysioId = val),
@@ -815,11 +892,11 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
                       },
                       calendarStyle: CalendarStyle(
                         selectedDecoration: BoxDecoration(
-                          color: const Color(0xFF207866),
+                          color: const Color(0xFF1565C0),
                           shape: BoxShape.circle,
                         ),
                         todayDecoration: BoxDecoration(
-                          color: const Color(0xFF207866).withOpacity(0.3),
+                          color: const Color(0xFF1565C0).withOpacity(0.3),
                           shape: BoxShape.circle,
                         ),
                       ),
@@ -879,7 +956,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage> with SingleTick
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF207866),
+                        backgroundColor: const Color(0xFF1565C0),
                         padding: const EdgeInsets.symmetric(vertical: 16),
                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                       ),

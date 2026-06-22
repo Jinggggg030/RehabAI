@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/landing_page.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -28,13 +28,7 @@ class MyApp extends StatelessWidget {
     return MaterialApp(
       title: 'RehabAI',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: const Color(0xFF207866)),
-        textTheme: GoogleFonts.readexProTextTheme(
-          Theme.of(context).textTheme,
-        ),
-        useMaterial3: true,
-      ),
+      theme: RehabTheme.light,
       home: const LandingPage(),
     );
   }

@@ -30,5 +30,12 @@ with engine.begin() as connection:
             "NOT NULL DEFAULT 'duration'"
         )
     )
+    connection.execute(
+        text(
+            'ALTER TABLE "Prescribed_Exercise" '
+            "ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMP NOT NULL "
+            "DEFAULT CURRENT_TIMESTAMP"
+        )
+    )
 
 print("Prescription exercise settings columns are ready.")

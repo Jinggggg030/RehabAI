@@ -12,7 +12,7 @@ import cv2
 from backend.ai.pose_detector import PoseDetector
 from backend.ai.angle_calculator import calculate_angle
 from backend.ai.chatbot import chatbot_instance
-from datetime import datetime
+from datetime import datetime, timedelta
 import secrets
 
 models.Base.metadata.create_all(bind=engine)
@@ -49,6 +49,11 @@ with engine.begin() as connection:
     connection.execute(text(
         'ALTER TABLE "Prescribed_Exercise" '
         'ADD COLUMN IF NOT EXISTS assigned_days INTEGER NOT NULL DEFAULT 1'
+    ))
+    connection.execute(text(
+        'ALTER TABLE "Prescribed_Exercise" '
+        'ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMP NOT NULL '
+        'DEFAULT CURRENT_TIMESTAMP'
     ))
     connection.execute(text(
         'ALTER TABLE "Prescribed_Exercise" '
@@ -706,7 +711,22 @@ def get_prescribed_exercises(student_id: int, db: Session = Depends(get_db)):
     ).all()
     
     result = []
+    today = datetime.now().date()
     for pe in prescribed:
+        assigned_days = max(pe.assigned_days or 1, 1)
+        assigned_at = pe.assigned_at or active_appointment.schedule_time
+        plan_start = assigned_at.date() if assigned_at else today
+        plan_end = plan_start + timedelta(days=assigned_days - 1)
+        # A prescription is part of the student's daily routine from its
+        # start date through the final assigned day, inclusive.
+        if today > plan_end:
+            continue
+        plan_day = 0 if today < plan_start else (today - plan_start).days + 1
+        days_remaining = (
+            assigned_days
+            if today < plan_start
+            else (plan_end - today).days + 1
+        )
         ex = db.query(models.Exercise).filter(models.Exercise.exercise_id == pe.exercise_id).first()
         if ex:
             disciplines = db.query(models.Discipline.description).join(
@@ -729,9 +749,13 @@ def get_prescribed_exercises(student_id: int, db: Session = Depends(get_db)):
                 "assigned_sets": pe.assigned_sets,
                 "assigned_duration": pe.assigned_duration,
                 "assigned_reps": pe.assigned_reps,
-                "assigned_days": pe.assigned_days,
+                "assigned_days": assigned_days,
                 "assigned_tracking_mode": pe.assigned_tracking_mode,
-                "assigned_date": active_appointment.schedule_time.isoformat() if active_appointment.schedule_time else None
+                "assigned_date": assigned_at.isoformat() if assigned_at else None,
+                "plan_day": plan_day,
+                "days_remaining": days_remaining,
+                "plan_progress": min(plan_day / assigned_days, 1.0),
+                "plan_end_date": plan_end.isoformat()
             })
     return {"exercises": result}
 
@@ -1971,7 +1995,10 @@ def request_rental(req: RentalRequest, db: Session = Depends(get_db)):
 @app.get("/rentals/student/{student_id}")
 def get_student_rentals(student_id: int, db: Session = Depends(get_db)):
     rentals = db.query(
-        models.RentalRecord, models.Equipment.name, models.RentalReason.description
+        models.RentalRecord,
+        models.Equipment.name,
+        models.Equipment.image,
+        models.RentalReason.description
     ).join(
         models.Equipment, models.RentalRecord.equipment_id == models.Equipment.equipment_id
     ).join(
@@ -1981,16 +2008,18 @@ def get_student_rentals(student_id: int, db: Session = Depends(get_db)):
     ).order_by(models.RentalRecord.collection_date.desc()).all()
     
     result = []
-    for r, eq_name, reason_desc in rentals:
+    for r, eq_name, eq_image, reason_desc in rentals:
         result.append({
             "rental_record_id": r.rental_record_id,
             "equipment_name": eq_name,
+            "equipment_image": eq_image,
             "reason_description": reason_desc,
             "custom_reason": r.custom_reason,
             "collection_date": r.collection_date,
             "return_date": r.return_date,
             "status": r.status,
-            "return_status": r.return_status
+            "return_status": r.return_status,
+            "proof_of_status": r.proof_of_status
         })
     return {"rentals": result}
 

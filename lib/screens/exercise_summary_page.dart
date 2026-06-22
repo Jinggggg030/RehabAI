@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class ExerciseSummaryPage extends StatelessWidget {
@@ -7,7 +7,7 @@ class ExerciseSummaryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF8FAFF),
       body: SafeArea(
         child: Column(
           children: [
@@ -23,7 +23,7 @@ class ExerciseSummaryPage extends StatelessWidget {
                     style: GoogleFonts.readexPro(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF207866),
+                      color: const Color(0xFF1565C0),
                     ),
                   ),
                 ),
@@ -54,7 +54,7 @@ class ExerciseSummaryPage extends StatelessWidget {
                       const Icon(
                         Icons.check_circle_outline,
                         size: 80,
-                        color: Color(0xFF207866),
+                        color: Color(0xFF1565C0),
                       ),
                       const SizedBox(height: 16),
                       Text(
@@ -92,7 +92,7 @@ class ExerciseSummaryPage extends StatelessWidget {
                             Navigator.of(context).popUntil((route) => route.isFirst);
                           },
                           style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF207866),
+                            backgroundColor: const Color(0xFF1565C0),
                             foregroundColor: Colors.white,
                             padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 32),
                             shape: RoundedRectangleBorder(
@@ -126,7 +126,7 @@ class ExerciseSummaryPage extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 48.0),
       child: Row(
         children: [
-          Icon(icon, color: const Color(0xFF207866), size: 24),
+          Icon(icon, color: const Color(0xFF1565C0), size: 24),
           const SizedBox(width: 16),
           Text(
             label,

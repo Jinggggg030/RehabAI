@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 class TermsAndConditionsPage extends StatelessWidget {
@@ -43,7 +43,7 @@ class TermsAndConditionsPage extends StatelessWidget {
                       style: GoogleFonts.readexPro(
                         fontSize: 18,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF207866),
+                        color: const Color(0xFF1565C0),
                       ),
                     ),
                     const SizedBox(width: 40), // Empty placeholder to balance the row

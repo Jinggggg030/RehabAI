@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/main_screen.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -114,7 +114,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                       ),
                       child: const Icon(
                         Icons.check,
-                        color: Color(0xFF207866),
+                        color: Color(0xFF1565C0),
                         size: 40,
                       ),
                     ),
@@ -124,7 +124,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                       style: GoogleFonts.readexPro(
                         fontSize: 24,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF207866),
+                        color: const Color(0xFF1565C0),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -394,7 +394,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               ElevatedButton(
                 onPressed: _isLoading ? null : _saveProfile,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF207866), // Primary green
+                  backgroundColor: const Color(0xFF1565C0), // Primary green
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -448,7 +448,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA), // Very light grey bg
+        color: const Color(0xFFF8FAFF), // Very light grey bg
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
       ),
@@ -495,7 +495,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
             value: value,
             groupValue: groupValue,
             onChanged: onChanged,
-            activeColor: const Color(0xFF207866),
+            activeColor: const Color(0xFF1565C0),
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
           Text(

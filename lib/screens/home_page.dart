@@ -12,6 +12,8 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:rehab_ai/widgets/futuristic_home_dashboard.dart';
+import 'package:rehab_ai/screens/progress_page.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -162,14 +164,74 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    if (isLoading) {
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
+    }
+    return FuturisticHomeDashboard(
+      userName: userName,
+      todayDate: DateFormat('EEEE, MMMM d').format(DateTime.now()),
+      todaysRoutine: todaysRoutine,
+      quickAccess: quickAccess,
+      hasActiveChat: hasActiveChat,
+      adviceController: _aiAdviceController,
+      onSubmitAdvice: _submitAiAdvice,
+      onOpenExercises: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const RehabilitationExercisesPage()),
+      ),
+      onOpenProgress: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const ProgressPage()),
+      ),
+      onOpenAppointments: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const MyAppointmentsPage()),
+      ),
+      onBookAppointment: () => Navigator.push(
+        context,
+        PageRouteBuilder<void>(
+          opaque: false,
+          transitionDuration: Duration.zero,
+          reverseTransitionDuration: Duration.zero,
+          pageBuilder: (_, _, _) => const MyAppointmentsPage(
+            openBookingOnStart: true,
+            closeAfterBooking: true,
+          ),
+        ),
+      ),
+      onOpenChat: () => Navigator.push(
+        context,
+        MaterialPageRoute(builder: (_) => const LiveChatPage()),
+      ),
+      onOpenRoutineExercise: (exercise) => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              ExerciseDetailsPage(isAssigned: true, exercise: exercise),
+        ),
+      ),
+      onOpenExercise: (exercise) => Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) =>
+              ExerciseDetailsPage(isAssigned: false, exercise: exercise),
+        ),
+      ),
+    );
+  }
+
+  // Kept temporarily as a visual fallback while preserving the original
+  // data flow and callbacks during the design-system migration.
+  // ignore: unused_element
+  Widget _legacyBuild(BuildContext context) {
     String todayDate = DateFormat('EEEE, MMMM d').format(DateTime.now());
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA), // Off-white background
+      backgroundColor: const Color(0xFFF8FAFF), // Off-white background
       body: SafeArea(
         child: isLoading
             ? const Center(
-                child: CircularProgressIndicator(color: Color(0xFF207866)),
+                child: CircularProgressIndicator(color: Color(0xFF1565C0)),
               )
             : SingleChildScrollView(
                 padding: const EdgeInsets.all(24.0),
@@ -299,7 +361,7 @@ class _HomePageState extends State<HomePage> {
                               minHeight: 8,
                               backgroundColor: Colors.grey.shade200,
                               valueColor: const AlwaysStoppedAnimation<Color>(
-                                Color(0xFF207866),
+                                Color(0xFF1565C0),
                               ),
                             ),
                           ),
@@ -414,7 +476,7 @@ class _HomePageState extends State<HomePage> {
                               children: [
                                 const Icon(
                                   Icons.fitness_center,
-                                  color: Color(0xFF207866),
+                                  color: Color(0xFF1565C0),
                                   size: 20,
                                 ),
                                 const SizedBox(width: 16),
@@ -527,13 +589,13 @@ class _HomePageState extends State<HomePage> {
                                           padding: const EdgeInsets.all(8),
                                           decoration: BoxDecoration(
                                             color: const Color(
-                                              0xFF207866,
+                                              0xFF1565C0,
                                             ).withValues(alpha: 0.1),
                                             shape: BoxShape.circle,
                                           ),
                                           child: const Icon(
                                             Icons.sports_gymnastics,
-                                            color: Color(0xFF207866),
+                                            color: Color(0xFF1565C0),
                                             size: 24,
                                           ),
                                         ),
@@ -645,7 +707,7 @@ class _HomePageState extends State<HomePage> {
                             vertical: 12,
                           ),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF207866),
+                            color: const Color(0xFF1565C0),
                             borderRadius: BorderRadius.circular(16),
                           ),
                           child: Row(
@@ -695,13 +757,13 @@ class _HomePageState extends State<HomePage> {
                             padding: const EdgeInsets.all(12),
                             decoration: BoxDecoration(
                               color: const Color(
-                                0xFF207866,
+                                0xFF1565C0,
                               ).withValues(alpha: 0.1),
                               shape: BoxShape.circle,
                             ),
                             child: const Icon(
                               Icons.calendar_month,
-                              color: Color(0xFF207866),
+                              color: Color(0xFF1565C0),
                               size: 32,
                             ),
                           ),
@@ -740,7 +802,7 @@ class _HomePageState extends State<HomePage> {
                                       );
                                     },
                                     style: ElevatedButton.styleFrom(
-                                      backgroundColor: const Color(0xFF207866),
+                                      backgroundColor: const Color(0xFF1565C0),
                                       foregroundColor: Colors.white,
                                       padding: const EdgeInsets.symmetric(
                                         horizontal: 20,

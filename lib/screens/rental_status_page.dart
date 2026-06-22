@@ -1,7 +1,7 @@
-import 'package:rehab_ai/widgets/notification_bell.dart';
+﻿import 'package:rehab_ai/widgets/notification_bell.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:rehab_ai/screens/live_chat_page.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
@@ -75,67 +75,115 @@ class _RentalStatusPageState extends State<RentalStatusPage> with SingleTickerPr
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF8FAFF),
       body: SafeArea(
         child: Column(
           children: [
-            // Header
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
-                          ),
-                        ],
-                        border: Border.all(color: Colors.grey.shade100),
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+              child: Container(
+                height: 142,
+                padding: const EdgeInsets.all(18),
+                decoration: BoxDecoration(
+                  gradient: RehabColors.darkGradient,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: RehabColors.primary.withValues(alpha: 0.25),
+                      blurRadius: 25,
+                      offset: const Offset(0, 12),
+                    ),
+                  ],
+                ),
+                child: Stack(
+                  children: [
+                    Positioned(
+                      right: -28,
+                      top: -42,
+                      child: Container(
+                        width: 125,
+                        height: 125,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.cyanAccent.withValues(alpha: 0.10),
+                        ),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black54),
                     ),
-                  ),
-                  Text(
-                    'Rental Status',
-                    style: GoogleFonts.readexPro(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF207866),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            IconButton.filledTonal(
+                              onPressed: () => Navigator.pop(context),
+                              style: IconButton.styleFrom(
+                                backgroundColor: Colors.white.withValues(alpha: 0.14),
+                                foregroundColor: Colors.white,
+                              ),
+                              icon: const Icon(Icons.arrow_back_rounded),
+                            ),
+                            const Spacer(),
+                            Container(
+                              width: 42,
+                              height: 42,
+                              decoration: BoxDecoration(
+                                color: Colors.white.withValues(alpha: 0.14),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const IconTheme(
+                                data: IconThemeData(color: Colors.white),
+                                child: NotificationBell(),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Rental Journey',
+                          style: GoogleFonts.readexPro(
+                            color: Colors.white,
+                            fontSize: 23,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 3),
+                        const Text(
+                          'Track every request from approval to return.',
+                          style: TextStyle(color: Colors.white60, fontSize: 11),
+                        ),
+                      ],
                     ),
-                  ),
-                  const NotificationBell(),
-                ],
+                  ],
+                ),
               ),
             ),
-            
-            // Tabs
+
             Container(
+              margin: const EdgeInsets.symmetric(horizontal: 20),
+              padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: Colors.grey.shade300, width: 1),
-                ),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: RehabColors.border),
               ),
               child: TabBar(
                 controller: _tabController,
-                indicatorColor: const Color(0xFF207866),
-                indicatorWeight: 3,
-                labelColor: Colors.black87,
-                labelStyle: GoogleFonts.readexPro(fontWeight: FontWeight.bold, fontSize: 16),
-                unselectedLabelColor: Colors.grey,
-                unselectedLabelStyle: GoogleFonts.readexPro(fontWeight: FontWeight.normal, fontSize: 15),
+                dividerColor: Colors.transparent,
+                indicatorSize: TabBarIndicatorSize.tab,
+                indicator: BoxDecoration(
+                  color: RehabColors.primary,
+                  borderRadius: BorderRadius.circular(13),
+                ),
+                labelColor: Colors.white,
+                labelStyle: GoogleFonts.readexPro(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 12,
+                ),
+                unselectedLabelColor: RehabColors.muted,
                 tabs: const [
-                  Tab(text: 'Request'),
-                  Tab(text: 'Pending'),
-                  Tab(text: 'Completed'),
+                  Tab(text: 'Requests'),
+                  Tab(text: 'Active'),
+                  Tab(text: 'History'),
                 ],
               ),
             ),
@@ -188,17 +236,20 @@ class _RentalStatusPageState extends State<RentalStatusPage> with SingleTickerPr
   }
 
   Widget _buildRentalCard(dynamic rental, {bool isRequest = false, bool isPending = false, bool isCompleted = false}) {
+    if (isCompleted) return _buildCompletedRentalCard(rental);
+
+    final imageUrl = rental['equipment_image']?.toString();
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: RehabColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            spreadRadius: 1,
-            offset: const Offset(0, 4),
+            color: RehabColors.primary.withValues(alpha: 0.08),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -210,14 +261,27 @@ class _RentalStatusPageState extends State<RentalStatusPage> with SingleTickerPr
             children: [
               // Image Placeholder
               Container(
-                width: 70,
-                height: 70,
+                width: 88,
+                height: 96,
+                clipBehavior: Clip.antiAlias,
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  border: Border.all(color: Colors.black87, width: 1),
-                  borderRadius: BorderRadius.circular(4),
+                  color: RehabColors.primaryLight,
+                  borderRadius: BorderRadius.circular(17),
                 ),
-                child: const Icon(Icons.image, color: Colors.grey),
+                child: imageUrl != null && imageUrl.isNotEmpty
+                    ? Image.network(
+                        imageUrl,
+                        fit: BoxFit.contain,
+                        errorBuilder: (_, _, _) => const Icon(
+                          Icons.image_not_supported_outlined,
+                          color: RehabColors.subtle,
+                        ),
+                      )
+                    : const Icon(
+                        Icons.inventory_2_outlined,
+                        color: RehabColors.subtle,
+                        size: 34,
+                      ),
               ),
               const SizedBox(width: 16),
               // Middle Column (Title and Reason)
@@ -233,9 +297,9 @@ class _RentalStatusPageState extends State<RentalStatusPage> with SingleTickerPr
                         color: Colors.black87,
                       ),
                     ),
-                    const SizedBox(height: 8),
+                    const SizedBox(height: 6),
                     Text(
-                      'Rental Reasons:',
+                      'Reason',
                       style: GoogleFonts.readexPro(
                         fontSize: 12,
                         fontWeight: FontWeight.bold,
@@ -263,7 +327,11 @@ class _RentalStatusPageState extends State<RentalStatusPage> with SingleTickerPr
                   style: GoogleFonts.readexPro(
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
-                    color: rental['status'] == 'Rejected' ? Colors.red : Colors.orange,
+                    color: rental['status'] == 'Rejected'
+                        ? RehabColors.danger
+                        : rental['status'] == 'Approved'
+                        ? RehabColors.green
+                        : RehabColors.amber,
                   ),
                 ),
               ],
@@ -279,7 +347,7 @@ class _RentalStatusPageState extends State<RentalStatusPage> with SingleTickerPr
               ],
             ),
           ),
-          if (isPending || isCompleted) ...[
+          if (isPending) ...[
             const SizedBox(height: 8),
             RichText(
               text: TextSpan(
@@ -288,20 +356,6 @@ class _RentalStatusPageState extends State<RentalStatusPage> with SingleTickerPr
                   const TextSpan(text: 'Return Date: ', style: TextStyle(fontWeight: FontWeight.bold)),
                   TextSpan(text: _formatDate(rental['return_date'])),
                 ],
-              ),
-            ),
-          ],
-          if (isCompleted) ...[
-            const SizedBox(height: 8),
-            Align(
-              alignment: Alignment.centerRight,
-              child: Text(
-                rental['status'] ?? 'Completed',
-                style: GoogleFonts.readexPro(
-                  fontSize: 12,
-                  fontWeight: FontWeight.bold,
-                  color: const Color(0xFF207866),
-                ),
               ),
             ),
           ],
@@ -320,6 +374,140 @@ class _RentalStatusPageState extends State<RentalStatusPage> with SingleTickerPr
             ),
           ],
         ],
+      ),
+    );
+  }
+
+  Widget _buildCompletedRentalCard(dynamic rental) {
+    final photoUrl = rental['proof_of_status']?.toString();
+    final hasPhoto = photoUrl != null && photoUrl.isNotEmpty;
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: RehabColors.border),
+        boxShadow: [
+          BoxShadow(
+            color: RehabColors.primary.withValues(alpha: 0.07),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            decoration: BoxDecoration(
+              color: RehabColors.green.withValues(alpha: 0.10),
+              borderRadius: BorderRadius.circular(14),
+            ),
+            child: const Icon(
+              Icons.inventory_2_outlined,
+              color: RehabColors.green,
+            ),
+          ),
+          const SizedBox(width: 13),
+          Expanded(
+            child: Text(
+              rental['equipment_name'] ?? 'Equipment',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: GoogleFonts.readexPro(
+                fontSize: 14,
+                fontWeight: FontWeight.w700,
+                color: RehabColors.ink,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          OutlinedButton.icon(
+            onPressed: hasPhoto ? () => _showReturnPhoto(photoUrl!) : null,
+            icon: const Icon(Icons.image_outlined, size: 17),
+            label: Text(hasPhoto ? 'View photo' : 'No photo'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: RehabColors.primary,
+              side: const BorderSide(color: RehabColors.border),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
+              textStyle: const TextStyle(
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showReturnPhoto(String photoUrl) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: Colors.transparent,
+        insetPadding: const EdgeInsets.all(22),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(26),
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Equipment Return Photo',
+                      style: GoogleFonts.readexPro(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 16,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    onPressed: () => Navigator.pop(context),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxHeight: MediaQuery.sizeOf(context).height * 0.65,
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(18),
+                  child: InteractiveViewer(
+                    child: Image.network(
+                      photoUrl,
+                      fit: BoxFit.contain,
+                      loadingBuilder: (context, child, progress) =>
+                          progress == null
+                          ? child
+                          : const SizedBox(
+                              height: 240,
+                              child: Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            ),
+                      errorBuilder: (_, _, _) => const SizedBox(
+                        height: 220,
+                        child: Center(
+                          child: Text('Unable to load the return photo.'),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

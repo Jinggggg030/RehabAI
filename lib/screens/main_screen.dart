@@ -3,7 +3,6 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/home_page.dart';
 import 'package:rehab_ai/screens/services_page.dart';
 import 'package:rehab_ai/screens/progress_page.dart';
@@ -11,6 +10,7 @@ import 'package:rehab_ai/screens/profile_page.dart';
 import 'package:rehab_ai/utils/global_state.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -149,48 +149,52 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
     return Scaffold(
       body: IndexedStack(index: _selectedIndex, children: _screens),
       bottomNavigationBar: Container(
+        margin: const EdgeInsets.fromLTRB(14, 0, 14, 12),
         decoration: BoxDecoration(
-          border: Border(
-            top: BorderSide(color: Colors.grey.shade300, width: 1.0),
-          ),
-        ),
-        child: BottomNavigationBar(
-          type: BottomNavigationBarType.fixed,
-          backgroundColor: Colors.white,
-          elevation: 0,
-          selectedItemColor: const Color(0xFF207866),
-          unselectedItemColor: Colors.black54,
-          selectedLabelStyle: GoogleFonts.readexPro(
-            fontSize: 12,
-            fontWeight: FontWeight.bold,
-          ),
-          unselectedLabelStyle: GoogleFonts.readexPro(fontSize: 12),
-          currentIndex: _selectedIndex,
-          onTap: _onItemTapped,
-          items: const [
-            BottomNavigationBarItem(
-              icon: Icon(Icons.home_outlined),
-              activeIcon: Icon(Icons.home),
-              label: 'Home',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.grid_view_outlined),
-              activeIcon: Icon(Icons.grid_view),
-              label: 'Services',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(
-                Icons.square_outlined,
-              ), // Placeholder for Progress icon from wireframe
-              activeIcon: Icon(Icons.square),
-              label: 'Progress',
-            ),
-            BottomNavigationBarItem(
-              icon: Icon(Icons.person_outline),
-              activeIcon: Icon(Icons.person),
-              label: 'Account',
+          color: Colors.white.withValues(alpha: 0.96),
+          borderRadius: BorderRadius.circular(24),
+          border: Border.all(color: RehabColors.border),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0x18204A87),
+              blurRadius: 28,
+              offset: Offset(0, 10),
             ),
           ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(24),
+          child: NavigationBar(
+            height: 70,
+            elevation: 0,
+            backgroundColor: Colors.transparent,
+            indicatorColor: RehabColors.primaryLight,
+            selectedIndex: _selectedIndex,
+            onDestinationSelected: _onItemTapped,
+            labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,
+            destinations: const [
+              NavigationDestination(
+                icon: Icon(Icons.home_outlined),
+                selectedIcon: Icon(Icons.home_rounded),
+                label: 'Home',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.grid_view_outlined),
+                selectedIcon: Icon(Icons.grid_view_rounded),
+                label: 'Services',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.insights_outlined),
+                selectedIcon: Icon(Icons.insights_rounded),
+                label: 'Progress',
+              ),
+              NavigationDestination(
+                icon: Icon(Icons.person_outline_rounded),
+                selectedIcon: Icon(Icons.person_rounded),
+                label: 'Account',
+              ),
+            ],
+          ),
         ),
       ),
     );

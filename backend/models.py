@@ -197,6 +197,7 @@ class PrescribedExercise(Base):
     assigned_reps = Column(Integer, nullable=True)
     assigned_days = Column(Integer, nullable=False, default=1)
     assigned_tracking_mode = Column(String(20), nullable=False, default="duration")
+    assigned_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     evaluation = Column(Text, nullable=True)
 
 class AIFeedback(Base):

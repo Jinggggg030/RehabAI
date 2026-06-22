@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
@@ -57,8 +57,8 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
           looping: true,
           aspectRatio: _videoPlayerController.value.aspectRatio,
           materialProgressColors: ChewieProgressColors(
-            playedColor: const Color(0xFF207866),
-            handleColor: const Color(0xFF207866),
+            playedColor: const Color(0xFF1565C0),
+            handleColor: const Color(0xFF1565C0),
             backgroundColor: Colors.grey.shade300,
             bufferedColor: Colors.grey.shade500,
           ),
@@ -127,14 +127,14 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
                     const SizedBox(height: 8),
                     Text(
                       '$localPain',
-                      style: GoogleFonts.readexPro(fontSize: 32, fontWeight: FontWeight.bold, color: const Color(0xFF207866)),
+                      style: GoogleFonts.readexPro(fontSize: 32, fontWeight: FontWeight.bold, color: const Color(0xFF1565C0)),
                     ),
                     Slider(
                       value: localPain.toDouble(),
                       min: 0,
                       max: 10,
                       divisions: 10,
-                      activeColor: const Color(0xFF207866),
+                      activeColor: const Color(0xFF1565C0),
                       onChanged: (value) {
                         setDialogState(() {
                           localPain = value.toInt();
@@ -176,9 +176,9 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
                                 _trackByTime = true;
                               });
                             },
-                            selectedColor: const Color(0xFF207866).withOpacity(0.2),
+                            selectedColor: const Color(0xFF1565C0).withOpacity(0.2),
                             labelStyle: TextStyle(
-                              color: _trackByTime ? const Color(0xFF207866) : Colors.black87,
+                              color: _trackByTime ? const Color(0xFF1565C0) : Colors.black87,
                               fontWeight: _trackByTime ? FontWeight.bold : FontWeight.normal,
                             ),
                           ),
@@ -191,9 +191,9 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
                                 _trackByTime = false;
                               });
                             },
-                            selectedColor: const Color(0xFF207866).withOpacity(0.2),
+                            selectedColor: const Color(0xFF1565C0).withOpacity(0.2),
                             labelStyle: TextStyle(
-                              color: !_trackByTime ? const Color(0xFF207866) : Colors.black87,
+                              color: !_trackByTime ? const Color(0xFF1565C0) : Colors.black87,
                               fontWeight: !_trackByTime ? FontWeight.bold : FontWeight.normal,
                             ),
                           ),
@@ -231,7 +231,7 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
                           const SizedBox(width: 16),
                           IconButton(
                             iconSize: 32,
-                            color: const Color(0xFF207866),
+                            color: const Color(0xFF1565C0),
                             icon: const Icon(Icons.add_circle_outline),
                             onPressed: () {
                               if (localDurationMinutes < 60) {
@@ -275,7 +275,7 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
                       _completeSessionNavigation();
                     }
                   },
-                  child: Text('Confirm', style: GoogleFonts.readexPro(fontWeight: FontWeight.bold, color: const Color(0xFF207866))),
+                  child: Text('Confirm', style: GoogleFonts.readexPro(fontWeight: FontWeight.bold, color: const Color(0xFF1565C0))),
                 ),
               ],
             );
@@ -329,7 +329,7 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF8FAFF),
       body: SafeArea(
         child: Column(
           children: [
@@ -367,7 +367,7 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
                       style: GoogleFonts.readexPro(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF207866),
+                        color: const Color(0xFF1565C0),
                       ),
                     ),
                   ),
@@ -402,7 +402,7 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
                               : Center(
                                   child: widget.exercise['video_url'] == null 
                                   ? Text('No video available', style: GoogleFonts.readexPro(color: Colors.white))
-                                  : const CircularProgressIndicator(color: Color(0xFF207866)),
+                                  : const CircularProgressIndicator(color: Color(0xFF1565C0)),
                                 ),
                         ),
                       ),
@@ -440,7 +440,7 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
                       ElevatedButton(
                         onPressed: _isSessionStarted ? _onCompleteSessionTapped : null,
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF207866),
+                          backgroundColor: const Color(0xFF1565C0),
                           foregroundColor: Colors.white,
                           minimumSize: const Size(double.infinity, 50),
                           shape: RoundedRectangleBorder(

@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -60,7 +60,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('Password updated successfully!'),
-            backgroundColor: Color(0xFF207866),
+            backgroundColor: Color(0xFF1565C0),
           ),
         );
         Navigator.pop(context);
@@ -128,7 +128,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
                         style: GoogleFonts.readexPro(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: const Color(0xFF207866),
+                          color: const Color(0xFF1565C0),
                         ),
                       ),
                     ),
@@ -158,7 +158,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
               const SizedBox(height: 8),
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8F9FA),
+                  color: const Color(0xFFF8FAFF),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: Colors.grey.shade200),
                 ),
@@ -205,7 +205,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
               const SizedBox(height: 8),
               Container(
                 decoration: BoxDecoration(
-                  color: const Color(0xFFF8F9FA),
+                  color: const Color(0xFFF8FAFF),
                   borderRadius: BorderRadius.circular(6),
                   border: Border.all(color: Colors.grey.shade200),
                 ),
@@ -244,7 +244,7 @@ class _ChangePasswordPageState extends State<ChangePasswordPage> {
               ElevatedButton(
                 onPressed: _isLoading ? null : _updatePassword,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF207866),
+                  backgroundColor: const Color(0xFF1565C0),
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(

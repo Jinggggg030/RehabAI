@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -57,7 +57,7 @@ class _SettingsPageState extends State<SettingsPage> {
                       style: GoogleFonts.readexPro(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF207866),
+                        color: const Color(0xFF1565C0),
                       ),
                     ),
                     // Empty placeholder to balance the row
@@ -162,7 +162,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: CupertinoSwitch(
                   value: value,
                   onChanged: onChanged,
-                  activeColor: const Color(0xFF207866),
+                  activeColor: const Color(0xFF1565C0),
                 ),
               ),
             ),

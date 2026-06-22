@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/intl.dart';
 import '../utils/current_user_id.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 class RehabilitationExercisesPage extends StatefulWidget {
   const RehabilitationExercisesPage({super.key});
@@ -21,6 +22,10 @@ class _RehabilitationExercisesPageState
     extends State<RehabilitationExercisesPage>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final TextEditingController _exploreSearchController =
+      TextEditingController();
+  int _activeTabIndex = 0;
+  String _exploreSearchQuery = '';
 
   List<dynamic> allExercises = [];
   List<dynamic> assignedExercises = [];
@@ -54,7 +59,13 @@ class _RehabilitationExercisesPageState
   void initState() {
     super.initState();
     _tabController = TabController(length: 3, vsync: this);
+    _tabController.addListener(_handleTabChange);
     _fetchExercises();
+  }
+
+  void _handleTabChange() {
+    if (!mounted || _activeTabIndex == _tabController.index) return;
+    setState(() => _activeTabIndex = _tabController.index);
   }
 
   Future<void> _scheduleExercise(Map<String, dynamic> exercise) async {
@@ -67,13 +78,13 @@ class _RehabilitationExercisesPageState
         return Theme(
           data: Theme.of(context).copyWith(
             colorScheme: const ColorScheme.light(
-              primary: Color(0xFF207866),
+              primary: Color(0xFF1565C0),
               onPrimary: Colors.white,
               onSurface: Colors.black,
             ),
             textButtonTheme: TextButtonThemeData(
               style: TextButton.styleFrom(
-                foregroundColor: const Color(0xFF207866),
+                foregroundColor: const Color(0xFF1565C0),
               ),
             ),
           ),
@@ -90,7 +101,7 @@ class _RehabilitationExercisesPageState
         builder: (context, child) {
           return Theme(
             data: Theme.of(context).copyWith(
-              colorScheme: const ColorScheme.light(primary: Color(0xFF207866)),
+              colorScheme: const ColorScheme.light(primary: Color(0xFF1565C0)),
             ),
             child: child!,
           );
@@ -228,23 +239,28 @@ class _RehabilitationExercisesPageState
 
   @override
   void dispose() {
+    _tabController.removeListener(_handleTabChange);
     _tabController.dispose();
+    _exploreSearchController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF8FAFF),
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             // Header
-            Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 24.0,
-                vertical: 24.0,
+            Container(
+              padding: const EdgeInsets.fromLTRB(24, 18, 24, 28),
+              decoration: const BoxDecoration(
+                gradient: RehabColors.patientGradient,
+                borderRadius: BorderRadius.vertical(
+                  bottom: Radius.circular(28),
+                ),
               ),
               child: SizedBox(
                 height: 48,
@@ -257,7 +273,7 @@ class _RehabilitationExercisesPageState
                         child: Container(
                           padding: const EdgeInsets.all(8),
                           decoration: BoxDecoration(
-                            color: Colors.white,
+                            color: Colors.white.withValues(alpha: 0.14),
                             shape: BoxShape.circle,
                             boxShadow: [
                               BoxShadow(
@@ -266,12 +282,12 @@ class _RehabilitationExercisesPageState
                                 offset: const Offset(0, 2),
                               ),
                             ],
-                            border: Border.all(color: Colors.grey.shade100),
+                            border: Border.all(color: Colors.white24),
                           ),
                           child: const Icon(
                             Icons.arrow_back_ios_new,
                             size: 16,
-                            color: Colors.black54,
+                            color: Colors.white,
                           ),
                         ),
                       ),
@@ -283,7 +299,7 @@ class _RehabilitationExercisesPageState
                         style: GoogleFonts.readexPro(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: const Color(0xFF207866),
+                          color: Colors.white,
                         ),
                       ),
                     ),
@@ -294,16 +310,22 @@ class _RehabilitationExercisesPageState
 
             // Tab Bar
             Container(
+              margin: const EdgeInsets.fromLTRB(18, 14, 18, 0),
               decoration: BoxDecoration(
-                border: Border(
-                  bottom: BorderSide(color: Colors.grey.shade300, width: 1),
-                ),
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: RehabColors.border),
               ),
               child: TabBar(
                 controller: _tabController,
-                indicatorColor: const Color(0xFF207866),
-                indicatorWeight: 3,
-                labelColor: Colors.black87,
+                indicator: BoxDecoration(
+                  color: RehabColors.primaryLight,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                indicatorSize: TabBarIndicatorSize.tab,
+                dividerColor: Colors.transparent,
+                padding: const EdgeInsets.all(4),
+                labelColor: RehabColors.primary,
                 labelStyle: GoogleFonts.readexPro(
                   fontWeight: FontWeight.bold,
                   fontSize: 14,
@@ -320,6 +342,50 @@ class _RehabilitationExercisesPageState
                 ],
               ),
             ),
+
+            if (_activeTabIndex == 1)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: RehabColors.input,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: RehabColors.border),
+                  ),
+                  child: TextField(
+                    controller: _exploreSearchController,
+                    onChanged: (value) {
+                      setState(() => _exploreSearchQuery = value.trim());
+                    },
+                    decoration: InputDecoration(
+                      hintText: 'Search exercises',
+                      hintStyle: GoogleFonts.readexPro(
+                        color: RehabColors.subtle,
+                        fontSize: 13,
+                      ),
+                      prefixIcon: const Icon(
+                        Icons.search_rounded,
+                        color: RehabColors.primary,
+                      ),
+                      suffixIcon: _exploreSearchQuery.isEmpty
+                          ? null
+                          : IconButton(
+                              tooltip: 'Clear search',
+                              onPressed: () {
+                                _exploreSearchController.clear();
+                                setState(() => _exploreSearchQuery = '');
+                              },
+                              icon: const Icon(
+                                Icons.close_rounded,
+                                color: RehabColors.muted,
+                              ),
+                            ),
+                      border: InputBorder.none,
+                      contentPadding: const EdgeInsets.symmetric(vertical: 15),
+                    ),
+                  ),
+                ),
+              ),
 
             // Filter Chips
             Padding(
@@ -372,14 +438,24 @@ class _RehabilitationExercisesPageState
                         // Explore Tab
                         _buildExercisesList(
                           allExercises.where((ex) {
-                            if (selectedDiscipline == 'All') return true;
-                            if (ex['disciplines'] != null &&
-                                ex['disciplines'] is List) {
-                              return (ex['disciplines'] as List).contains(
-                                selectedDiscipline,
-                              );
-                            }
-                            return false;
+                            final matchesDiscipline =
+                                selectedDiscipline == 'All' ||
+                                (ex['disciplines'] is List &&
+                                    (ex['disciplines'] as List).contains(
+                                      selectedDiscipline,
+                                    ));
+                            final query = _exploreSearchQuery.toLowerCase();
+                            final matchesSearch =
+                                query.isEmpty ||
+                                (ex['name'] ?? '')
+                                    .toString()
+                                    .toLowerCase()
+                                    .contains(query) ||
+                                (ex['description'] ?? '')
+                                    .toString()
+                                    .toLowerCase()
+                                    .contains(query);
+                            return matchesDiscipline && matchesSearch;
                           }).toList(),
                           tabType: 'Explore',
                         ),
@@ -413,7 +489,7 @@ class _RehabilitationExercisesPageState
         color: Colors.white,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
-          color: isSelected ? const Color(0xFF207866) : Colors.grey.shade200,
+          color: isSelected ? const Color(0xFF1565C0) : Colors.grey.shade200,
           width: isSelected ? 1.5 : 1.0,
         ),
         boxShadow: [
@@ -429,7 +505,7 @@ class _RehabilitationExercisesPageState
         style: GoogleFonts.readexPro(
           fontSize: 12,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-          color: isSelected ? const Color(0xFF207866) : Colors.black87,
+          color: isSelected ? const Color(0xFF1565C0) : Colors.black87,
         ),
       ),
     );
@@ -446,6 +522,8 @@ class _RehabilitationExercisesPageState
               ? 'No assigned or scheduled exercises.'
               : tabType == 'Completed'
               ? 'No completed exercises yet.'
+              : _exploreSearchQuery.isNotEmpty
+              ? 'No exercises match your search.'
               : 'No exercises found for this discipline.',
           style: GoogleFonts.readexPro(
             color: Colors.grey.shade500,
@@ -472,13 +550,13 @@ class _RehabilitationExercisesPageState
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: RehabColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
-            blurRadius: 10,
-            spreadRadius: 1,
-            offset: const Offset(0, 4),
+            color: RehabColors.primary.withValues(alpha: 0.06),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
@@ -499,7 +577,7 @@ class _RehabilitationExercisesPageState
                       vertical: 4,
                     ),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF207866).withValues(alpha: 0.1),
+                      color: const Color(0xFF1565C0).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(4),
                     ),
                     child: Text(
@@ -507,7 +585,7 @@ class _RehabilitationExercisesPageState
                       style: GoogleFonts.readexPro(
                         fontSize: 10,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF207866),
+                        color: const Color(0xFF1565C0),
                       ),
                     ),
                   ),
@@ -519,7 +597,7 @@ class _RehabilitationExercisesPageState
                     vertical: 4,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF207866).withValues(alpha: 0.1),
+                    color: const Color(0xFF1565C0).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(4),
                   ),
                   child: Text(
@@ -527,7 +605,7 @@ class _RehabilitationExercisesPageState
                     style: GoogleFonts.readexPro(
                       fontSize: 10,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF207866),
+                      color: const Color(0xFF1565C0),
                     ),
                   ),
                 ),
@@ -595,6 +673,8 @@ class _RehabilitationExercisesPageState
                 ),
               ],
             ),
+            const SizedBox(height: 12),
+            _buildAssignmentProgress(exercise),
           ] else if (tabType == 'MyExercises' &&
               exercise['_source'] == 'scheduled') ...[
             const SizedBox(height: 8),
@@ -691,8 +771,8 @@ class _RehabilitationExercisesPageState
                       OutlinedButton(
                         onPressed: () => _scheduleExercise(exercise),
                         style: OutlinedButton.styleFrom(
-                          foregroundColor: const Color(0xFF207866),
-                          side: const BorderSide(color: Color(0xFF207866)),
+                          foregroundColor: const Color(0xFF1565C0),
+                          side: const BorderSide(color: Color(0xFF1565C0)),
                           padding: const EdgeInsets.symmetric(
                             horizontal: 12,
                             vertical: 8,
@@ -756,7 +836,7 @@ class _RehabilitationExercisesPageState
                         if (mounted) await _fetchExercises();
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF207866),
+                        backgroundColor: const Color(0xFF1565C0),
                         foregroundColor: Colors.white,
                         padding: const EdgeInsets.symmetric(
                           horizontal: 16,
@@ -800,6 +880,69 @@ class _RehabilitationExercisesPageState
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildAssignmentProgress(Map<String, dynamic> exercise) {
+    final totalDays = (exercise['assigned_days'] as num?)?.toInt() ?? 1;
+    final currentDay = (exercise['plan_day'] as num?)?.toInt() ?? 1;
+    final daysLeft = (exercise['days_remaining'] as num?)?.toInt() ?? totalDays;
+    final progress =
+        ((exercise['plan_progress'] as num?)?.toDouble() ??
+                (currentDay / totalDays))
+            .clamp(0.0, 1.0);
+    final isUpcoming = currentDay == 0;
+
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: RehabColors.primaryLight,
+        borderRadius: BorderRadius.circular(14),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              const Icon(
+                Icons.calendar_view_week_rounded,
+                size: 17,
+                color: RehabColors.primary,
+              ),
+              const SizedBox(width: 7),
+              Expanded(
+                child: Text(
+                  isUpcoming
+                      ? 'Plan starts soon'
+                      : 'Day $currentDay of $totalDays',
+                  style: GoogleFonts.readexPro(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: RehabColors.ink,
+                  ),
+                ),
+              ),
+              Text(
+                '$daysLeft ${daysLeft == 1 ? 'day' : 'days'} left',
+                style: GoogleFonts.readexPro(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: RehabColors.primary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 9),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(8),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 7,
+              backgroundColor: Colors.white,
+              valueColor: const AlwaysStoppedAnimation(RehabColors.primary),
+            ),
+          ),
+        ],
+      ),
     );
   }
 

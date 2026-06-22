@@ -24,8 +24,9 @@ class ExerciseDetailsPage extends StatefulWidget {
 }
 
 class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
-  late VideoPlayerController _videoPlayerController;
+  VideoPlayerController? _videoPlayerController;
   ChewieController? _chewieController;
+  bool _videoLoadFailed = false;
 
   String get _aiType =>
       (widget.exercise['ai_type'] ?? '').toString().trim().toLowerCase();
@@ -45,20 +46,31 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
 
   Future<void> _initializePlayer() async {
     final videoUrl = widget.exercise['video_url'];
-    if (videoUrl != null && videoUrl.isNotEmpty) {
+    if (videoUrl != null && videoUrl.toString().trim().isNotEmpty) {
       try {
-        _videoPlayerController = VideoPlayerController.networkUrl(
-          Uri.parse(videoUrl),
+        final controller = VideoPlayerController.networkUrl(
+          Uri.parse(videoUrl.toString().trim()),
         );
-        await _videoPlayerController.initialize();
+        _videoPlayerController = controller;
+        await controller.initialize();
+        if (!mounted) {
+          controller.dispose();
+          return;
+        }
         _chewieController = ChewieController(
-          videoPlayerController: _videoPlayerController,
+          videoPlayerController: controller,
           autoPlay: false,
           looping: false,
-          aspectRatio: _videoPlayerController.value.aspectRatio,
+          aspectRatio: controller.value.aspectRatio > 0
+              ? controller.value.aspectRatio
+              : 16 / 9,
+          allowFullScreen: true,
+          allowMuting: true,
+          showControlsOnInitialize: true,
+          placeholder: const ColoredBox(color: Colors.black),
           materialProgressColors: ChewieProgressColors(
-            playedColor: const Color(0xFF207866),
-            handleColor: const Color(0xFF207866),
+            playedColor: const Color(0xFF1565C0),
+            handleColor: const Color(0xFF1565C0),
             backgroundColor: Colors.grey.shade300,
             bufferedColor: Colors.grey.shade500,
           ),
@@ -66,22 +78,65 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
         if (mounted) setState(() {});
       } catch (e) {
         debugPrint("Error initializing video player: $e");
-        // Fallback or handle error if needed
+        if (mounted) setState(() => _videoLoadFailed = true);
       }
     }
   }
 
   @override
   void dispose() {
-    _videoPlayerController.dispose();
     _chewieController?.dispose();
+    _videoPlayerController?.dispose();
     super.dispose();
+  }
+
+  double get _displayVideoAspectRatio {
+    final controller = _videoPlayerController;
+    if (controller != null && controller.value.isInitialized) {
+      final ratio = controller.value.aspectRatio;
+      if (ratio.isFinite && ratio > 0) return ratio;
+    }
+    return 16 / 9;
+  }
+
+  Widget _buildVideoPlaceholder() {
+    final videoUrl = widget.exercise['video_url']?.toString().trim() ?? '';
+    if (videoUrl.isEmpty) {
+      return Center(
+        child: Text(
+          'No demonstration video available',
+          style: GoogleFonts.readexPro(color: Colors.white70),
+        ),
+      );
+    }
+    if (_videoLoadFailed) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.video_file_outlined,
+              color: Colors.white54,
+              size: 34,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Unable to load this video',
+              style: GoogleFonts.readexPro(color: Colors.white70),
+            ),
+          ],
+        ),
+      );
+    }
+    return const Center(
+      child: CircularProgressIndicator(color: Color(0xFF1565C0)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF8FAFF),
       body: SafeArea(
         child: Column(
           children: [
@@ -124,7 +179,7 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                       style: GoogleFonts.readexPro(
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF207866),
+                        color: const Color(0xFF1565C0),
                       ),
                     ),
                   ),
@@ -146,34 +201,27 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                     children: [
                       // Video Player
                       Padding(
-                        padding: const EdgeInsets.all(8.0),
+                        padding: const EdgeInsets.all(12),
                         child: Container(
-                          height: 300,
+                          clipBehavior: Clip.antiAlias,
                           decoration: BoxDecoration(
                             color: Colors.black,
-                            borderRadius: BorderRadius.circular(8),
+                            borderRadius: BorderRadius.circular(18),
+                            boxShadow: [
+                              BoxShadow(
+                                color: Colors.black.withValues(alpha: 0.16),
+                                blurRadius: 18,
+                                offset: const Offset(0, 8),
+                              ),
+                            ],
                           ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
+                          child: AspectRatio(
+                            aspectRatio: _displayVideoAspectRatio,
                             child:
                                 _chewieController != null &&
-                                    _chewieController!
-                                        .videoPlayerController
-                                        .value
-                                        .isInitialized
+                                    _videoPlayerController!.value.isInitialized
                                 ? Chewie(controller: _chewieController!)
-                                : Center(
-                                    child: widget.exercise['video_url'] == null
-                                        ? Text(
-                                            'No video available',
-                                            style: GoogleFonts.readexPro(
-                                              color: Colors.white,
-                                            ),
-                                          )
-                                        : const CircularProgressIndicator(
-                                            color: Color(0xFF207866),
-                                          ),
-                                  ),
+                                : _buildVideoPlaceholder(),
                           ),
                         ),
                       ),
@@ -189,7 +237,7 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                               style: GoogleFonts.readexPro(
                                 fontSize: 16,
                                 fontWeight: FontWeight.bold,
-                                color: const Color(0xFF207866),
+                                color: const Color(0xFF1565C0),
                               ),
                             ),
                             const SizedBox(height: 16),
@@ -252,7 +300,7 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
                                 }
                               },
                               style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF207866),
+                                backgroundColor: const Color(0xFF1565C0),
                                 foregroundColor: Colors.white,
                                 minimumSize: const Size(double.infinity, 50),
                                 shape: RoundedRectangleBorder(

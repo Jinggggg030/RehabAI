@@ -16,27 +16,46 @@ class NotificationBell extends StatelessWidget {
 
   IconData _getIconForType(String type) {
     switch (type) {
-      case 'chat': return Icons.chat;
-      case 'rental': return Icons.handyman;
-      case 'appointment': return Icons.calendar_today;
-      case 'exercise': return Icons.fitness_center;
-      default: return Icons.notifications;
+      case 'chat':
+        return Icons.chat;
+      case 'rental':
+        return Icons.handyman;
+      case 'appointment':
+        return Icons.calendar_today;
+      case 'exercise':
+        return Icons.fitness_center;
+      default:
+        return Icons.notifications;
     }
   }
 
   void _handleTap(BuildContext context, String type) {
     switch (type) {
       case 'chat':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const LiveChatPage()));
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const LiveChatPage()),
+        );
         break;
       case 'rental':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const RentalStatusPage()));
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const RentalStatusPage()),
+        );
         break;
       case 'appointment':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const MyAppointmentsPage()));
+        Navigator.push(
+          context,
+          MaterialPageRoute(builder: (_) => const MyAppointmentsPage()),
+        );
         break;
       case 'exercise':
-        Navigator.push(context, MaterialPageRoute(builder: (_) => const RehabilitationExercisesPage()));
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const RehabilitationExercisesPage(),
+          ),
+        );
         break;
     }
   }
@@ -66,15 +85,20 @@ class NotificationBell extends StatelessWidget {
       valueListenable: GlobalState.notifications,
       builder: (context, notifications, child) {
         final hasUnread = notifications.isNotEmpty;
-        
+
         return PopupMenuButton<dynamic>(
           icon: Badge(
             isLabelVisible: hasUnread,
             label: Text(notifications.length.toString()),
-            child: const Icon(Icons.notifications_none, color: Color(0xFF207866)),
+            child: Icon(
+              Icons.notifications_none,
+              color: IconTheme.of(context).color ?? const Color(0xFF1565C0),
+            ),
           ),
           offset: const Offset(0, 50),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           itemBuilder: (BuildContext context) {
             if (!hasUnread) {
               return [
@@ -93,9 +117,13 @@ class NotificationBell extends StatelessWidget {
                 child: Row(
                   children: [
                     CircleAvatar(
-                      backgroundColor: const Color(0xFF207866),
+                      backgroundColor: const Color(0xFF1565C0),
                       radius: 16,
-                      child: Icon(_getIconForType(notif['type']), color: Colors.white, size: 16),
+                      child: Icon(
+                        _getIconForType(notif['type']),
+                        color: Colors.white,
+                        size: 16,
+                      ),
                     ),
                     const SizedBox(width: 12),
                     Expanded(
@@ -103,8 +131,17 @@ class NotificationBell extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Text(notif['title'], style: GoogleFonts.readexPro(fontWeight: FontWeight.bold, fontSize: 14)),
-                          Text(notif['message'], style: GoogleFonts.readexPro(fontSize: 12)),
+                          Text(
+                            notif['title'],
+                            style: GoogleFonts.readexPro(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                          Text(
+                            notif['message'],
+                            style: GoogleFonts.readexPro(fontSize: 12),
+                          ),
                         ],
                       ),
                     ),

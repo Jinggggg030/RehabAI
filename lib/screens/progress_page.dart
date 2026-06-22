@@ -1,4 +1,4 @@
-import 'dart:convert';
+﻿import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:rehab_ai/widgets/notification_bell.dart';
 import '../utils/current_user_id.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 enum _ProgressRange { sevenDays, thirtyDays, allTime }
 
@@ -179,26 +180,25 @@ class _ProgressPageState extends State<ProgressPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF8FAFF),
       body: SafeArea(
         child: RefreshIndicator(
-          color: const Color(0xFF207866),
+          color: const Color(0xFF1565C0),
           onRefresh: _fetchProgress,
           child: CustomScrollView(
             physics: const AlwaysScrollableScrollPhysics(),
             slivers: [
+              SliverToBoxAdapter(child: _buildHeader()),
               SliverPadding(
-                padding: const EdgeInsets.fromLTRB(24, 24, 24, 32),
+                padding: const EdgeInsets.fromLTRB(20, 22, 20, 32),
                 sliver: SliverList(
                   delegate: SliverChildListDelegate([
-                    _buildHeader(),
-                    const SizedBox(height: 24),
                     if (_isLoading)
                       const SizedBox(
                         height: 420,
                         child: Center(
                           child: CircularProgressIndicator(
-                            color: Color(0xFF207866),
+                            color: Color(0xFF1565C0),
                           ),
                         ),
                       )
@@ -228,20 +228,114 @@ class _ProgressPageState extends State<ProgressPage> {
   }
 
   Widget _buildHeader() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        const SizedBox(width: 40),
-        Text(
-          'Progress',
-          style: GoogleFonts.readexPro(
-            fontSize: 20,
-            fontWeight: FontWeight.bold,
-            color: const Color(0xFF207866),
+    final completion = _sessions.isEmpty
+        ? 0.0
+        : (_filteredSessions.length / _sessions.length).clamp(0.0, 1.0);
+    return Container(
+      height: 215,
+      padding: const EdgeInsets.fromLTRB(24, 52, 20, 24),
+      decoration: const BoxDecoration(
+        gradient: RehabColors.progressGradient,
+        borderRadius: BorderRadius.vertical(bottom: Radius.circular(32)),
+      ),
+      child: Stack(
+        children: [
+          Positioned(
+            right: -36,
+            top: -60,
+            child: Container(
+              width: 145,
+              height: 145,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: Colors.white.withValues(alpha: 0.06),
+              ),
+            ),
           ),
-        ),
-        const NotificationBell(),
-      ],
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Progress Intelligence',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 23,
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          'Your recovery data, transformed into insights.',
+                          style: TextStyle(color: Colors.white70, fontSize: 11),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    width: 44,
+                    height: 44,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.14),
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white24),
+                    ),
+                    child: const IconTheme(
+                      data: IconThemeData(color: Colors.white),
+                      child: NotificationBell(),
+                    ),
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.all(13),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.11),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white24),
+                ),
+                child: Column(
+                  children: [
+                    Row(
+                      children: [
+                        const Expanded(
+                          child: Text(
+                            'Sessions in selected period',
+                            style: TextStyle(color: Colors.white70, fontSize: 11),
+                          ),
+                        ),
+                        Text(
+                          '${(completion * 100).round()}%',
+                          style: const TextStyle(
+                            color: Color(0xFF4ADE80),
+                            fontWeight: FontWeight.w900,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: LinearProgressIndicator(
+                        value: completion,
+                        minHeight: 8,
+                        backgroundColor: Colors.white12,
+                        valueColor: const AlwaysStoppedAnimation(Color(0xFF4ADE80)),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
     );
   }
 
@@ -258,7 +352,7 @@ class _ProgressPageState extends State<ProgressPage> {
         visualDensity: VisualDensity.compact,
         backgroundColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
-              ? const Color(0xFF207866)
+              ? const Color(0xFF1565C0)
               : Colors.white,
         ),
         foregroundColor: WidgetStateProperty.resolveWith(
@@ -287,7 +381,7 @@ class _ProgressPageState extends State<ProgressPage> {
           label: 'Sessions',
           value: '${_filteredSessions.length}',
           icon: Icons.check_circle_outline,
-          color: const Color(0xFF207866),
+          color: const Color(0xFF1565C0),
         ),
         _StatCard(
           label: 'Active Minutes',
@@ -331,7 +425,7 @@ class _ProgressPageState extends State<ProgressPage> {
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF207866), Color(0xFF2C9A82)],
+          colors: [Color(0xFF1565C0), Color(0xFF2C9A82)],
         ),
         borderRadius: BorderRadius.circular(16),
       ),
@@ -456,10 +550,10 @@ class _ProgressPageState extends State<ProgressPage> {
           Container(
             padding: const EdgeInsets.all(10),
             decoration: BoxDecoration(
-              color: const Color(0xFF207866).withValues(alpha: 0.1),
+              color: const Color(0xFF1565C0).withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.fitness_center, color: Color(0xFF207866)),
+            child: const Icon(Icons.fitness_center, color: Color(0xFF1565C0)),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -547,7 +641,7 @@ class _ProgressPageState extends State<ProgressPage> {
               child: const Icon(
                 Icons.insights_outlined,
                 size: 44,
-                color: Color(0xFF207866),
+                color: Color(0xFF1565C0),
               ),
             ),
             const SizedBox(height: 18),
@@ -715,7 +809,7 @@ class _ActivityBars extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: day.minutes == 0
                           ? const Color(0xFFE5E9E8)
-                          : const Color(0xFF207866),
+                          : const Color(0xFF1565C0),
                       borderRadius: BorderRadius.circular(6),
                     ),
                   ),

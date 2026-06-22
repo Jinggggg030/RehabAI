@@ -78,7 +78,11 @@ class _RepCounterPageState extends State<RepCounterPage> {
           : null,
       prescribedSettings: prescribed,
     );
-    if (!mounted || config == null) return;
+    if (!mounted) return;
+    if (config == null) {
+      Navigator.pop(context);
+      return;
+    }
     final analyzer = await MovementAnalyzer.create(
       exerciseId: (widget.exercise['exercise_id'] as num?)?.toInt(),
       exerciseName: widget.exercise['name']?.toString() ?? '',
@@ -283,7 +287,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
                 _startSet();
               },
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF207866),
+                backgroundColor: const Color(0xFF1565C0),
               ),
               child: const Text('Start Next Set'),
             ),
@@ -376,7 +380,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
                       style: GoogleFonts.readexPro(
                         fontSize: 32,
                         fontWeight: FontWeight.bold,
-                        color: const Color(0xFF207866),
+                        color: const Color(0xFF1565C0),
                       ),
                     ),
                     Slider(
@@ -384,7 +388,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
                       min: 0,
                       max: 10,
                       divisions: 10,
-                      activeColor: const Color(0xFF207866),
+                      activeColor: const Color(0xFF1565C0),
                       onChanged: (value) {
                         setDialogState(() {
                           localPain = value.toInt();
@@ -416,7 +420,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
                     'Confirm',
                     style: GoogleFonts.readexPro(
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF207866),
+                      color: const Color(0xFF1565C0),
                     ),
                   ),
                 ),
@@ -490,7 +494,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
             child: Text(
               "Finish",
               style: GoogleFonts.readexPro(
-                color: const Color(0xFF207866),
+                color: const Color(0xFF1565C0),
                 fontWeight: FontWeight.bold,
                 fontSize: 16,
               ),
@@ -500,7 +504,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
       ),
       body: _cameraController == null || !_cameraController!.value.isInitialized
           ? const Center(
-              child: CircularProgressIndicator(color: Color(0xFF207866)),
+              child: CircularProgressIndicator(color: Color(0xFF1565C0)),
             )
           : Stack(
               fit: StackFit.expand,
@@ -539,7 +543,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
                               ? '$_setRepCount / $_targetPerSet reps'
                               : '${_formatTime(_setSecondsRemaining)} left',
                           style: GoogleFonts.readexPro(
-                            color: const Color(0xFF207866),
+                            color: const Color(0xFF1565C0),
                             fontSize: 32,
                             fontWeight: FontWeight.bold,
                           ),
@@ -569,7 +573,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
                       color: Colors.black.withValues(alpha: 0.7),
                       borderRadius: BorderRadius.circular(16),
                       border: Border.all(
-                        color: const Color(0xFF207866),
+                        color: const Color(0xFF1565C0),
                         width: 2,
                       ),
                     ),
@@ -592,7 +596,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
                             icon: const Icon(Icons.play_arrow),
                             label: Text('Start Set $_currentSet'),
                             style: FilledButton.styleFrom(
-                              backgroundColor: const Color(0xFF207866),
+                              backgroundColor: const Color(0xFF1565C0),
                             ),
                           ),
                         ],
@@ -620,42 +624,55 @@ class PosePainter extends CustomPainter {
   );
 
   Offset _translate(PoseLandmark landmark, Size canvasSize) {
+    late double x;
+    late double y;
     switch (rotation) {
       case InputImageRotation.rotation90deg:
-        return Offset(
-          landmark.x *
-              canvasSize.width /
-              (Platform.isIOS
-                  ? absoluteImageSize.width
-                  : absoluteImageSize.height),
-          landmark.y *
-              canvasSize.height /
-              (Platform.isIOS
-                  ? absoluteImageSize.height
-                  : absoluteImageSize.width),
-        );
+        x =
+            landmark.x *
+            canvasSize.width /
+            (Platform.isIOS
+                ? absoluteImageSize.width
+                : absoluteImageSize.height);
+        y =
+            landmark.y *
+            canvasSize.height /
+            (Platform.isIOS
+                ? absoluteImageSize.height
+                : absoluteImageSize.width);
+        break;
       case InputImageRotation.rotation270deg:
-        return Offset(
-          canvasSize.width -
-              landmark.x *
-                  canvasSize.width /
-                  (Platform.isIOS
-                      ? absoluteImageSize.width
-                      : absoluteImageSize.height),
-          landmark.y *
-              canvasSize.height /
-              (Platform.isIOS
-                  ? absoluteImageSize.height
-                  : absoluteImageSize.width),
-        );
+        x =
+            canvasSize.width -
+            landmark.x *
+                canvasSize.width /
+                (Platform.isIOS
+                    ? absoluteImageSize.width
+                    : absoluteImageSize.height);
+        y =
+            landmark.y *
+            canvasSize.height /
+            (Platform.isIOS
+                ? absoluteImageSize.height
+                : absoluteImageSize.width);
+        break;
       case InputImageRotation.rotation0deg:
+        x = landmark.x * canvasSize.width / absoluteImageSize.width;
+        y = landmark.y * canvasSize.height / absoluteImageSize.height;
+        break;
       case InputImageRotation.rotation180deg:
-        final x = landmark.x * canvasSize.width / absoluteImageSize.width;
-        return Offset(
-          lensDirection == CameraLensDirection.back ? x : canvasSize.width - x,
-          landmark.y * canvasSize.height / absoluteImageSize.height,
-        );
+        x =
+            canvasSize.width -
+            landmark.x * canvasSize.width / absoluteImageSize.width;
+        y =
+            canvasSize.height -
+            landmark.y * canvasSize.height / absoluteImageSize.height;
+        break;
     }
+    return Offset(
+      lensDirection == CameraLensDirection.front ? canvasSize.width - x : x,
+      y,
+    );
   }
 
   @override
@@ -663,7 +680,7 @@ class PosePainter extends CustomPainter {
     final paint = Paint()
       ..style = PaintingStyle.stroke
       ..strokeWidth = 4.0
-      ..color = const Color(0xFF207866);
+      ..color = const Color(0xFF1565C0);
 
     final jointPaint = Paint()
       ..style = PaintingStyle.fill

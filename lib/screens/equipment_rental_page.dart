@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/rental_status_page.dart';
 import 'package:http/http.dart' as http;
@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 class EquipmentRentalPage extends StatefulWidget {
   const EquipmentRentalPage({super.key});
@@ -26,6 +27,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
   List<dynamic> _rentalReasons = [];
   
   Set<dynamic> _selectedCategoryIds = {};
+  String _searchQuery = '';
   final ScrollController _scrollController = ScrollController();
 
   @override
@@ -79,80 +81,114 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
   }
 
   List<dynamic> get _filteredEquipment {
-    if (_selectedCategoryIds.isEmpty) return _equipmentList;
     return _equipmentList.where((eq) {
       final List<dynamic> catIds = eq['category_ids'] ?? [];
-      return _selectedCategoryIds.every((id) => catIds.contains(id));
+      final matchesCategory = _selectedCategoryIds.isEmpty ||
+          _selectedCategoryIds.every((id) => catIds.contains(id));
+      final query = _searchQuery.trim().toLowerCase();
+      final matchesSearch = query.isEmpty ||
+          (eq['name'] ?? '').toString().toLowerCase().contains(query) ||
+          (eq['description'] ?? '').toString().toLowerCase().contains(query);
+      return matchesCategory && matchesSearch;
     }).toList();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF8FAFF),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(
-                            color: Colors.black.withOpacity(0.05),
-                            blurRadius: 10,
-                            offset: const Offset(0, 2),
+              Container(
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 18),
+                decoration: BoxDecoration(
+                  gradient: RehabColors.darkGradient,
+                  borderRadius: BorderRadius.circular(28),
+                  boxShadow: [
+                    BoxShadow(
+                      color: RehabColors.primary.withValues(alpha: 0.24),
+                      blurRadius: 24,
+                      offset: const Offset(0, 10),
+                    ),
+                  ],
+                ),
+                child: Row(
+                  children: [
+                    IconButton.filledTonal(
+                      onPressed: () => Navigator.pop(context),
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.white.withValues(alpha: 0.14),
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.arrow_back_rounded),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Equipment Hub',
+                            style: GoogleFonts.readexPro(
+                              fontSize: 21,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                          ),
+                          const SizedBox(height: 3),
+                          Text(
+                            '${_equipmentList.length} rehabilitation tools available',
+                            style: const TextStyle(
+                              color: Colors.white60,
+                              fontSize: 11,
+                            ),
                           ),
                         ],
-                        border: Border.all(color: Colors.grey.shade100),
                       ),
-                      child: const Icon(Icons.arrow_back_ios_new, size: 16, color: Colors.black54),
                     ),
-                  ),
-                  Text(
-                    'Equipment Rental',
-                    style: GoogleFonts.readexPro(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: const Color(0xFF207866),
+                    IconButton.filledTonal(
+                      tooltip: 'My rental requests',
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (context) => const RentalStatusPage(),
+                          ),
+                        );
+                      },
+                      style: IconButton.styleFrom(
+                        backgroundColor: Colors.cyanAccent,
+                        foregroundColor: const Color(0xFF071A3D),
+                      ),
+                      icon: const Icon(Icons.receipt_long_rounded),
                     ),
-                  ),
-                  IconButton(
-                    onPressed: () {
-                      Navigator.push(
-                        context,
-                        MaterialPageRoute(builder: (context) => const RentalStatusPage()),
-                      );
-                    },
-                    icon: const Icon(Icons.list, color: Colors.black87),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 20),
 
               // Search Bar
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.grey.shade200),
+                  color: RehabColors.input,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: RehabColors.border),
                 ),
                 child: TextField(
+                  onChanged: (value) => setState(() => _searchQuery = value),
                   decoration: InputDecoration(
-                    hintText: 'Search',
+                    hintText: 'Search equipment',
                     hintStyle: GoogleFonts.readexPro(color: Colors.grey.shade400, fontSize: 14),
                     prefixIcon: Icon(Icons.search, color: Colors.grey.shade400),
-                    suffixIcon: Icon(Icons.close, color: Colors.grey.shade400, size: 20),
+                    suffixIcon: const Icon(
+                      Icons.tune_rounded,
+                      color: RehabColors.primary,
+                      size: 20,
+                    ),
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(vertical: 16),
                   ),
@@ -165,67 +201,87 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                 const Expanded(child: Center(child: CircularProgressIndicator()))
               else
                 Expanded(
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
-                      // Sidebar (Categories)
-                      Container(
-                        width: 100,
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF86B9B0).withOpacity(0.8), // light teal
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 16),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Padding(
-                              padding: const EdgeInsets.only(left: 4.0, bottom: 12.0),
-                              child: Text(
-                                'Categories',
-                                style: GoogleFonts.readexPro(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.bold,
-                                  color: Colors.black87,
-                                ),
+                      SizedBox(
+                        height: 40,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: _categories.length + 1,
+                          separatorBuilder: (_, _) => const SizedBox(width: 8),
+                          itemBuilder: (context, index) {
+                            final isAll = index == 0;
+                            final cat = isAll ? null : _categories[index - 1];
+                            final id = cat?['category_id'];
+                            final selected = isAll
+                                ? _selectedCategoryIds.isEmpty
+                                : _selectedCategoryIds.contains(id);
+                            return FilterChip(
+                              selected: selected,
+                              showCheckmark: false,
+                              avatar: Icon(
+                                isAll
+                                    ? Icons.grid_view_rounded
+                                    : Icons.category_outlined,
+                                size: 16,
+                                color: selected
+                                    ? Colors.white
+                                    : RehabColors.primary,
                               ),
-                            ),
-                            ..._categories.map((cat) => _CategoryCheckbox(
-                              title: cat['description'],
-                              isChecked: _selectedCategoryIds.contains(cat['category_id']),
-                              onChanged: (val) {
+                              label: Text(
+                                isAll ? 'All' : cat['description'].toString(),
+                              ),
+                              labelStyle: TextStyle(
+                                color: selected ? Colors.white : RehabColors.ink,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              selectedColor: RehabColors.primary,
+                              backgroundColor: Colors.white,
+                              side: BorderSide(
+                                color: selected
+                                    ? RehabColors.primary
+                                    : RehabColors.border,
+                              ),
+                              onSelected: (_) {
                                 setState(() {
-                                  if (val == true) {
-                                    _selectedCategoryIds.add(cat['category_id']);
+                                  if (isAll) {
+                                    _selectedCategoryIds.clear();
+                                  } else if (selected) {
+                                    _selectedCategoryIds.remove(id);
                                   } else {
-                                    _selectedCategoryIds.remove(cat['category_id']);
+                                    _selectedCategoryIds.add(id);
                                   }
                                 });
-                                if (_scrollController.hasClients) {
-                                  _scrollController.animateTo(0, duration: const Duration(milliseconds: 300), curve: Curves.easeInOut);
-                                }
                               },
-                            )),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-
-                      // Grid of Items
-                      Expanded(
-                        child: GridView.builder(
-                          controller: _scrollController,
-                          itemCount: _filteredEquipment.length,
-                          gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                            crossAxisCount: 2,
-                            crossAxisSpacing: 12,
-                            mainAxisSpacing: 12,
-                            childAspectRatio: 0.65,
-                          ),
-                          itemBuilder: (context, index) {
-                            return _buildEquipmentCard(context, _filteredEquipment[index]);
+                            );
                           },
                         ),
+                      ),
+                      const SizedBox(height: 16),
+                      Expanded(
+                        child: _filteredEquipment.isEmpty
+                            ? const Center(
+                                child: Text('No matching equipment found.'),
+                              )
+                            : GridView.builder(
+                                controller: _scrollController,
+                                itemCount: _filteredEquipment.length,
+                                gridDelegate:
+                                    const SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      crossAxisSpacing: 12,
+                                      mainAxisSpacing: 12,
+                                      childAspectRatio: 0.68,
+                                    ),
+                                itemBuilder: (context, index) {
+                                  return _buildEquipmentCard(
+                                    context,
+                                    _filteredEquipment[index],
+                                  );
+                                },
+                              ),
                       ),
                     ],
                   ),
@@ -242,30 +298,32 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
     return Container(
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(4),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: RehabColors.border),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.04),
-            blurRadius: 10,
-            offset: const Offset(0, 4),
+            color: RehabColors.primary.withValues(alpha: 0.08),
+            blurRadius: 18,
+            offset: const Offset(0, 8),
           ),
         ],
       ),
-      padding: const EdgeInsets.all(8),
+      padding: const EdgeInsets.all(10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           // Image placeholder
           Expanded(
             child: Container(
+              clipBehavior: Clip.antiAlias,
               decoration: BoxDecoration(
-                color: Colors.white,
-                border: Border.all(color: Colors.black87, width: 0.5),
+                color: RehabColors.primaryLight,
+                borderRadius: BorderRadius.circular(16),
               ),
               child: equipment['image'] != null && equipment['image'].toString().isNotEmpty
                   ? Image.network(
                       equipment['image'], 
-                      fit: BoxFit.cover,
+                      fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) => const Icon(Icons.broken_image, color: Colors.grey),
                     )
                   : const Icon(Icons.image, color: Colors.grey),
@@ -274,9 +332,9 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
           const SizedBox(height: 8),
           Text(
             equipment['name'] ?? '',
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.left,
             style: GoogleFonts.readexPro(
-              fontSize: 10,
+              fontSize: 12,
               fontWeight: FontWeight.bold,
               color: Colors.black87,
             ),
@@ -286,9 +344,9 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
           const SizedBox(height: 4),
           Text(
             equipment['description'] ?? '',
-            textAlign: TextAlign.center,
+            textAlign: TextAlign.left,
             style: GoogleFonts.readexPro(
-              fontSize: 9,
+              fontSize: 9.5,
               color: Colors.grey.shade500,
             ),
             maxLines: 2,
@@ -300,24 +358,28 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                'Instock: $stock',
+                stock > 0 ? '$stock available' : 'Out of stock',
                 style: GoogleFonts.readexPro(
-                  fontSize: 8,
-                  color: Colors.grey.shade400,
+                  fontSize: 9,
+                  fontWeight: FontWeight.w600,
+                  color: stock > 0 ? RehabColors.green : RehabColors.danger,
                 ),
               ),
               GestureDetector(
                 onTap: stock > 0 ? () => _showRentalDialog(context, equipment) : null,
                 child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 13,
+                    vertical: 7,
+                  ),
                   decoration: BoxDecoration(
-                    color: stock > 0 ? const Color(0xFF207866) : Colors.grey,
-                    borderRadius: BorderRadius.circular(12),
+                    color: stock > 0 ? const Color(0xFF1565C0) : Colors.grey,
+                    borderRadius: BorderRadius.circular(11),
                   ),
                   child: Text(
                     'Rent',
                     style: GoogleFonts.readexPro(
-                      fontSize: 8,
+                      fontSize: 9,
                       fontWeight: FontWeight.bold,
                       color: Colors.white,
                     ),
@@ -348,7 +410,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
             return Dialog(
               backgroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
+                borderRadius: BorderRadius.circular(28),
               ),
               child: Padding(
                 padding: const EdgeInsets.all(20.0),
@@ -372,9 +434,10 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                         width: 150,
                         height: 150,
                         decoration: BoxDecoration(
-                          color: Colors.white,
-                          border: Border.all(color: Colors.black87),
+                          color: RehabColors.primaryLight,
+                          borderRadius: BorderRadius.circular(20),
                         ),
+                        clipBehavior: Clip.antiAlias,
                         child: equipment['image'] != null && equipment['image'].toString().isNotEmpty
                             ? Image.network(
                                 equipment['image'], 
@@ -564,7 +627,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                           }
                         },
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF207866),
+                          backgroundColor: const Color(0xFF1565C0),
                           foregroundColor: Colors.white,
                           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                           shape: RoundedRectangleBorder(
@@ -681,7 +744,7 @@ class _CategoryCheckbox extends StatelessWidget {
               onChanged: onChanged,
               fillColor: WidgetStateProperty.resolveWith((states) {
                 if (states.contains(WidgetState.selected)) {
-                  return const Color(0xFF207866); // Dark teal
+                  return const Color(0xFF1565C0); // Dark teal
                 }
                 return Colors.white;
               }),

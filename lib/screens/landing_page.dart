@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/login_page.dart';
 import 'package:rehab_ai/screens/signup_page.dart';
@@ -74,7 +74,7 @@ class LandingPage extends StatelessWidget {
                       );
                     },
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF207866), // Dark green color
+                      backgroundColor: const Color(0xFF1565C0), // Dark green color
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
@@ -104,8 +104,8 @@ class LandingPage extends StatelessWidget {
                       );
                     },
                     style: OutlinedButton.styleFrom(
-                      foregroundColor: const Color(0xFF207866), // Dark green color
-                      side: const BorderSide(color: Color(0xFF207866), width: 1.5),
+                      foregroundColor: const Color(0xFF1565C0), // Dark green color
+                      side: const BorderSide(color: Color(0xFF1565C0), width: 1.5),
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(30),
                       ),

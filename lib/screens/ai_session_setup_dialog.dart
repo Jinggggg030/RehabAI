@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 enum AiTrackingMode { duration, reps }
@@ -84,7 +84,7 @@ Future<AiSessionConfig?> showAiSessionSetupDialog(
                   IconButton(
                     onPressed: increase,
                     icon: const Icon(Icons.add_circle_outline),
-                    color: const Color(0xFF207866),
+                    color: const Color(0xFF1565C0),
                   ),
                 ],
               ),
@@ -108,7 +108,7 @@ Future<AiSessionConfig?> showAiSessionSetupDialog(
                     width: double.infinity,
                     padding: const EdgeInsets.all(10),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF207866).withValues(alpha: 0.1),
+                      color: const Color(0xFF1565C0).withValues(alpha: 0.1),
                       borderRadius: BorderRadius.circular(8),
                     ),
                     child: const Text(
@@ -182,7 +182,7 @@ Future<AiSessionConfig?> showAiSessionSetupDialog(
                   min: 0,
                   max: 10,
                   divisions: 10,
-                  activeColor: const Color(0xFF207866),
+                  activeColor: const Color(0xFF1565C0),
                   onChanged: (value) {
                     setDialogState(() => painBefore = value.round());
                   },
@@ -191,6 +191,11 @@ Future<AiSessionConfig?> showAiSessionSetupDialog(
             ),
           ),
           actions: [
+            TextButton.icon(
+              onPressed: () => Navigator.pop(context),
+              icon: const Icon(Icons.arrow_back_rounded),
+              label: const Text('Back'),
+            ),
             FilledButton(
               onPressed: () {
                 Navigator.pop(
@@ -206,7 +211,7 @@ Future<AiSessionConfig?> showAiSessionSetupDialog(
                 );
               },
               style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFF207866),
+                backgroundColor: const Color(0xFF1565C0),
               ),
               child: const Text('Continue to Camera'),
             ),

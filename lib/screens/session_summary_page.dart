@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
@@ -110,7 +110,7 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF8FAFF),
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),
@@ -121,7 +121,7 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
               Icon(
                 Icons.check_circle,
                 size: 80,
-                color: const Color(0xFF207866),
+                color: const Color(0xFF1565C0),
               ),
               const SizedBox(height: 16),
               Text(
@@ -130,7 +130,7 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
                 style: GoogleFonts.readexPro(
                   fontSize: 28,
                   fontWeight: FontWeight.bold,
-                  color: const Color(0xFF207866),
+                  color: const Color(0xFF1565C0),
                 ),
               ),
               const SizedBox(height: 8),
@@ -205,20 +205,20 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
               const SizedBox(height: 24),
               if (_isSaving)
                 const Center(
-                  child: CircularProgressIndicator(color: Color(0xFF207866)),
+                  child: CircularProgressIndicator(color: Color(0xFF1565C0)),
                 )
               else if (_saveSuccess)
                 Text(
-                  '✓ Progress securely saved',
+                  'âœ“ Progress securely saved',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.readexPro(
-                    color: const Color(0xFF207866),
+                    color: const Color(0xFF1565C0),
                     fontWeight: FontWeight.bold,
                   ),
                 )
               else
                 Text(
-                  '❌ Failed to save progress to cloud',
+                  'âŒ Failed to save progress to cloud',
                   textAlign: TextAlign.center,
                   style: GoogleFonts.readexPro(
                     color: Colors.red,
@@ -234,7 +234,7 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
                   Navigator.pop(context); // pop details
                 },
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF207866),
+                  backgroundColor: const Color(0xFF1565C0),
                   foregroundColor: Colors.white,
                   minimumSize: const Size(double.infinity, 50),
                   shape: RoundedRectangleBorder(

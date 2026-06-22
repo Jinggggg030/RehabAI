@@ -10,6 +10,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/record_session_dialog.dart';
 import 'package:rehab_ai/screens/physio_progress_tab.dart';
 import '../services/teleconference_service.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 class PhysioDashboard extends StatefulWidget {
   const PhysioDashboard({super.key});
@@ -22,7 +23,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
   final _supabase = Supabase.instance.client;
   int? _myUserId;
   int _selectedIndex = 0;
-  
+
   List<int> _assignedSessionIds = [];
   Set<String> _unreadChats = {};
   RealtimeChannel? _globalNotificationSub;
@@ -32,20 +33,24 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
   bool _notificationsInitialized = false;
   bool _notificationFetchInProgress = false;
   int _pageRefreshVersion = 0;
-  
+
   @override
   void initState() {
     super.initState();
     _initDashboard();
   }
-  
+
   Future<void> _initDashboard() async {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
-    
-    final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-    final userRes = await http.get(Uri.parse('$apiUrl/users/profile/${user.id}'));
-    
+
+    final apiUrl = kIsWeb
+        ? 'http://127.0.0.1:8000'
+        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final userRes = await http.get(
+      Uri.parse('$apiUrl/users/profile/${user.id}'),
+    );
+
     if (userRes.statusCode == 200) {
       final userData = jsonDecode(userRes.body);
       if (userData['exists'] == true) {
@@ -65,12 +70,16 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
 
   Future<void> _fetchAssignedSessions() async {
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
       final res = await http.get(Uri.parse('$apiUrl/physio/chats/$_myUserId'));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         setState(() {
-          _assignedSessionIds = (data['chats'] as List).map((c) => c['session_id'] as int).toList();
+          _assignedSessionIds = (data['chats'] as List)
+              .map((c) => c['session_id'] as int)
+              .toList();
           _unreadChats.clear();
           for (var c in data['chats']) {
             if (c['has_unread'] == true) {
@@ -79,80 +88,88 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
           }
         });
       }
-    } catch(e) {}
+    } catch (e) {}
   }
 
   void _setupGlobalNotifications() {
-    _globalNotificationSub = _supabase.channel('public:Chat_Log:notifications_global')
-      .onPostgresChanges(event: PostgresChangeEvent.insert, schema: 'public', table: 'Chat_Log',
-        callback: (payload) {
-          final newRecord = payload.newRecord;
-          if (newRecord['sender_id'] != null &&
-              newRecord['sender_id'] != _myUserId) {
-            final sessionId = newRecord['session_id'] as int;
-            if (_assignedSessionIds.contains(sessionId)) {
-              setState(() {
-                _unreadChats.add(sessionId.toString());
-              });
-              _fetchPhysioNotifications(showSnackBar: false);
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("New message received from patient!"),
-                    duration: Duration(seconds: 3),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+    _globalNotificationSub = _supabase
+        .channel('public:Chat_Log:notifications_global')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'Chat_Log',
+          callback: (payload) {
+            final newRecord = payload.newRecord;
+            if (newRecord['sender_id'] != null &&
+                newRecord['sender_id'] != _myUserId) {
+              final sessionId = newRecord['session_id'] as int;
+              if (_assignedSessionIds.contains(sessionId)) {
+                setState(() {
+                  _unreadChats.add(sessionId.toString());
+                });
+                _fetchPhysioNotifications(showSnackBar: false);
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("New message received from patient!"),
+                      duration: Duration(seconds: 3),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
               }
             }
-          }
-        }
-      )
-      .onPostgresChanges(event: PostgresChangeEvent.update, schema: 'public', table: 'Live_Chat_Session',
-        callback: (payload) {
-          final newRecord = payload.newRecord;
-          if (newRecord['therapist_id'] == _myUserId && newRecord['session_status'] == 'Active') {
-            final sessionId = newRecord['session_id'] as int;
-            if (!_assignedSessionIds.contains(sessionId)) {
-              _fetchAssignedSessions(); // Fetch again to update assignments and unread status
-              if (mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text("New chat assigned to you!"),
-                    duration: Duration(seconds: 3),
-                    behavior: SnackBarBehavior.floating,
-                  ),
-                );
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'Live_Chat_Session',
+          callback: (payload) {
+            final newRecord = payload.newRecord;
+            if (newRecord['therapist_id'] == _myUserId &&
+                newRecord['session_status'] == 'Active') {
+              final sessionId = newRecord['session_id'] as int;
+              if (!_assignedSessionIds.contains(sessionId)) {
+                _fetchAssignedSessions(); // Fetch again to update assignments and unread status
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(
+                      content: Text("New chat assigned to you!"),
+                      duration: Duration(seconds: 3),
+                      behavior: SnackBarBehavior.floating,
+                    ),
+                  );
+                }
               }
             }
-          }
-        }
-      )
-      .onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'Rental_Record',
-        callback: (_) => _fetchPhysioNotifications(),
-      )
-      .onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'Appointment',
-        callback: (_) => _fetchPhysioNotifications(),
-      )
-      .onPostgresChanges(
-        event: PostgresChangeEvent.insert,
-        schema: 'public',
-        table: 'Session_Log',
-        callback: (_) => _fetchPhysioNotifications(),
-      )
-      .onPostgresChanges(
-        event: PostgresChangeEvent.update,
-        schema: 'public',
-        table: 'Session_Log',
-        callback: (_) => _fetchPhysioNotifications(),
-      )
-      .subscribe();
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'Rental_Record',
+          callback: (_) => _fetchPhysioNotifications(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'Appointment',
+          callback: (_) => _fetchPhysioNotifications(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'Session_Log',
+          callback: (_) => _fetchPhysioNotifications(),
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.update,
+          schema: 'public',
+          table: 'Session_Log',
+          callback: (_) => _fetchPhysioNotifications(),
+        )
+        .subscribe();
   }
 
   Future<void> _fetchPhysioNotifications({bool showSnackBar = true}) async {
@@ -273,98 +290,267 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
   @override
   void dispose() {
     _notificationTimer?.cancel();
-    if (_globalNotificationSub != null) _supabase.removeChannel(_globalNotificationSub!);
+    if (_globalNotificationSub != null)
+      _supabase.removeChannel(_globalNotificationSub!);
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.grey[50],
-      appBar: AppBar(
-        title: const Text('Physiotherapist Portal', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.white)),
-        backgroundColor: Colors.blue[800],
-        actions: [
-          IconButton(
-            tooltip: 'Refresh current page',
-            icon: const Icon(Icons.refresh, color: Colors.white),
-            onPressed: _refreshCurrentPage,
+      backgroundColor: RehabColors.portalBackground,
+      body: Row(
+        children: [
+          Container(
+            width: 220,
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(right: BorderSide(color: RehabColors.border)),
+            ),
+            child: Column(
+              children: [
+                _portalBrand(accent: RehabColors.physio, role: 'Physio Portal'),
+                const SizedBox(height: 12),
+                Expanded(
+                  child: ListView(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    children: [
+                      _portalNavItem(
+                        0,
+                        Icons.forum_outlined,
+                        'Live Chat',
+                        showBadge:
+                            _unreadChats.isNotEmpty || _hasNotification('chat'),
+                      ),
+                      _portalNavItem(
+                        1,
+                        Icons.insights_outlined,
+                        'Patient Progress',
+                        showBadge: _hasNotification('exercise'),
+                      ),
+                      _portalNavItem(
+                        2,
+                        Icons.calendar_month_outlined,
+                        'Appointments',
+                        showBadge: _hasNotification('appointment'),
+                      ),
+                      _portalNavItem(
+                        3,
+                        Icons.medical_services_outlined,
+                        'Equipment',
+                        showBadge: _hasNotification('rental'),
+                      ),
+                    ],
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      await _supabase.auth.signOut();
+                      if (mounted) {
+                        Navigator.of(context).pushReplacement(
+                          MaterialPageRoute(builder: (_) => const LoginPage()),
+                        );
+                      }
+                    },
+                    icon: const Icon(Icons.logout_rounded),
+                    label: const Text('Exit Portal'),
+                    style: TextButton.styleFrom(
+                      foregroundColor: RehabColors.danger,
+                      minimumSize: const Size(double.infinity, 46),
+                      alignment: Alignment.centerLeft,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
-          IconButton(
-            icon: const Icon(Icons.logout, color: Colors.white),
-            onPressed: () async {
-              await _supabase.auth.signOut();
-              if (mounted) {
-                Navigator.of(context).pushReplacement(MaterialPageRoute(builder: (_) => const LoginPage()));
-              }
-            },
+          Expanded(
+            child: Column(
+              children: [
+                Container(
+                  height: 70,
+                  padding: const EdgeInsets.symmetric(horizontal: 24),
+                  decoration: const BoxDecoration(
+                    color: Colors.white,
+                    border: Border(
+                      bottom: BorderSide(color: RehabColors.border),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              const [
+                                'Live Chat',
+                                'Patient Progress',
+                                'Appointments',
+                                'Equipment Rentals',
+                              ][_selectedIndex],
+                              style: const TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const Text(
+                              'RehabAI clinical workspace',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: RehabColors.subtle,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton.filledTonal(
+                        tooltip: 'Refresh current page',
+                        onPressed: _refreshCurrentPage,
+                        icon: const Icon(Icons.refresh_rounded),
+                      ),
+                      const SizedBox(width: 10),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 8,
+                        ),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF0FDF4),
+                          borderRadius: BorderRadius.circular(13),
+                          border: Border.all(color: RehabColors.border),
+                        ),
+                        child: const Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 12,
+                              backgroundColor: RehabColors.physio,
+                              child: Icon(
+                                Icons.person,
+                                size: 14,
+                                color: Colors.white,
+                              ),
+                            ),
+                            SizedBox(width: 8),
+                            Text(
+                              'Physiotherapist',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(child: _buildMainContent()),
+              ],
+            ),
           ),
         ],
       ),
-      body: Row(
+    );
+  }
+
+  Widget _portalBrand({required Color accent, required String role}) {
+    return Container(
+      height: 74,
+      padding: const EdgeInsets.symmetric(horizontal: 18),
+      decoration: const BoxDecoration(
+        border: Border(bottom: BorderSide(color: RehabColors.border)),
+      ),
+      child: Row(
         children: [
-          NavigationRail(
-            selectedIndex: _selectedIndex,
-            onDestinationSelected: _openDashboardSection,
-            labelType: NavigationRailLabelType.all,
-            backgroundColor: Colors.white,
-            selectedIconTheme: IconThemeData(color: Colors.blue[800]),
-            selectedLabelTextStyle: TextStyle(color: Colors.blue[800], fontWeight: FontWeight.bold),
-            destinations: [
-              NavigationRailDestination(
-                icon: Badge(
-                  isLabelVisible:
-                      _unreadChats.isNotEmpty || _hasNotification('chat'),
-                  child: const Icon(Icons.chat_bubble_outline),
-                ),
-                selectedIcon: Badge(
-                  isLabelVisible:
-                      _unreadChats.isNotEmpty || _hasNotification('chat'),
-                  child: const Icon(Icons.chat_bubble),
-                ),
-                label: const Text('Live Chat'),
+          Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: accent,
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: const Icon(
+              Icons.health_and_safety_rounded,
+              color: Colors.white,
+              size: 20,
+            ),
+          ),
+          const SizedBox(width: 11),
+          Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'RehabAI',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
               ),
-              NavigationRailDestination(
-                icon: Badge(
-                  isLabelVisible: _hasNotification('exercise'),
-                  child: const Icon(Icons.trending_up),
+              Text(
+                role,
+                style: TextStyle(
+                  fontSize: 10,
+                  color: accent,
+                  fontWeight: FontWeight.w700,
                 ),
-                selectedIcon: Badge(
-                  isLabelVisible: _hasNotification('exercise'),
-                  child: const Icon(Icons.trending_up, size: 28),
-                ),
-                label: const Text('Progress'),
-              ),
-              NavigationRailDestination(
-                icon: Badge(
-                  isLabelVisible: _hasNotification('appointment'),
-                  child: const Icon(Icons.calendar_today_outlined),
-                ),
-                selectedIcon: Badge(
-                  isLabelVisible: _hasNotification('appointment'),
-                  child: const Icon(Icons.calendar_today),
-                ),
-                label: const Text('Appointments'),
-              ),
-              NavigationRailDestination(
-                icon: Badge(
-                  isLabelVisible: _hasNotification('rental'),
-                  child: const Icon(Icons.medical_services_outlined),
-                ),
-                selectedIcon: Badge(
-                  isLabelVisible: _hasNotification('rental'),
-                  child: const Icon(Icons.medical_services),
-                ),
-                label: const Text('Rentals'),
               ),
             ],
           ),
-          const VerticalDivider(thickness: 1, width: 1, color: Colors.black12),
-          // Main Content Area
-          Expanded(
-            child: _buildMainContent(),
-          ),
         ],
+      ),
+    );
+  }
+
+  Widget _portalNavItem(
+    int index,
+    IconData icon,
+    String label, {
+    bool showBadge = false,
+  }) {
+    final selected = _selectedIndex == index;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 5),
+      child: Material(
+        color: selected ? const Color(0xFFECFDF5) : Colors.transparent,
+        borderRadius: BorderRadius.circular(13),
+        child: InkWell(
+          onTap: () => _openDashboardSection(index),
+          borderRadius: BorderRadius.circular(13),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            child: Row(
+              children: [
+                Icon(
+                  icon,
+                  size: 19,
+                  color: selected ? RehabColors.physio : RehabColors.muted,
+                ),
+                const SizedBox(width: 11),
+                Expanded(
+                  child: Text(
+                    label,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                      color: selected ? RehabColors.green : RehabColors.muted,
+                    ),
+                  ),
+                ),
+                if (showBadge)
+                  Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: RehabColors.danger,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -377,8 +563,8 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
       case 0:
         return PhysioLiveChatTab(
           key: ValueKey('chat-$_pageRefreshVersion'),
-          myUserId: _myUserId!, 
-          unreadChats: _unreadChats, 
+          myUserId: _myUserId!,
+          unreadChats: _unreadChats,
           onChatRead: (sessionId) {
             setState(() {
               _unreadChats.remove(sessionId);
@@ -387,7 +573,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                     notification['reference_id'].toString() != sessionId;
               }).toList();
             });
-          }
+          },
         );
       case 1:
         return PhysioProgressTab(
@@ -418,7 +604,12 @@ class PhysioLiveChatTab extends StatefulWidget {
   final Set<String> unreadChats;
   final Function(String) onChatRead;
 
-  const PhysioLiveChatTab({super.key, required this.myUserId, required this.unreadChats, required this.onChatRead});
+  const PhysioLiveChatTab({
+    super.key,
+    required this.myUserId,
+    required this.unreadChats,
+    required this.onChatRead,
+  });
 
   @override
   State<PhysioLiveChatTab> createState() => _PhysioLiveChatTabState();
@@ -435,14 +626,21 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
   void initState() {
     super.initState();
     _fetchChats();
-    _refreshTimer = Timer.periodic(const Duration(seconds: 5), (_) => _fetchChats(isBackground: true));
+    _refreshTimer = Timer.periodic(
+      const Duration(seconds: 5),
+      (_) => _fetchChats(isBackground: true),
+    );
   }
 
   Future<void> _fetchChats({bool isBackground = false}) async {
     if (!isBackground) setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final res = await http.get(Uri.parse('$apiUrl/physio/chats/${widget.myUserId}'));
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final res = await http.get(
+        Uri.parse('$apiUrl/physio/chats/${widget.myUserId}'),
+      );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (mounted) {
@@ -450,7 +648,9 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
             _chats = data['chats'] ?? [];
             // Update selected chat if it was modified
             if (_selectedChat != null) {
-              final updated = _chats.where((c) => c['session_id'] == _selectedChat!['session_id']).toList();
+              final updated = _chats
+                  .where((c) => c['session_id'] == _selectedChat!['session_id'])
+                  .toList();
               if (updated.isNotEmpty) _selectedChat = updated.first;
             }
           });
@@ -488,8 +688,12 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
 
   @override
   Widget build(BuildContext context) {
-    final activeChats = _chats.where((c) => c['session_status'] != 'Closed').toList();
-    final pastChats = _chats.where((c) => c['session_status'] == 'Closed').toList();
+    final activeChats = _chats
+        .where((c) => c['session_status'] != 'Closed')
+        .toList();
+    final pastChats = _chats
+        .where((c) => c['session_status'] == 'Closed')
+        .toList();
 
     return Row(
       children: [
@@ -507,40 +711,77 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    const Text("Assigned Chats", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    IconButton(icon: const Icon(Icons.refresh), onPressed: _fetchChats),
+                    const Text(
+                      "Assigned Chats",
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.refresh),
+                      onPressed: _fetchChats,
+                    ),
                   ],
                 ),
               ),
               const Divider(height: 1),
               Expanded(
-                child: _isLoading 
-                  ? const Center(child: CircularProgressIndicator())
-                  : _chats.isEmpty
-                    ? const Center(child: Text("No patients assigned yet.", style: TextStyle(color: Colors.grey)))
+                child: _isLoading
+                    ? const Center(child: CircularProgressIndicator())
+                    : _chats.isEmpty
+                    ? const Center(
+                        child: Text(
+                          "No patients assigned yet.",
+                          style: TextStyle(color: Colors.grey),
+                        ),
+                      )
                     : ListView(
                         children: [
                           if (activeChats.isNotEmpty)
                             const Padding(
                               padding: EdgeInsets.all(8.0),
-                              child: Text("ACTIVE CHATS", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                              child: Text(
+                                "ACTIVE CHATS",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey,
+                                ),
+                              ),
                             ),
                           ...activeChats.map((chat) {
-                            final isSelected = _selectedChat?['session_id'] == chat['session_id'];
+                            final isSelected =
+                                _selectedChat?['session_id'] ==
+                                chat['session_id'];
                             return ListTile(
                               selected: isSelected,
                               selectedTileColor: Colors.blue[50],
                               leading: CircleAvatar(
                                 backgroundColor: Colors.blue[100],
-                                child: const Icon(Icons.person, color: Colors.blue),
+                                child: const Icon(
+                                  Icons.person,
+                                  color: Colors.blue,
+                                ),
                               ),
-                              title: Text(chat['student_name'] ?? 'Unknown Patient', style: const TextStyle(fontWeight: FontWeight.bold)),
+                              title: Text(
+                                chat['student_name'] ?? 'Unknown Patient',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
                               subtitle: Text("${chat['discipline']}"),
-                              trailing: widget.unreadChats.contains(chat['session_id'].toString())
+                              trailing:
+                                  widget.unreadChats.contains(
+                                    chat['session_id'].toString(),
+                                  )
                                   ? Container(
                                       width: 12,
                                       height: 12,
-                                      decoration: const BoxDecoration(color: Colors.red, shape: BoxShape.circle),
+                                      decoration: const BoxDecoration(
+                                        color: Colors.red,
+                                        shape: BoxShape.circle,
+                                      ),
                                     )
                                   : null,
                               onTap: () {
@@ -554,19 +795,40 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
                           if (pastChats.isNotEmpty)
                             const Padding(
                               padding: EdgeInsets.fromLTRB(8, 16, 8, 8),
-                              child: Text("PAST CONVERSATIONS", style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Colors.grey)),
+                              child: Text(
+                                "PAST CONVERSATIONS",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey,
+                                ),
+                              ),
                             ),
                           ...pastChats.map((chat) {
-                            final isSelected = _selectedChat?['session_id'] == chat['session_id'];
+                            final isSelected =
+                                _selectedChat?['session_id'] ==
+                                chat['session_id'];
                             return ListTile(
                               selected: isSelected,
                               selectedTileColor: Colors.grey[200],
                               leading: CircleAvatar(
                                 backgroundColor: Colors.grey[300],
-                                child: const Icon(Icons.person, color: Colors.grey),
+                                child: const Icon(
+                                  Icons.person,
+                                  color: Colors.grey,
+                                ),
                               ),
-                              title: Text(chat['student_name'] ?? 'Unknown Patient', style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.grey)),
-                              subtitle: const Text("Closed", style: TextStyle(color: Colors.grey)),
+                              title: Text(
+                                chat['student_name'] ?? 'Unknown Patient',
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.grey,
+                                ),
+                              ),
+                              subtitle: const Text(
+                                "Closed",
+                                style: TextStyle(color: Colors.grey),
+                              ),
                               onTap: () => setState(() => _selectedChat = chat),
                             );
                           }),
@@ -576,7 +838,7 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
             ],
           ),
         ),
-        
+
         // Right Main Area: Chat Interface
         Expanded(
           child: _selectedChat == null
@@ -584,9 +846,16 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: [
-                      Icon(Icons.chat_bubble_outline, size: 80, color: Colors.grey),
+                      Icon(
+                        Icons.chat_bubble_outline,
+                        size: 80,
+                        color: Colors.grey,
+                      ),
                       SizedBox(height: 16),
-                      Text("Select a patient to start messaging", style: TextStyle(fontSize: 18, color: Colors.grey)),
+                      Text(
+                        "Select a patient to start messaging",
+                        style: TextStyle(fontSize: 18, color: Colors.grey),
+                      ),
                     ],
                   ),
                 )
@@ -596,8 +865,8 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
                   studentName:
                       _selectedChat!['student_name']?.toString() ?? 'Patient',
                   triageData: _selectedChat!['triage_data'],
-                  teleconferenceStatus:
-                      _selectedChat!['teleconference_status']?.toString(),
+                  teleconferenceStatus: _selectedChat!['teleconference_status']
+                      ?.toString(),
                   isClosed: _selectedChat!['session_status'] == 'Closed',
                   onChatClosed: _fetchChats,
                 ),
@@ -638,7 +907,7 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
   List<dynamic> _messages = [];
   RealtimeChannel? _subscription;
   bool _isLoading = true;
-  
+
   void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 100), () {
       if (_scrollController.hasClients) {
@@ -670,7 +939,11 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
     if (_subscription != null) await _supabase.removeChannel(_subscription!);
 
     try {
-      final res = await _supabase.from('Chat_Log').select().eq('session_id', widget.sessionId).order('timestamp', ascending: true);
+      final res = await _supabase
+          .from('Chat_Log')
+          .select()
+          .eq('session_id', widget.sessionId)
+          .order('timestamp', ascending: true);
       setState(() => _messages = List<dynamic>.from(res));
       _scrollToBottom();
     } catch (e) {
@@ -679,13 +952,23 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
       setState(() => _isLoading = false);
     }
 
-    _subscription = _supabase.channel('public:Chat_Log:session_${widget.sessionId}')
-        .onPostgresChanges(event: PostgresChangeEvent.insert, schema: 'public', table: 'Chat_Log', filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'session_id', value: widget.sessionId),
+    _subscription = _supabase
+        .channel('public:Chat_Log:session_${widget.sessionId}')
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'Chat_Log',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'session_id',
+            value: widget.sessionId,
+          ),
           callback: (payload) {
             setState(() => _messages.add(payload.newRecord));
             _scrollToBottom();
           },
-        ).subscribe();
+        )
+        .subscribe();
   }
 
   Future<void> _startTeleconference() async {
@@ -736,12 +1019,17 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
     if (text.isEmpty) return;
     _messageController.clear();
     try {
-      
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
       await http.post(
         Uri.parse('$apiUrl/chat/send'),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({"session_id": widget.sessionId, "user_id": widget.myUserId, "message": text}),
+        body: jsonEncode({
+          "session_id": widget.sessionId,
+          "user_id": widget.myUserId,
+          "message": text,
+        }),
       );
       _scrollToBottom();
     } catch (e) {
@@ -754,23 +1042,42 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text("End Conversation?"),
-        content: const Text("Are you sure you want to close this chat? You will not be able to send any more messages."),
+        content: const Text(
+          "Are you sure you want to close this chat? You will not be able to send any more messages.",
+        ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text("Cancel")),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), style: ElevatedButton.styleFrom(backgroundColor: Colors.red, foregroundColor: Colors.white), child: const Text("End Chat")),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text("Cancel"),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.red,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text("End Chat"),
+          ),
         ],
-      )
+      ),
     );
 
     if (confirm != true) return;
 
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final res = await http.put(Uri.parse('$apiUrl/physio/chats/${widget.sessionId}/close'));
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final res = await http.put(
+        Uri.parse('$apiUrl/physio/chats/${widget.sessionId}/close'),
+      );
       if (res.statusCode == 200) {
         widget.onChatClosed(); // Refresh the list
       } else {
-        if (mounted) ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Failed to end chat")));
+        if (mounted)
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(const SnackBar(content: Text("Failed to end chat")));
       }
     } catch (e) {
       debugPrint("Error ending chat: $e");
@@ -792,11 +1099,17 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
         // Chat Header
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: const BoxDecoration(color: Colors.white, border: Border(bottom: BorderSide(color: Colors.black12))),
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            border: Border(bottom: BorderSide(color: Colors.black12)),
+          ),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text("Conversation", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+              const Text(
+                "Conversation",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
               if (!widget.isClosed)
                 Wrap(
                   spacing: 8,
@@ -825,12 +1138,21 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
                       onPressed: _endChat,
                       icon: const Icon(Icons.close, size: 18),
                       label: const Text("End Chat"),
-                      style: OutlinedButton.styleFrom(foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        side: const BorderSide(color: Colors.red),
+                      ),
                     ),
                   ],
                 )
               else
-                Chip(label: const Text("Closed", style: TextStyle(color: Colors.white)), backgroundColor: Colors.grey[600]),
+                Chip(
+                  label: const Text(
+                    "Closed",
+                    style: TextStyle(color: Colors.white),
+                  ),
+                  backgroundColor: Colors.grey[600],
+                ),
             ],
           ),
         ),
@@ -842,77 +1164,127 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text("AI Triage Summary", style: TextStyle(fontWeight: FontWeight.bold, color: Colors.brown)),
+                const Text(
+                  "AI Triage Summary",
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Colors.brown,
+                  ),
+                ),
                 const SizedBox(height: 4),
-                Text("Area: ${widget.triageData['pain_area'] ?? 'Unknown'} | Severity: ${widget.triageData['severity'] ?? 'Unknown'} | Duration: ${widget.triageData['duration'] ?? 'Unknown'}", style: const TextStyle(color: Colors.black87)),
+                Text(
+                  "Area: ${widget.triageData['pain_area'] ?? 'Unknown'} | Severity: ${widget.triageData['severity'] ?? 'Unknown'} | Duration: ${widget.triageData['duration'] ?? 'Unknown'}",
+                  style: const TextStyle(color: Colors.black87),
+                ),
               ],
             ),
           ),
         Expanded(
-          child: _isLoading ? const Center(child: CircularProgressIndicator())
-            : ListView.builder(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(16),
-                itemCount: _messages.length,
-                itemBuilder: (context, index) {
-                  final msg = _messages[index];
-                  final isMe = msg['sender_id'] == widget.myUserId;
-                  final isSystem = msg['sender_id'] == null;
-                  final meetingRoom = TeleconferenceService.roomFromInvite(
-                    msg['content']?.toString(),
-                  );
-                  return Align(
-                    alignment: isMe ? Alignment.centerRight : (isSystem ? Alignment.center : Alignment.centerLeft),
-                    child: Container(
-                      margin: const EdgeInsets.symmetric(vertical: 4),
-                      padding: const EdgeInsets.all(12),
-                      decoration: BoxDecoration(color: isMe ? Colors.blue[600] : (isSystem ? Colors.grey[300] : Colors.white), borderRadius: BorderRadius.circular(12)),
-                      constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.5),
-                      child: meetingRoom == null
-                          ? Text(msg['content'] ?? '', style: TextStyle(color: isMe ? Colors.white : (isSystem ? Colors.black54 : Colors.black87), fontStyle: isSystem ? FontStyle.italic : FontStyle.normal))
-                          : Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Video consultation invitation sent.',
-                                  style: TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.w600,
-                                  ),
+          child: _isLoading
+              ? const Center(child: CircularProgressIndicator())
+              : ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _messages.length,
+                  itemBuilder: (context, index) {
+                    final msg = _messages[index];
+                    final isMe = msg['sender_id'] == widget.myUserId;
+                    final isSystem = msg['sender_id'] == null;
+                    final meetingRoom = TeleconferenceService.roomFromInvite(
+                      msg['content']?.toString(),
+                    );
+                    return Align(
+                      alignment: isMe
+                          ? Alignment.centerRight
+                          : (isSystem
+                                ? Alignment.center
+                                : Alignment.centerLeft),
+                      child: Container(
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: isMe
+                              ? Colors.blue[600]
+                              : (isSystem ? Colors.grey[300] : Colors.white),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        constraints: BoxConstraints(
+                          maxWidth: MediaQuery.of(context).size.width * 0.5,
+                        ),
+                        child: meetingRoom == null
+                            ? Text(
+                                msg['content'] ?? '',
+                                style: TextStyle(
+                                  color: isMe
+                                      ? Colors.white
+                                      : (isSystem
+                                            ? Colors.black54
+                                            : Colors.black87),
+                                  fontStyle: isSystem
+                                      ? FontStyle.italic
+                                      : FontStyle.normal,
                                 ),
-                                TextButton.icon(
-                                  onPressed: () => TeleconferenceService.join(
-                                    context: context,
-                                    meetingRoom: meetingRoom,
+                              )
+                            : Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Video consultation invitation sent.',
+                                    style: TextStyle(
+                                      color: Colors.white,
+                                      fontWeight: FontWeight.w600,
+                                    ),
                                   ),
-                                  icon: const Icon(Icons.video_call_outlined),
-                                  label: const Text('Rejoin'),
-                                  style: TextButton.styleFrom(
-                                    foregroundColor: Colors.white,
+                                  TextButton.icon(
+                                    onPressed: () => TeleconferenceService.join(
+                                      context: context,
+                                      meetingRoom: meetingRoom,
+                                    ),
+                                    icon: const Icon(Icons.video_call_outlined),
+                                    label: const Text('Rejoin'),
+                                    style: TextButton.styleFrom(
+                                      foregroundColor: Colors.white,
+                                    ),
                                   ),
-                                ),
-                              ],
-                            ),
-                    ),
-                  );
-                },
-              ),
+                                ],
+                              ),
+                      ),
+                    );
+                  },
+                ),
         ),
         if (!widget.isClosed)
           Container(
             padding: const EdgeInsets.all(16),
-            decoration: const BoxDecoration(color: Colors.white, border: Border(top: BorderSide(color: Colors.black12))),
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              border: Border(top: BorderSide(color: Colors.black12)),
+            ),
             child: Row(
               children: [
                 Expanded(
                   child: TextField(
                     controller: _messageController,
-                    decoration: InputDecoration(hintText: "Type a message...", border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)), contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12)),
+                    decoration: InputDecoration(
+                      hintText: "Type a message...",
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(24),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
                     onSubmitted: (_) => _sendMessage(),
                   ),
                 ),
                 const SizedBox(width: 8),
-                FloatingActionButton(onPressed: _sendMessage, backgroundColor: Colors.blue[800], elevation: 0, child: const Icon(Icons.send, color: Colors.white)),
+                FloatingActionButton(
+                  onPressed: _sendMessage,
+                  backgroundColor: Colors.blue[800],
+                  elevation: 0,
+                  child: const Icon(Icons.send, color: Colors.white),
+                ),
               ],
             ),
           )
@@ -922,7 +1294,10 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
             color: Colors.grey[200],
             width: double.infinity,
             alignment: Alignment.center,
-            child: const Text("This conversation has ended.", style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic)),
+            child: const Text(
+              "This conversation has ended.",
+              style: TextStyle(color: Colors.grey, fontStyle: FontStyle.italic),
+            ),
           ),
       ],
     );
@@ -953,8 +1328,12 @@ class _PhysioPatientsTabState extends State<PhysioPatientsTab> {
   Future<void> _fetchPatients() async {
     setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final res = await http.get(Uri.parse('$apiUrl/physio/patients/${widget.myUserId}'));
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final res = await http.get(
+        Uri.parse('$apiUrl/physio/patients/${widget.myUserId}'),
+      );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         setState(() => _patients = data['patients'] ?? []);
@@ -969,7 +1348,8 @@ class _PhysioPatientsTabState extends State<PhysioPatientsTab> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_patients.isEmpty) return const Center(child: Text("No patients assigned."));
+    if (_patients.isEmpty)
+      return const Center(child: Text("No patients assigned."));
 
     return ListView.builder(
       padding: const EdgeInsets.all(24),
@@ -977,10 +1357,12 @@ class _PhysioPatientsTabState extends State<PhysioPatientsTab> {
       itemBuilder: (context, index) {
         final p = _patients[index];
         final exercises = p['exercises'] as List<dynamic>? ?? [];
-        
+
         return Card(
           margin: const EdgeInsets.only(bottom: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16.0),
             child: Column(
@@ -988,14 +1370,26 @@ class _PhysioPatientsTabState extends State<PhysioPatientsTab> {
               children: [
                 Row(
                   children: [
-                    CircleAvatar(backgroundColor: Colors.green[100], child: const Icon(Icons.person, color: Colors.green)),
+                    CircleAvatar(
+                      backgroundColor: Colors.green[100],
+                      child: const Icon(Icons.person, color: Colors.green),
+                    ),
                     const SizedBox(width: 16),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(p['student_name'] ?? 'Unknown', style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                          Text(p['email'] ?? '', style: const TextStyle(color: Colors.grey)),
+                          Text(
+                            p['student_name'] ?? 'Unknown',
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            p['email'] ?? '',
+                            style: const TextStyle(color: Colors.grey),
+                          ),
                         ],
                       ),
                     ),
@@ -1003,18 +1397,41 @@ class _PhysioPatientsTabState extends State<PhysioPatientsTab> {
                 ),
                 const SizedBox(height: 16),
                 if (p['active_prescription'] != null) ...[
-                  Text("Diagnosis: ${p['active_prescription']}", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+                  Text(
+                    "Diagnosis: ${p['active_prescription']}",
+                    style: const TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                    ),
+                  ),
                   const SizedBox(height: 8),
-                  if (exercises.isEmpty) const Text("No exercises assigned yet.", style: TextStyle(color: Colors.grey)),
-                  ...exercises.map((ex) => ListTile(
-                    contentPadding: EdgeInsets.zero,
-                    leading: const Icon(Icons.fitness_center, color: Colors.black54),
-                    title: Text(ex['name']),
-                    subtitle: Text("Sets: ${ex['assigned_sets']} | Eval: ${ex['evaluation'] ?? 'None'}"),
-                  )),
+                  if (exercises.isEmpty)
+                    const Text(
+                      "No exercises assigned yet.",
+                      style: TextStyle(color: Colors.grey),
+                    ),
+                  ...exercises.map(
+                    (ex) => ListTile(
+                      contentPadding: EdgeInsets.zero,
+                      leading: const Icon(
+                        Icons.fitness_center,
+                        color: Colors.black54,
+                      ),
+                      title: Text(ex['name']),
+                      subtitle: Text(
+                        "Sets: ${ex['assigned_sets']} | Eval: ${ex['evaluation'] ?? 'None'}",
+                      ),
+                    ),
+                  ),
                 ] else ...[
-                  const Text("No active prescription.", style: TextStyle(color: Colors.orange, fontStyle: FontStyle.italic)),
-                ]
+                  const Text(
+                    "No active prescription.",
+                    style: TextStyle(
+                      color: Colors.orange,
+                      fontStyle: FontStyle.italic,
+                    ),
+                  ),
+                ],
               ],
             ),
           ),
@@ -1079,8 +1496,12 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
   Future<void> _fetchAppointments() async {
     setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final res = await http.get(Uri.parse('$apiUrl/physio/appointments/${widget.myUserId}'));
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final res = await http.get(
+        Uri.parse('$apiUrl/physio/appointments/${widget.myUserId}'),
+      );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         setState(() => _appointments = data['appointments'] ?? []);
@@ -1092,7 +1513,9 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
     }
   }
 
-  Future<void> _showRecordSessionDialog(Map<String, dynamic> appointment) async {
+  Future<void> _showRecordSessionDialog(
+    Map<String, dynamic> appointment,
+  ) async {
     final result = await showDialog<bool>(
       context: context,
       builder: (context) => RecordSessionDialog(appointment: appointment),
@@ -1100,7 +1523,15 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
     if (result == true) {
       _fetchAppointments();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Session recorded successfully!', style: TextStyle(color: Colors.white)), backgroundColor: Colors.green));
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Session recorded successfully!',
+              style: TextStyle(color: Colors.white),
+            ),
+            backgroundColor: Colors.green,
+          ),
+        );
       }
     }
   }
@@ -1111,23 +1542,33 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
       barrierDismissible: false,
       builder: (BuildContext context) {
         return const Center(child: CircularProgressIndicator());
-      }
+      },
     );
 
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final res = await http.get(Uri.parse('$apiUrl/physiotherapists/colleagues/${widget.myUserId}'));
-      
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final res = await http.get(
+        Uri.parse('$apiUrl/physiotherapists/colleagues/${widget.myUserId}'),
+      );
+
       if (!mounted) return;
       Navigator.pop(context); // Pop loading dialog
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final colleagues = data['colleagues'] as List<dynamic>? ?? [];
-        
+
         if (colleagues.isEmpty) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No colleagues with the same specialization found.")));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text(
+                  "No colleagues with the same specialization found.",
+                ),
+              ),
+            );
           }
           return;
         }
@@ -1138,63 +1579,82 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
           showDialog(
             context: context,
             builder: (BuildContext dialogContext) {
-              return StatefulBuilder(builder: (context, setDialogState) {
-                return AlertDialog(
-                  title: const Text("Transfer Appointment"),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      const Text("Select a colleague to transfer this appointment to:"),
-                      const SizedBox(height: 16),
-                      DropdownButton<int>(
-                        isExpanded: true,
-                        value: selectedColleagueId,
-                        items: colleagues.map<DropdownMenuItem<int>>((c) {
-                          return DropdownMenuItem<int>(
-                            value: c['therapist_id'],
-                            child: Text("${c['name']} (${c['specialization']})"),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          setDialogState(() {
-                            selectedColleagueId = val;
-                          });
+              return StatefulBuilder(
+                builder: (context, setDialogState) {
+                  return AlertDialog(
+                    title: const Text("Transfer Appointment"),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          "Select a colleague to transfer this appointment to:",
+                        ),
+                        const SizedBox(height: 16),
+                        DropdownButton<int>(
+                          isExpanded: true,
+                          value: selectedColleagueId,
+                          items: colleagues.map<DropdownMenuItem<int>>((c) {
+                            return DropdownMenuItem<int>(
+                              value: c['therapist_id'],
+                              child: Text(
+                                "${c['name']} (${c['specialization']})",
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            setDialogState(() {
+                              selectedColleagueId = val;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        child: const Text("Cancel"),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (selectedColleagueId == null) return;
+                          try {
+                            final transRes = await http.put(
+                              Uri.parse(
+                                '$apiUrl/appointments/${appointment['appointment_id']}/transfer',
+                              ),
+                              headers: {'Content-Type': 'application/json'},
+                              body: jsonEncode({
+                                "new_therapist_id": selectedColleagueId,
+                              }),
+                            );
+                            if (transRes.statusCode == 200) {
+                              if (mounted) Navigator.pop(dialogContext);
+                              _fetchAppointments();
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      "Appointment transferred successfully!",
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                          } catch (e) {
+                            debugPrint("Transfer error: $e");
+                          }
                         },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.blue[800],
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text("Confirm Transfer"),
                       ),
                     ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      child: const Text("Cancel"),
-                    ),
-                    ElevatedButton(
-                      onPressed: () async {
-                        if (selectedColleagueId == null) return;
-                        try {
-                          final transRes = await http.put(
-                            Uri.parse('$apiUrl/appointments/${appointment['appointment_id']}/transfer'),
-                            headers: {'Content-Type': 'application/json'},
-                            body: jsonEncode({"new_therapist_id": selectedColleagueId}),
-                          );
-                          if (transRes.statusCode == 200) {
-                            if (mounted) Navigator.pop(dialogContext);
-                            _fetchAppointments();
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Appointment transferred successfully!")));
-                            }
-                          }
-                        } catch (e) {
-                          debugPrint("Transfer error: $e");
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.blue[800], foregroundColor: Colors.white),
-                      child: const Text("Confirm Transfer"),
-                    ),
-                  ],
-                );
-              });
-            }
+                  );
+                },
+              );
+            },
           );
         }
       }
@@ -1220,27 +1680,35 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
     );
 
     if (picked == null) return;
-    
+
     showDialog(
       context: context,
       barrierDismissible: false,
-      builder: (context) => const Center(child: CircularProgressIndicator())
+      builder: (context) => const Center(child: CircularProgressIndicator()),
     );
 
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final res = await http.get(Uri.parse('$apiUrl/physiotherapists/colleagues/${widget.myUserId}'));
-      
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final res = await http.get(
+        Uri.parse('$apiUrl/physiotherapists/colleagues/${widget.myUserId}'),
+      );
+
       if (!mounted) return;
       Navigator.pop(context); // Pop loading
 
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         final colleagues = data['colleagues'] as List<dynamic>? ?? [];
-        
+
         if (colleagues.isEmpty) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("No colleagues available to cover.")));
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text("No colleagues available to cover."),
+              ),
+            );
           }
           return;
         }
@@ -1251,69 +1719,90 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
           showDialog(
             context: context,
             builder: (BuildContext dialogContext) {
-              return StatefulBuilder(builder: (context, setDialogState) {
-                return AlertDialog(
-                  title: const Text("Set Unavailable Dates"),
-                  content: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text("Unavailable Period: ${picked.start.toLocal().toString().split(' ')[0]} to ${picked.end.toLocal().toString().split(' ')[0]}"),
-                      const SizedBox(height: 16),
-                      const Text("Select a covering colleague:"),
-                      const SizedBox(height: 8),
-                      DropdownButton<int>(
-                        isExpanded: true,
-                        value: selectedColleagueId,
-                        items: colleagues.map<DropdownMenuItem<int>>((c) {
-                          return DropdownMenuItem<int>(
-                            value: c['therapist_id'],
-                            child: Text("${c['name']} (${c['specialization']})"),
-                          );
-                        }).toList(),
-                        onChanged: (val) {
-                          setDialogState(() {
-                            selectedColleagueId = val;
-                          });
+              return StatefulBuilder(
+                builder: (context, setDialogState) {
+                  return AlertDialog(
+                    title: const Text("Set Unavailable Dates"),
+                    content: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Text(
+                          "Unavailable Period: ${picked.start.toLocal().toString().split(' ')[0]} to ${picked.end.toLocal().toString().split(' ')[0]}",
+                        ),
+                        const SizedBox(height: 16),
+                        const Text("Select a covering colleague:"),
+                        const SizedBox(height: 8),
+                        DropdownButton<int>(
+                          isExpanded: true,
+                          value: selectedColleagueId,
+                          items: colleagues.map<DropdownMenuItem<int>>((c) {
+                            return DropdownMenuItem<int>(
+                              value: c['therapist_id'],
+                              child: Text(
+                                "${c['name']} (${c['specialization']})",
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            setDialogState(() {
+                              selectedColleagueId = val;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        child: const Text("Cancel"),
+                      ),
+                      ElevatedButton(
+                        onPressed: () async {
+                          if (selectedColleagueId == null) return;
+                          try {
+                            final leaveRes = await http.put(
+                              Uri.parse(
+                                '$apiUrl/physio/leave/${widget.myUserId}',
+                              ),
+                              headers: {'Content-Type': 'application/json'},
+                              body: jsonEncode({
+                                "start_date": picked.start
+                                    .toUtc()
+                                    .toIso8601String(),
+                                "end_date": picked.end
+                                    .toUtc()
+                                    .toIso8601String(),
+                                "cover_colleague_id": selectedColleagueId,
+                              }),
+                            );
+                            if (leaveRes.statusCode == 200) {
+                              if (mounted) Navigator.pop(dialogContext);
+                              _fetchAppointments();
+                              if (mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text(
+                                      "Unavailable dates set & appointments transferred!",
+                                    ),
+                                  ),
+                                );
+                              }
+                            }
+                          } catch (e) {
+                            debugPrint("Leave error: $e");
+                          }
                         },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.red[800],
+                          foregroundColor: Colors.white,
+                        ),
+                        child: const Text("Confirm"),
                       ),
                     ],
-                  ),
-                  actions: [
-                    TextButton(
-                      onPressed: () => Navigator.pop(dialogContext),
-                      child: const Text("Cancel"),
-                    ),
-                    ElevatedButton(
-                      onPressed: () async {
-                        if (selectedColleagueId == null) return;
-                        try {
-                          final leaveRes = await http.put(
-                            Uri.parse('$apiUrl/physio/leave/${widget.myUserId}'),
-                            headers: {'Content-Type': 'application/json'},
-                            body: jsonEncode({
-                                "start_date": picked.start.toUtc().toIso8601String(),
-                                "end_date": picked.end.toUtc().toIso8601String(),
-                                "cover_colleague_id": selectedColleagueId
-                            }),
-                          );
-                          if (leaveRes.statusCode == 200) {
-                            if (mounted) Navigator.pop(dialogContext);
-                            _fetchAppointments();
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Unavailable dates set & appointments transferred!")));
-                            }
-                          }
-                        } catch (e) {
-                          debugPrint("Leave error: $e");
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(backgroundColor: Colors.red[800], foregroundColor: Colors.white),
-                      child: const Text("Confirm"),
-                    ),
-                  ],
-                );
-              });
-            }
+                  );
+                },
+              );
+            },
           );
         }
       }
@@ -1335,13 +1824,25 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text("Appointments", style: GoogleFonts.readexPro(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.blue.shade900)),
+              Text(
+                "Appointments",
+                style: GoogleFonts.readexPro(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.blue.shade900,
+                ),
+              ),
               ElevatedButton.icon(
                 onPressed: _showApplyLeaveDialog,
                 icon: const Icon(Icons.event_busy, size: 18),
                 label: const Text("Set Unavailable Dates"),
-                style: ElevatedButton.styleFrom(backgroundColor: Colors.red.shade50, foregroundColor: Colors.red.shade900, elevation: 0, side: BorderSide(color: Colors.red.shade200)),
-              )
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.red.shade50,
+                  foregroundColor: Colors.red.shade900,
+                  elevation: 0,
+                  side: BorderSide(color: Colors.red.shade200),
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -1368,26 +1869,41 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
           ),
           const SizedBox(height: 16),
           if (_visibleAppointments.isEmpty)
-             Expanded(child: Center(child: Text(_searchTerm.isEmpty ? "No appointments scheduled." : "No matching appointments found.")))
+            Expanded(
+              child: Center(
+                child: Text(
+                  _searchTerm.isEmpty
+                      ? "No appointments scheduled."
+                      : "No matching appointments found.",
+                ),
+              ),
+            )
           else
             Expanded(
               child: ListView.builder(
                 itemCount: _visibleAppointments.length,
                 itemBuilder: (context, index) {
                   final a = _visibleAppointments[index];
-                  final parsedDate = DateTime.tryParse(a['schedule_time'] ?? '');
-                  final date = parsedDate?.toLocal().toString().split('.')[0] ?? 'Unknown';
+                  final parsedDate = DateTime.tryParse(
+                    a['schedule_time'] ?? '',
+                  );
+                  final date =
+                      parsedDate?.toLocal().toString().split('.')[0] ??
+                      'Unknown';
                   final isScheduled = a['status'] == 'Scheduled';
-                  
-                  final isToday = parsedDate != null && 
-                                  parsedDate.toLocal().year == DateTime.now().year && 
-                                  parsedDate.toLocal().month == DateTime.now().month && 
-                                  parsedDate.toLocal().day == DateTime.now().day;
+
+                  final isToday =
+                      parsedDate != null &&
+                      parsedDate.toLocal().year == DateTime.now().year &&
+                      parsedDate.toLocal().month == DateTime.now().month &&
+                      parsedDate.toLocal().day == DateTime.now().day;
 
                   return Card(
                     elevation: 2,
                     margin: const EdgeInsets.only(bottom: 16),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
                     child: Padding(
                       padding: const EdgeInsets.all(16),
                       child: Row(
@@ -1402,7 +1918,13 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(a['student_name'] ?? 'Unknown', style: GoogleFonts.readexPro(fontSize: 16, fontWeight: FontWeight.bold)),
+                                Text(
+                                  a['student_name'] ?? 'Unknown',
+                                  style: GoogleFonts.readexPro(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
                                 const SizedBox(height: 4),
                                 Text(
                                   "Student ID: ${a['student_id'] ?? '—'}  •  Matric No: ${a['matric_no'] ?? 'Not provided'}",
@@ -1414,9 +1936,19 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                                 const SizedBox(height: 4),
                                 Row(
                                   children: [
-                                    const Icon(Icons.calendar_today, size: 14, color: Colors.grey),
+                                    const Icon(
+                                      Icons.calendar_today,
+                                      size: 14,
+                                      color: Colors.grey,
+                                    ),
                                     const SizedBox(width: 4),
-                                    Text(date, style: GoogleFonts.readexPro(fontSize: 14, color: Colors.grey.shade700)),
+                                    Text(
+                                      date,
+                                      style: GoogleFonts.readexPro(
+                                        fontSize: 14,
+                                        color: Colors.grey.shade700,
+                                      ),
+                                    ),
                                   ],
                                 ),
                               ],
@@ -1426,8 +1958,18 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                             crossAxisAlignment: CrossAxisAlignment.end,
                             children: [
                               Chip(
-                                label: Text(a['status'] ?? '', style: TextStyle(color: isScheduled ? Colors.blue.shade900 : Colors.grey.shade700, fontWeight: FontWeight.bold)),
-                                backgroundColor: isScheduled ? Colors.blue.shade50 : Colors.grey.shade200,
+                                label: Text(
+                                  a['status'] ?? '',
+                                  style: TextStyle(
+                                    color: isScheduled
+                                        ? Colors.blue.shade900
+                                        : Colors.grey.shade700,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                                backgroundColor: isScheduled
+                                    ? Colors.blue.shade50
+                                    : Colors.grey.shade200,
                                 side: BorderSide.none,
                               ),
                               if (isScheduled) ...[
@@ -1438,37 +1980,65 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                                   alignment: WrapAlignment.end,
                                   children: [
                                     ElevatedButton.icon(
-                                      onPressed: () => TeleconferenceService.join(
-                                        context: context,
-                                        meetingRoom: a['meeting_room']?.toString(),
+                                      onPressed: () =>
+                                          TeleconferenceService.join(
+                                            context: context,
+                                            meetingRoom: a['meeting_room']
+                                                ?.toString(),
+                                          ),
+                                      icon: const Icon(
+                                        Icons.video_call_outlined,
+                                        size: 16,
                                       ),
-                                      icon: const Icon(Icons.video_call_outlined, size: 16),
                                       label: const Text("Video Call"),
                                       style: ElevatedButton.styleFrom(
                                         backgroundColor: Colors.green.shade700,
                                         foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(horizontal: 10),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                        ),
                                       ),
                                     ),
                                     OutlinedButton.icon(
                                       onPressed: () => _showTransferDialog(a),
-                                      icon: const Icon(Icons.swap_horiz, size: 16),
+                                      icon: const Icon(
+                                        Icons.swap_horiz,
+                                        size: 16,
+                                      ),
                                       label: const Text("Transfer"),
-                                      style: OutlinedButton.styleFrom(foregroundColor: Colors.orange.shade800, side: BorderSide(color: Colors.orange.shade200), padding: const EdgeInsets.symmetric(horizontal: 8)),
+                                      style: OutlinedButton.styleFrom(
+                                        foregroundColor: Colors.orange.shade800,
+                                        side: BorderSide(
+                                          color: Colors.orange.shade200,
+                                        ),
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 8,
+                                        ),
+                                      ),
                                     ),
                                     if (isToday) ...[
                                       ElevatedButton.icon(
-                                        onPressed: () => _showRecordSessionDialog(a),
-                                        icon: const Icon(Icons.edit_document, size: 16),
+                                        onPressed: () =>
+                                            _showRecordSessionDialog(a),
+                                        icon: const Icon(
+                                          Icons.edit_document,
+                                          size: 16,
+                                        ),
                                         label: const Text("Record Session"),
-                                        style: ElevatedButton.styleFrom(backgroundColor: Colors.blue.shade800, foregroundColor: Colors.white, padding: const EdgeInsets.symmetric(horizontal: 8)),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: Colors.blue.shade800,
+                                          foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                          ),
+                                        ),
                                       ),
                                     ],
                                   ],
-                                )
-                              ]
+                                ),
+                              ],
                             ],
-                          )
+                          ),
                         ],
                       ),
                     ),
@@ -1506,8 +2076,12 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
   Future<void> _fetchRentals() async {
     setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final res = await http.get(Uri.parse('$apiUrl/physio/rentals/${widget.myUserId}'));
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final res = await http.get(
+        Uri.parse('$apiUrl/physio/rentals/${widget.myUserId}'),
+      );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         setState(() => _rentals = data['rentals'] ?? []);
@@ -1521,7 +2095,9 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
 
   Future<void> _updateRentalStatus(int rentalId, String action) async {
     try {
-      final apiUrl = kIsWeb ? 'http://127.0.0.1:8000' : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
       final res = await http.post(
         Uri.parse(
           '$apiUrl/physio/rentals/$rentalId/$action'
@@ -1532,11 +2108,15 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
         _fetchRentals();
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Rental $action successful!'), backgroundColor: Colors.green),
+            SnackBar(
+              content: Text('Rental $action successful!'),
+              backgroundColor: Colors.green,
+            ),
           );
         }
       } else {
-        final errorMsg = jsonDecode(res.body)['detail'] ?? 'Failed to $action rental';
+        final errorMsg =
+            jsonDecode(res.body)['detail'] ?? 'Failed to $action rental';
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(content: Text(errorMsg), backgroundColor: Colors.red),
@@ -1551,7 +2131,8 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
-    if (_rentals.isEmpty) return const Center(child: Text("No equipment rentals found."));
+    if (_rentals.isEmpty)
+      return const Center(child: Text("No equipment rentals found."));
 
     return ListView.builder(
       padding: const EdgeInsets.all(24),
@@ -1559,10 +2140,13 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
       itemBuilder: (context, index) {
         final r = _rentals[index];
         String date = 'Unknown';
-        final parsedDate = DateTime.tryParse(r['collection_date'] ?? '')?.toLocal();
+        final parsedDate = DateTime.tryParse(
+          r['collection_date'] ?? '',
+        )?.toLocal();
         if (parsedDate != null) {
           final timeStr = TimeOfDay.fromDateTime(parsedDate).format(context);
-          date = '${parsedDate.day}/${parsedDate.month}/${parsedDate.year} $timeStr';
+          date =
+              '${parsedDate.day}/${parsedDate.month}/${parsedDate.year} $timeStr';
         }
         final isPending = r['status'] == 'Pending';
         final isApproved = r['status'] == 'Approved';
@@ -1570,7 +2154,9 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
         return Card(
           elevation: 2,
           margin: const EdgeInsets.only(bottom: 16),
-          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(12),
+          ),
           child: Padding(
             padding: const EdgeInsets.all(16),
             child: Row(
@@ -1585,7 +2171,13 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text("${r['student_name']} - ${r['equipment_name']}", style: GoogleFonts.readexPro(fontSize: 16, fontWeight: FontWeight.bold)),
+                      Text(
+                        "${r['student_name']} - ${r['equipment_name']}",
+                        style: GoogleFonts.readexPro(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
                       const SizedBox(height: 4),
                       Text(
                         "Student ID: ${r['student_id'] ?? '—'}  •  Matric No: ${r['matric_no'] ?? 'Not provided'}",
@@ -1597,36 +2189,86 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
                       const SizedBox(height: 4),
                       Row(
                         children: [
-                          Icon(r['collection_method'] == 'Delivery' ? Icons.local_shipping : Icons.store, size: 14, color: Colors.grey),
+                          Icon(
+                            r['collection_method'] == 'Delivery'
+                                ? Icons.local_shipping
+                                : Icons.store,
+                            size: 14,
+                            color: Colors.grey,
+                          ),
                           const SizedBox(width: 4),
-                          Text("${r['collection_method'] ?? 'Self-Pickup'}: $date", style: GoogleFonts.readexPro(fontSize: 14, color: Colors.grey.shade700)),
+                          Text(
+                            "${r['collection_method'] ?? 'Self-Pickup'}: $date",
+                            style: GoogleFonts.readexPro(
+                              fontSize: 14,
+                              color: Colors.grey.shade700,
+                            ),
+                          ),
                         ],
                       ),
-                      if (r['collection_method'] == 'Delivery' && r['delivery_address'] != null) ...[
+                      if (r['collection_method'] == 'Delivery' &&
+                          r['delivery_address'] != null) ...[
                         const SizedBox(height: 4),
                         Row(
                           children: [
-                            const Icon(Icons.location_on, size: 14, color: Colors.grey),
+                            const Icon(
+                              Icons.location_on,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
                             const SizedBox(width: 4),
-                            Expanded(child: Text("${r['delivery_address']}", style: GoogleFonts.readexPro(fontSize: 14, color: Colors.grey.shade700), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                            Expanded(
+                              child: Text(
+                                "${r['delivery_address']}",
+                                style: GoogleFonts.readexPro(
+                                  fontSize: 14,
+                                  color: Colors.grey.shade700,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                       ],
-                      if (r['reason'] != null && r['reason'].toString().isNotEmpty) ...[
+                      if (r['reason'] != null &&
+                          r['reason'].toString().isNotEmpty) ...[
                         const SizedBox(height: 4),
                         Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Icon(Icons.info_outline, size: 14, color: Colors.grey),
+                            const Icon(
+                              Icons.info_outline,
+                              size: 14,
+                              color: Colors.grey,
+                            ),
                             const SizedBox(width: 4),
-                            Expanded(child: Text("Reason: ${r['reason']}", style: GoogleFonts.readexPro(fontSize: 13, color: Colors.grey.shade700, fontStyle: FontStyle.italic), maxLines: 2, overflow: TextOverflow.ellipsis)),
+                            Expanded(
+                              child: Text(
+                                "Reason: ${r['reason']}",
+                                style: GoogleFonts.readexPro(
+                                  fontSize: 13,
+                                  color: Colors.grey.shade700,
+                                  fontStyle: FontStyle.italic,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
                           ],
                         ),
                       ],
-                      if (r['return_status'] != null && r['return_status'] != 'N/A') ...[
+                      if (r['return_status'] != null &&
+                          r['return_status'] != 'N/A') ...[
                         const SizedBox(height: 4),
-                        Text("Return: ${r['return_status']}", style: GoogleFonts.readexPro(fontSize: 12, color: Colors.grey.shade600)),
-                      ]
+                        Text(
+                          "Return: ${r['return_status']}",
+                          style: GoogleFonts.readexPro(
+                            fontSize: 12,
+                            color: Colors.grey.shade600,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -1634,8 +2276,22 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     Chip(
-                      label: Text(r['status'] ?? '', style: TextStyle(color: isPending ? Colors.orange.shade900 : (isApproved ? Colors.green.shade900 : Colors.red.shade900), fontWeight: FontWeight.bold)),
-                      backgroundColor: isPending ? Colors.orange.shade50 : (isApproved ? Colors.green.shade50 : Colors.red.shade50),
+                      label: Text(
+                        r['status'] ?? '',
+                        style: TextStyle(
+                          color: isPending
+                              ? Colors.orange.shade900
+                              : (isApproved
+                                    ? Colors.green.shade900
+                                    : Colors.red.shade900),
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      backgroundColor: isPending
+                          ? Colors.orange.shade50
+                          : (isApproved
+                                ? Colors.green.shade50
+                                : Colors.red.shade50),
                       side: BorderSide.none,
                     ),
                     if (isPending) ...[
@@ -1644,23 +2300,41 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           OutlinedButton.icon(
-                            onPressed: () => _updateRentalStatus(r['rental_record_id'], 'approve'),
+                            onPressed: () => _updateRentalStatus(
+                              r['rental_record_id'],
+                              'approve',
+                            ),
                             icon: const Icon(Icons.check, size: 16),
                             label: const Text("Approve"),
-                            style: OutlinedButton.styleFrom(foregroundColor: Colors.green.shade700, side: BorderSide(color: Colors.green.shade200), padding: const EdgeInsets.symmetric(horizontal: 8)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.green.shade700,
+                              side: BorderSide(color: Colors.green.shade200),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                            ),
                           ),
                           const SizedBox(width: 8),
                           OutlinedButton.icon(
-                            onPressed: () => _updateRentalStatus(r['rental_record_id'], 'reject'),
+                            onPressed: () => _updateRentalStatus(
+                              r['rental_record_id'],
+                              'reject',
+                            ),
                             icon: const Icon(Icons.close, size: 16),
                             label: const Text("Reject"),
-                            style: OutlinedButton.styleFrom(foregroundColor: Colors.red.shade700, side: BorderSide(color: Colors.red.shade200), padding: const EdgeInsets.symmetric(horizontal: 8)),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: Colors.red.shade700,
+                              side: BorderSide(color: Colors.red.shade200),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
+                            ),
                           ),
                         ],
-                      )
-                    ]
+                      ),
+                    ],
                   ],
-                )
+                ),
               ],
             ),
           ),

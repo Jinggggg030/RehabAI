@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -122,7 +122,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       
       if (mounted) {
         if (res.statusCode == 200) {
-          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated successfully!', style: TextStyle(color: Colors.white)), backgroundColor: Color(0xFF207866)));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Profile updated successfully!', style: TextStyle(color: Colors.white)), backgroundColor: Color(0xFF1565C0)));
           Navigator.pop(context, true); // Return true to indicate change
         } else {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to update profile: ${res.body}'), backgroundColor: Colors.red));
@@ -158,7 +158,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       backgroundColor: Colors.white,
       body: SafeArea(
         child: _isLoading 
-        ? const Center(child: CircularProgressIndicator(color: Color(0xFF207866)))
+        ? const Center(child: CircularProgressIndicator(color: Color(0xFF1565C0)))
         : SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
           child: Column(
@@ -198,7 +198,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                         style: GoogleFonts.readexPro(
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: const Color(0xFF207866),
+                          color: const Color(0xFF1565C0),
                         ),
                       ),
                     ),
@@ -211,8 +211,8 @@ class _EditProfilePageState extends State<EditProfilePage> {
               Container(
                 padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade400, width: 1),
                   color: Colors.white,
+                  borderRadius: BorderRadius.circular(24),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -332,7 +332,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     ElevatedButton(
                       onPressed: _isSaving ? null : _saveProfile,
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: const Color(0xFF207866),
+                        backgroundColor: const Color(0xFF1565C0),
                         foregroundColor: Colors.white,
                         minimumSize: const Size(double.infinity, 50),
                         shape: RoundedRectangleBorder(
@@ -379,7 +379,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF8F9FA),
+        color: const Color(0xFFF8FAFF),
         borderRadius: BorderRadius.circular(6),
         border: Border.all(color: Colors.grey.shade200),
       ),

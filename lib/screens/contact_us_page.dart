@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
 
@@ -15,7 +15,7 @@ class ContactUsPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8F9FA),
+      backgroundColor: const Color(0xFFF8FAFF),
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.all(24.0),
@@ -50,7 +50,7 @@ class ContactUsPage extends StatelessWidget {
                     style: GoogleFonts.readexPro(
                       fontSize: 20,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF207866),
+                      color: const Color(0xFF1565C0),
                     ),
                   ),
                   const SizedBox(width: 40), // Empty placeholder to balance header

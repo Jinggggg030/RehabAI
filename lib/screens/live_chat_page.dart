@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
@@ -240,7 +240,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
         icon: const Icon(
           Icons.video_call_outlined,
           size: 44,
-          color: Color(0xFF207866),
+          color: Color(0xFF1565C0),
         ),
         title: const Text('Video consultation invitation'),
         content: const Text(
@@ -257,7 +257,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
             icon: const Icon(Icons.video_call),
             label: const Text('Accept & Join'),
             style: FilledButton.styleFrom(
-              backgroundColor: const Color(0xFF207866),
+              backgroundColor: const Color(0xFF1565C0),
             ),
           ),
         ],
@@ -465,12 +465,12 @@ class _LiveChatPageState extends State<LiveChatPage> {
                     style: GoogleFonts.readexPro(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: const Color(0xFF207866),
+                      color: const Color(0xFF1565C0),
                     ),
                   ),
                   IconButton(
                     onPressed: () {},
-                    icon: const Icon(Icons.more_vert, color: Color(0xFF207866)),
+                    icon: const Icon(Icons.more_vert, color: Color(0xFF1565C0)),
                   ),
                 ],
               ),
@@ -546,7 +546,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
                             decoration: BoxDecoration(
-                              color: const Color(0xFFF8F9FA),
+                              color: const Color(0xFFF8FAFF),
                               borderRadius: BorderRadius.circular(24),
                               border: Border.all(color: Colors.grey.shade200),
                             ),
@@ -578,7 +578,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
                                   onPressed: _sendMessage,
                                   icon: const Icon(
                                     Icons.send_rounded,
-                                    color: Color(0xFF207866),
+                                    color: Color(0xFF1565C0),
                                     size: 24,
                                   ),
                                   padding: EdgeInsets.zero,
@@ -639,7 +639,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         decoration: BoxDecoration(
-          color: message.isUser ? const Color(0xFF207866) : const Color(0xFFF0F2F5),
+          color: message.isUser ? const Color(0xFF1565C0) : const Color(0xFFF1F5FF),
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -666,7 +666,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
         margin: const EdgeInsets.only(bottom: 16.0),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: const BoxDecoration(
-          color: Color(0xFFF0F2F5),
+          color: Color(0xFFF1F5FF),
           borderRadius: BorderRadius.only(
             topLeft: Radius.circular(16),
             topRight: Radius.circular(16),
@@ -712,14 +712,14 @@ class _LiveChatPageState extends State<LiveChatPage> {
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF207866).withOpacity(0.3)),
+          border: Border.all(color: const Color(0xFF1565C0).withOpacity(0.3)),
         ),
         child: Text(
           text,
           style: GoogleFonts.readexPro(
             fontSize: 12,
             fontWeight: FontWeight.w500,
-            color: const Color(0xFF207866),
+            color: const Color(0xFF1565C0),
           ),
         ),
       ),

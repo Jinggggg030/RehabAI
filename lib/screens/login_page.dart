@@ -1,4 +1,4 @@
-import 'package:flutter/material.dart';
+﻿import 'package:flutter/material.dart';
 import 'package:rehab_ai/screens/signup_page.dart';
 import 'package:rehab_ai/screens/main_screen.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -276,7 +276,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF207866)),
+                    borderSide: const BorderSide(color: Color(0xFF1565C0)),
                   ),
                 ),
               ),
@@ -318,7 +318,7 @@ class _LoginPageState extends State<LoginPage> {
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF207866)),
+                    borderSide: const BorderSide(color: Color(0xFF1565C0)),
                   ),
                 ),
               ),
@@ -330,7 +330,7 @@ class _LoginPageState extends State<LoginPage> {
                 child: TextButton(
                   onPressed: () {},
                   style: TextButton.styleFrom(
-                    foregroundColor: const Color(0xFF207866),
+                    foregroundColor: const Color(0xFF1565C0),
                     padding: EdgeInsets.zero,
                     minimumSize: const Size(50, 30),
                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
@@ -350,7 +350,7 @@ class _LoginPageState extends State<LoginPage> {
               ElevatedButton(
                 onPressed: _isLoading ? null : _signIn,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF207866),
+                  backgroundColor: const Color(0xFF1565C0),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
@@ -400,7 +400,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: Text(
                       'Sign Up',
                       style: GoogleFonts.readexPro(
-                        color: Color(0xFF207866),
+                        color: Color(0xFF1565C0),
                         fontWeight: FontWeight.bold,
                         fontSize: 13,
                       ),
@@ -442,7 +442,7 @@ class _LoginPageState extends State<LoginPage> {
                         height: 20,
                         width: 20,
                         child: CircularProgressIndicator(
-                          color: Color(0xFF207866),
+                          color: Color(0xFF1565C0),
                           strokeWidth: 2,
                         ),
                       )
