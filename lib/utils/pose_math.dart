@@ -5,8 +5,10 @@ class PoseMath {
   /// Calculates the angle between three landmarks in degrees.
   /// [middle] is the vertex of the angle.
   static double calculateAngle(
-      PoseLandmark first, PoseLandmark middle, PoseLandmark last) {
-    
+    PoseLandmark first,
+    PoseLandmark middle,
+    PoseLandmark last,
+  ) {
     // Calculate the vectors
     double vector1X = first.x - middle.x;
     double vector1Y = first.y - middle.y;

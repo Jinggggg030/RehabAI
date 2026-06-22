@@ -1,2 +1,10 @@
-
+fastapi
 google-generativeai
+mediapipe
+numpy
+opencv-python
+psycopg2-binary
+pydantic
+python-dotenv
+sqlalchemy
+uvicorn[standard]

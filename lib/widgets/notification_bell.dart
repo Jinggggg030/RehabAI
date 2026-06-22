@@ -1,10 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/utils/global_state.dart';
-import 'package:rehab_ai/screens/live_chat_page.dart';
-import 'package:rehab_ai/screens/rental_status_page.dart';
-import 'package:rehab_ai/screens/my_appointments_page.dart';
-import 'package:rehab_ai/screens/rehabilitation_exercises_page.dart';
+import 'package:rehab_ai/screens/student/chat/live_chat_page.dart';
+import 'package:rehab_ai/screens/student/rentals/rental_status_page.dart';
+import 'package:rehab_ai/screens/student/appointments/my_appointments_page.dart';
+import 'package:rehab_ai/screens/student/exercises/rehabilitation_exercises_page.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;

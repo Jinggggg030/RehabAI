@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:rehab_ai/screens/landing_page.dart';
+import 'package:rehab_ai/screens/auth/landing_page.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
