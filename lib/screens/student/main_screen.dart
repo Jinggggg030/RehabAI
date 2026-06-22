@@ -7,10 +7,12 @@ import 'package:rehab_ai/screens/student/home_page.dart';
 import 'package:rehab_ai/screens/student/services_page.dart';
 import 'package:rehab_ai/screens/student/progress_page.dart';
 import 'package:rehab_ai/screens/student/account/profile_page.dart';
+import 'package:rehab_ai/services/local_notification_service.dart';
 import 'package:rehab_ai/utils/global_state.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/services/local_notification_service.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -20,6 +22,7 @@ class MainScreen extends StatefulWidget {
 }
 
 class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
+  dynamic _lastNotificationId;
   int _selectedIndex = 0;
   Timer? _notificationTimer;
   RealtimeChannel? _notificationChannel;
@@ -73,19 +76,40 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
           event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'Chat_Log',
-          callback: (_) => _fetchNotifications(myUserId!),
+          callback: (_) async {
+            await _fetchNotifications(myUserId!);
+
+            await LocalNotificationService.showNotification(
+              title: 'New Message',
+              body: 'You received a new message from your physiotherapist.',
+            );
+          },
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.update,
           schema: 'public',
           table: 'Rental_Record',
-          callback: (_) => _fetchNotifications(myUserId!),
+          callback: (_) async {
+            await _fetchNotifications(myUserId!);
+
+            await LocalNotificationService.showNotification(
+              title: 'Equipment Update',
+              body: 'Your equipment rental status has been updated.',
+            );
+          },
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
           schema: 'public',
           table: 'Prescribed_Exercise',
-          callback: (_) => _fetchNotifications(myUserId!),
+          callback: (_) async {
+            await _fetchNotifications(myUserId!);
+
+            await LocalNotificationService.showNotification(
+              title: 'New Exercise Assigned',
+              body: 'Your physiotherapist assigned a new rehabilitation exercise.',
+            );
+          },
         )
         .onPostgresChanges(
           event: PostgresChangeEvent.insert,
@@ -96,7 +120,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
         .subscribe();
 
     // Polling remains as a fallback if a table is not enabled for Realtime.
-    _notificationTimer = Timer.periodic(const Duration(seconds: 3), (timer) {
+    _notificationTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       _fetchNotifications(myUserId!);
     });
   }
@@ -113,12 +137,37 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       final apiUrl = kIsWeb
           ? 'http://127.0.0.1:8000'
           : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+
       final res = await http.get(
         Uri.parse('$apiUrl/users/$userId/notifications'),
       );
+
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
-        GlobalState.notifications.value = data['notifications'] ?? [];
+        final newNotifications = data['notifications'] ?? [];
+
+        GlobalState.notifications.value = newNotifications;
+
+        if (newNotifications.isNotEmpty) {
+          final latest = newNotifications.last;
+          final latestId =
+              latest['notification_id'] ??
+                  latest['id'] ??
+                  latest['created_at'] ??
+                  latest.toString();
+
+          if (_lastNotificationId != null &&
+              latestId != _lastNotificationId) {
+            await LocalNotificationService.showNotification(
+              title: latest['title']?.toString() ?? 'RehabAI Update',
+              body: latest['message']?.toString() ??
+                  latest['body']?.toString() ??
+                  'You have a new notification.',
+            );
+          }
+
+          _lastNotificationId = latestId;
+        }
       }
     } catch (e) {
       debugPrint('Error fetching notifications: $e');

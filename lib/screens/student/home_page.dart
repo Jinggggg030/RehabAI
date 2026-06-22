@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:rehab_ai/widgets/futuristic_home_dashboard.dart';
 import 'package:rehab_ai/screens/student/progress_page.dart';
+import 'package:rehab_ai/services/local_notification_service.dart'; //testing
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -162,6 +163,7 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
+
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -219,6 +221,7 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+  
 
   // Kept temporarily as a visual fallback while preserving the original
   // data flow and callbacks during the design-system migration.
@@ -227,6 +230,16 @@ class _HomePageState extends State<HomePage> {
     String todayDate = DateFormat('EEEE, MMMM d').format(DateTime.now());
 
     return Scaffold(
+      floatingActionButton: FloatingActionButton(
+        //testing
+        onPressed: () {
+          LocalNotificationService.showNotification(
+            title: 'Test Notification',
+            body: 'Local notification is working!',
+          );
+        },
+        child: const Icon(Icons.notifications),
+      ),
       backgroundColor: const Color(0xFFF8FAFF), // Off-white background
       body: SafeArea(
         child: isLoading
