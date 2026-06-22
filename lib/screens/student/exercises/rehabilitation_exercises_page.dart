@@ -248,7 +248,7 @@ class _RehabilitationExercisesPageState
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -312,9 +312,9 @@ class _RehabilitationExercisesPageState
             Container(
               margin: const EdgeInsets.fromLTRB(18, 14, 18, 0),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.rehabSurface,
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: RehabColors.border),
+                border: Border.all(color: context.rehabBorder),
               ),
               child: TabBar(
                 controller: _tabController,
@@ -486,7 +486,7 @@ class _RehabilitationExercisesPageState
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.rehabSurface,
         borderRadius: BorderRadius.circular(8),
         border: Border.all(
           color: isSelected ? const Color(0xFF1565C0) : Colors.grey.shade200,
@@ -505,7 +505,9 @@ class _RehabilitationExercisesPageState
         style: GoogleFonts.readexPro(
           fontSize: 12,
           fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-          color: isSelected ? const Color(0xFF1565C0) : Colors.black87,
+          color: isSelected
+              ? const Color(0xFF1565C0)
+              : Theme.of(context).colorScheme.onSurface,
         ),
       ),
     );
@@ -549,9 +551,9 @@ class _RehabilitationExercisesPageState
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.rehabSurface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: RehabColors.border),
+        border: Border.all(color: context.rehabBorder),
         boxShadow: [
           BoxShadow(
             color: RehabColors.primary.withValues(alpha: 0.06),
@@ -637,7 +639,7 @@ class _RehabilitationExercisesPageState
             style: GoogleFonts.readexPro(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
           if (tabType == 'MyExercises' &&

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/auth/login_page.dart';
 import 'package:rehab_ai/screens/auth/signup_page.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 class LandingPage extends StatelessWidget {
   const LandingPage({super.key});
@@ -9,7 +10,7 @@ class LandingPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -26,13 +27,13 @@ class LandingPage extends StatelessWidget {
                     color: const Color(0xFFD9D9D9), // Light grey
                     borderRadius: BorderRadius.circular(20.0),
                   ),
-                  child: const Center(
+                  child: Center(
                     child: Text(
                       'Logo',
                       style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.w300,
-                        color: Colors.black87,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                   ),
@@ -46,7 +47,7 @@ class LandingPage extends StatelessWidget {
                   style: GoogleFonts.readexPro(
                     fontSize: 28,
                     fontWeight: FontWeight.w600,
-                    color: Colors.black,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 8),
@@ -57,7 +58,7 @@ class LandingPage extends StatelessWidget {
                   textAlign: TextAlign.center,
                   style: GoogleFonts.readexPro(
                     fontSize: 16,
-                    color: Colors.black87,
+                    color: Theme.of(context).colorScheme.onSurface,
                   ),
                 ),
                 const SizedBox(height: 60),

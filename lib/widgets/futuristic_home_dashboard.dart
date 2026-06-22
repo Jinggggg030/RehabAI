@@ -39,7 +39,7 @@ class FuturisticHomeDashboard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: RehabColors.background,
+      backgroundColor: context.rehabBackground,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
@@ -281,9 +281,9 @@ class _HealthSummary extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.rehabSurface,
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: RehabColors.border),
+        border: Border.all(color: context.rehabBorder),
         boxShadow: const [
           BoxShadow(
             color: Color(0x18204A87),
@@ -535,10 +535,10 @@ class _RoutineTile extends StatelessWidget {
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Material(
-        color: Colors.white,
+        color: context.rehabSurface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(18),
-          side: const BorderSide(color: RehabColors.border),
+          side: BorderSide(color: context.rehabBorder),
         ),
         child: InkWell(
           onTap: () => onTap(exercise),
@@ -670,10 +670,10 @@ class _ExploreTile extends StatelessWidget {
     return SizedBox(
       width: 166,
       child: Material(
-        color: Colors.white,
+        color: context.rehabSurface,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
-          side: const BorderSide(color: RehabColors.border),
+          side: BorderSide(color: context.rehabBorder),
         ),
         child: InkWell(
           onTap: () => onTap(exercise),
@@ -744,7 +744,7 @@ class _ChatComposer extends StatelessWidget {
           ],
         ),
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: RehabColors.border),
+        border: Border.all(color: context.rehabBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -801,10 +801,10 @@ class _AppointmentCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: context.rehabSurface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(20),
-        side: const BorderSide(color: RehabColors.border),
+        side: BorderSide(color: context.rehabBorder),
       ),
       child: InkWell(
         onTap: onTap,
@@ -862,9 +862,9 @@ class _EmptyRoutine extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.rehabSurface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: RehabColors.border),
+        border: Border.all(color: context.rehabBorder),
       ),
       alignment: Alignment.center,
       child: const Text(

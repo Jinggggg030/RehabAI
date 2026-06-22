@@ -4,6 +4,7 @@ import 'package:video_player/video_player.dart';
 import 'package:chewie/chewie.dart';
 import 'dart:async';
 import 'package:flutter/services.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 import 'session_summary_page.dart';
 
 class DuringExercisePage extends StatefulWidget {
@@ -375,7 +376,7 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: Column(
           children: [

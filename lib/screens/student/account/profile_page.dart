@@ -187,7 +187,7 @@ class _ProfilePageState extends State<ProfilePage> {
     final contactNumber = _profileData?['contact_number'] ?? 'Not set';
 
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: _isLoading
             ? const Center(
@@ -217,7 +217,7 @@ class _ProfilePageState extends State<ProfilePage> {
                       style: GoogleFonts.readexPro(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -276,9 +276,9 @@ class _ProfilePageState extends State<ProfilePage> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.rehabSurface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: RehabColors.border),
+        border: Border.all(color: context.rehabBorder),
         boxShadow: [
           BoxShadow(
             color: RehabColors.primary.withValues(alpha: 0.08),
@@ -507,7 +507,7 @@ class _ProfilePageState extends State<ProfilePage> {
           style: GoogleFonts.readexPro(
             fontSize: 12,
             fontWeight: FontWeight.w600,
-            color: Colors.grey.shade500,
+            color: context.rehabMuted,
             letterSpacing: 0.5,
           ),
         ),
@@ -517,13 +517,13 @@ class _ProfilePageState extends State<ProfilePage> {
           style: GoogleFonts.readexPro(
             fontSize: 15,
             fontWeight: FontWeight.w500,
-            color: Colors.black87,
+            color: Theme.of(context).colorScheme.onSurface,
             height: 1.4,
           ),
         ),
         const SizedBox(height: 16),
         if (!isLast)
-          Divider(height: 1, thickness: 1, color: Colors.grey.shade100),
+          Divider(height: 1, thickness: 1, color: context.rehabBorder),
       ],
     );
   }
@@ -538,9 +538,9 @@ class _ProfilePageState extends State<ProfilePage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.rehabSurface,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: RehabColors.border),
+          border: Border.all(color: context.rehabBorder),
           boxShadow: [
             BoxShadow(
               color: RehabColors.primary.withValues(alpha: 0.07),
@@ -564,7 +564,10 @@ class _ProfilePageState extends State<ProfilePage> {
             const SizedBox(width: 16),
             Text(
               title,
-              style: GoogleFonts.readexPro(fontSize: 14, color: Colors.black87),
+              style: GoogleFonts.readexPro(
+                fontSize: 14,
+                color: Theme.of(context).colorScheme.onSurface,
+              ),
             ),
             const Spacer(),
             const Icon(

@@ -8,6 +8,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:rehab_ai/services/teleconference_service.dart';
 import 'dart:async';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 class ChatMessage {
   final String text;
@@ -473,7 +474,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: Column(
           children: [
@@ -496,14 +497,14 @@ class _LiveChatPageState extends State<LiveChatPage> {
                     child: Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: context.rehabSurface,
                         borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: Colors.grey.shade200),
+                        border: Border.all(color: context.rehabBorder),
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.arrow_back_ios_new,
                         size: 16,
-                        color: Colors.black54,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                   ),
@@ -528,11 +529,11 @@ class _LiveChatPageState extends State<LiveChatPage> {
               child: Container(
                 margin: const EdgeInsets.fromLTRB(24, 0, 24, 24),
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: context.rehabSurface,
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.05),
+                      color: Colors.black.withValues(alpha: 0.16),
                       blurRadius: 15,
                       spreadRadius: 2,
                       offset: const Offset(0, 5),
@@ -594,9 +595,9 @@ class _LiveChatPageState extends State<LiveChatPage> {
                                 vertical: 4,
                               ),
                               decoration: BoxDecoration(
-                                color: const Color(0xFFF8FAFF),
+                                color: context.rehabInput,
                                 borderRadius: BorderRadius.circular(24),
-                                border: Border.all(color: Colors.grey.shade200),
+                                border: Border.all(color: context.rehabBorder),
                               ),
                               child: Row(
                                 children: [
@@ -652,7 +653,9 @@ class _LiveChatPageState extends State<LiveChatPage> {
         alignment: Alignment.centerLeft,
         child: Card(
           margin: const EdgeInsets.only(bottom: 16),
-          color: const Color(0xFFE8F5F1),
+          color: context.isDarkMode
+              ? RehabColors.darkSurfaceElevated
+              : const Color(0xFFE8F5F1),
           child: Padding(
             padding: const EdgeInsets.all(14),
             child: Column(
@@ -684,9 +687,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
           maxWidth: MediaQuery.of(context).size.width * 0.75,
         ),
         decoration: BoxDecoration(
-          color: message.isUser
-              ? const Color(0xFF1565C0)
-              : const Color(0xFFF1F5FF),
+          color: message.isUser ? const Color(0xFF1565C0) : context.rehabInput,
           borderRadius: BorderRadius.only(
             topLeft: const Radius.circular(16),
             topRight: const Radius.circular(16),
@@ -703,7 +704,9 @@ class _LiveChatPageState extends State<LiveChatPage> {
           style: GoogleFonts.readexPro(
             fontSize: 14,
             height: 1.4,
-            color: message.isUser ? Colors.white : Colors.black87,
+            color: message.isUser
+                ? Colors.white
+                : Theme.of(context).colorScheme.onSurface,
           ),
         ),
       ),
@@ -716,9 +719,9 @@ class _LiveChatPageState extends State<LiveChatPage> {
       child: Container(
         margin: const EdgeInsets.only(bottom: 16.0),
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: const BoxDecoration(
-          color: Color(0xFFF1F5FF),
-          borderRadius: BorderRadius.only(
+        decoration: BoxDecoration(
+          color: context.rehabInput,
+          borderRadius: const BorderRadius.only(
             topLeft: Radius.circular(16),
             topRight: Radius.circular(16),
             bottomLeft: Radius.circular(4),
@@ -761,7 +764,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.rehabSurface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(color: const Color(0xFF1565C0).withOpacity(0.3)),
         ),

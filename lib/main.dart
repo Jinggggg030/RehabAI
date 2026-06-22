@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:rehab_ai/screens/auth/landing_page.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/theme/theme_controller.dart';
 
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -17,6 +18,8 @@ Future<void> main() async {
     anonKey: dotenv.env['SUPABASE_ANON_KEY'] ?? '',
   );
 
+  await AppThemeController.initialize();
+
   runApp(const MyApp());
 }
 
@@ -25,11 +28,16 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      title: 'RehabAI',
-      debugShowCheckedModeBanner: false,
-      theme: RehabTheme.light,
-      home: const LandingPage(),
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: AppThemeController.themeMode,
+      builder: (context, themeMode, _) => MaterialApp(
+        title: 'RehabAI',
+        debugShowCheckedModeBanner: false,
+        theme: RehabTheme.light,
+        darkTheme: RehabTheme.dark,
+        themeMode: themeMode,
+        home: const LandingPage(),
+      ),
     );
   }
 }

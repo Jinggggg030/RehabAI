@@ -5,6 +5,7 @@ import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 class EditProfilePage extends StatefulWidget {
   const EditProfilePage({super.key});
@@ -182,7 +183,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: _isLoading
             ? const Center(
@@ -249,7 +250,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
                     Container(
                       padding: const EdgeInsets.all(20),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: context.rehabSurface,
                         borderRadius: BorderRadius.circular(24),
                       ),
                       child: Column(
@@ -436,7 +437,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
       style: GoogleFonts.readexPro(
         fontSize: 14,
         fontWeight: FontWeight.bold,
-        color: Colors.black87,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
     );
   }
@@ -449,15 +450,18 @@ class _EditProfilePageState extends State<EditProfilePage> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFF),
+        color: context.rehabInput,
         borderRadius: BorderRadius.circular(6),
-        border: Border.all(color: Colors.grey.shade200),
+        border: Border.all(color: context.rehabBorder),
       ),
       child: TextField(
         controller: controller,
         keyboardType: keyboardType,
         textAlign: textAlign,
-        style: GoogleFonts.readexPro(fontSize: 14, color: Colors.black87),
+        style: GoogleFonts.readexPro(
+          fontSize: 14, 
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: GoogleFonts.readexPro(
@@ -493,7 +497,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
               value: value,
               groupValue: groupValue,
               onChanged: onChanged,
-              activeColor: Colors.black87,
+              activeColor: Theme.of(context).colorScheme.primary,
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
             ),
           ),
@@ -502,7 +506,7 @@ class _EditProfilePageState extends State<EditProfilePage> {
             title,
             style: GoogleFonts.readexPro(
               fontSize: 14,
-              color: Colors.black87,
+              color: Theme.of(context).colorScheme.onSurface,
               fontWeight: FontWeight.w500,
             ),
           ),

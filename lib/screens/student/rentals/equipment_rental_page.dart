@@ -102,7 +102,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.all(24.0),
@@ -189,7 +189,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                   decoration: InputDecoration(
                     hintText: 'Search equipment',
                     hintStyle: GoogleFonts.readexPro(
-                      color: Colors.grey.shade400,
+                      color: context.rehabInput,
                       fontSize: 14,
                     ),
                     prefixIcon: Icon(Icons.search, color: Colors.grey.shade400),
@@ -310,9 +310,9 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
     int stock = equipment['stock'] ?? 0;
     return Container(
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.rehabSurface,
         borderRadius: BorderRadius.circular(22),
-        border: Border.all(color: RehabColors.border),
+        border: Border.all(color: context.rehabBorder),
         boxShadow: [
           BoxShadow(
             color: RehabColors.primary.withValues(alpha: 0.08),
@@ -352,7 +352,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
             style: GoogleFonts.readexPro(
               fontSize: 12,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
@@ -426,7 +426,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
         return StatefulBuilder(
           builder: (context, setModalState) {
             return Dialog(
-              backgroundColor: Colors.white,
+              backgroundColor: context.rehabSurfaceElevated,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(28),
               ),
@@ -441,10 +441,10 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                       alignment: Alignment.topRight,
                       child: GestureDetector(
                         onTap: () => Navigator.pop(context),
-                        child: const Icon(
+                        child: Icon(
                           Icons.close,
                           size: 20,
-                          color: Colors.black54,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -489,7 +489,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                       style: GoogleFonts.readexPro(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -516,7 +516,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                                   hintText: 'Please specify your reason',
                                   hintStyle: GoogleFonts.readexPro(
                                     fontSize: 11,
-                                    color: Colors.grey,
+                                    color: context.rehabMuted,
                                   ),
                                   border: OutlineInputBorder(
                                     borderRadius: BorderRadius.circular(8),
@@ -582,8 +582,8 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                                     style: GoogleFonts.readexPro(
                                       fontSize: 12,
                                       color: collectionDate == null
-                                          ? Colors.grey[600]
-                                          : Colors.black87,
+                                          ? context.rehabMuted
+                                          : Theme.of(context).colorScheme.onSurface,
                                     ),
                                   ),
                                   const Icon(
@@ -631,8 +631,8 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                                     style: GoogleFonts.readexPro(
                                       fontSize: 12,
                                       color: collectionTime == null
-                                          ? Colors.grey[600]
-                                          : Colors.black87,
+                                          ? context.rehabMuted
+                                          : Theme.of(context).colorScheme.onSurface,
                                     ),
                                   ),
                                   const Icon(
@@ -659,13 +659,13 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                       decoration: BoxDecoration(
                         border: Border.all(color: Colors.black26),
                         borderRadius: BorderRadius.circular(8),
-                        color: Colors.grey.shade50,
+                        color: context.rehabInput,
                       ),
                       child: Text(
                         'Self-Pickup at Clinic',
                         style: GoogleFonts.readexPro(
                           fontSize: 14,
-                          color: Colors.black54,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -797,7 +797,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
           style: GoogleFonts.readexPro(
             fontSize: 11,
             fontWeight: FontWeight.bold,
-            color: Colors.black87,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         const SizedBox(width: 8),
@@ -845,7 +845,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
           style: GoogleFonts.readexPro(
             fontSize: 11,
             fontWeight: FontWeight.bold,
-            color: Colors.black87,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         const SizedBox(width: 8),

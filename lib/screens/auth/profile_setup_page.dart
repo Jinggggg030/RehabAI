@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 class ProfileSetupPage extends StatefulWidget {
   final String name;
@@ -179,7 +180,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 40.0),
@@ -193,7 +194,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
                 style: GoogleFonts.readexPro(
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: 40),
@@ -447,7 +448,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       style: GoogleFonts.readexPro(
         fontSize: 14,
         fontWeight: FontWeight.w600,
-        color: Colors.black87,
+        color: Theme.of(context).colorScheme.onSurface,
       ),
     );
   }
@@ -462,7 +463,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFF), // Very light grey bg
+        color: context.rehabInput,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
       ),
@@ -471,7 +472,10 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         keyboardType: keyboardType,
         textAlign: textAlign,
         onChanged: onChanged,
-        style: GoogleFonts.readexPro(fontSize: 14, color: Colors.black87),
+        style: GoogleFonts.readexPro(
+          fontSize: 14,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
         decoration: InputDecoration(
           hintText: hintText,
           hintStyle: GoogleFonts.readexPro(
@@ -511,7 +515,10 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           ),
           Text(
             title,
-            style: GoogleFonts.readexPro(fontSize: 14, color: Colors.black87),
+            style: GoogleFonts.readexPro(
+              fontSize: 14,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
           ),
         ],
       ),

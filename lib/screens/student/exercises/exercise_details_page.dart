@@ -6,6 +6,7 @@ import 'during_exercise_page.dart';
 import 'pose_camera_page.dart';
 import 'rep_counter_page.dart';
 import 'package:rehab_ai/utils/exercise_formatters.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 class ExerciseDetailsPage extends StatefulWidget {
   final bool isAssigned;
@@ -136,7 +137,7 @@ class _ExerciseDetailsPageState extends State<ExerciseDetailsPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: Column(
           children: [

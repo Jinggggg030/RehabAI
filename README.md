@@ -18,6 +18,7 @@ appointments, and equipment rental in one application.
 - Live chat and on-demand teleconference invitations
 - Appointment booking and equipment rental
 - Notifications and profile-picture upload
+- Persistent light and dark appearance modes
 - Help centre with contact details and a physiotherapy dictionary
 
 ### Physiotherapist portal

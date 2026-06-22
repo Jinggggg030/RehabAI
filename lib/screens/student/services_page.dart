@@ -51,7 +51,7 @@ class ServicesPage extends StatelessWidget {
     ];
 
     return Scaffold(
-      backgroundColor: RehabColors.background,
+      backgroundColor: context.rehabBackground,
       body: CustomScrollView(
         physics: const BouncingScrollPhysics(),
         slivers: [
@@ -159,10 +159,10 @@ class _ServiceCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: context.rehabSurface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
-        side: const BorderSide(color: RehabColors.border),
+        side: BorderSide(color: context.rehabBorder),
       ),
       child: InkWell(
         onTap: () => Navigator.push(
@@ -209,10 +209,10 @@ class _ServiceCard extends StatelessWidget {
                     const SizedBox(height: 5),
                     Text(
                       item.description,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 11,
                         height: 1.4,
-                        color: RehabColors.muted,
+                        color: context.rehabMuted,
                       ),
                     ),
                   ],

@@ -6,6 +6,8 @@ import 'package:rehab_ai/screens/auth/login_page.dart';
 import 'package:rehab_ai/screens/student/account/change_password_page.dart';
 
 import 'package:rehab_ai/screens/student/account/terms_and_conditions_page.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/theme/theme_controller.dart';
 
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key});
@@ -16,12 +18,11 @@ class SettingsPage extends StatefulWidget {
 
 class _SettingsPageState extends State<SettingsPage> {
   bool _notificationsEnabled = true;
-  bool _darkModeEnabled = true;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: Column(
           children: [
@@ -41,21 +42,21 @@ class _SettingsPageState extends State<SettingsPage> {
                       child: Container(
                         padding: const EdgeInsets.all(8),
                         decoration: BoxDecoration(
-                          color: Colors.white,
+                          color: context.rehabSurface,
                           shape: BoxShape.circle,
                           boxShadow: [
                             BoxShadow(
-                              color: Colors.black.withOpacity(0.05),
+                              color: Colors.black.withValues(alpha: 0.12),
                               blurRadius: 10,
                               offset: const Offset(0, 2),
                             ),
                           ],
-                          border: Border.all(color: Colors.grey.shade100),
+                          border: Border.all(color: context.rehabBorder),
                         ),
-                        child: const Icon(
+                        child: Icon(
                           Icons.arrow_back_ios_new,
                           size: 16,
-                          color: Colors.black54,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                     ),
@@ -90,9 +91,8 @@ class _SettingsPageState extends State<SettingsPage> {
                   _buildSwitchTile(
                     icon: Icons.brightness_medium_outlined,
                     title: 'Dark Mode',
-                    value: _darkModeEnabled,
-                    onChanged: (value) =>
-                        setState(() => _darkModeEnabled = value),
+                    value: AppThemeController.isDarkMode,
+                    onChanged: AppThemeController.setDarkMode,
                   ),
                   _buildNavigationTile(
                     icon: Icons.lock_outline,
@@ -153,7 +153,7 @@ class _SettingsPageState extends State<SettingsPage> {
       height: 56,
       child: Row(
         children: [
-          Icon(icon, size: 24, color: Colors.black87),
+          Icon(icon, size: 24, color: Theme.of(context).colorScheme.onSurface),
           const SizedBox(width: 16),
           Expanded(
             child: Text(
@@ -161,7 +161,7 @@ class _SettingsPageState extends State<SettingsPage> {
               style: GoogleFonts.readexPro(
                 fontSize: 14,
                 fontWeight: FontWeight.bold,
-                color: Colors.black87,
+                color: Theme.of(context).colorScheme.onSurface,
               ),
             ),
           ),
@@ -173,7 +173,7 @@ class _SettingsPageState extends State<SettingsPage> {
                 child: CupertinoSwitch(
                   value: value,
                   onChanged: onChanged,
-                  activeColor: const Color(0xFF1565C0),
+                  activeTrackColor: const Color(0xFF1565C0),
                 ),
               ),
             ),
@@ -196,7 +196,11 @@ class _SettingsPageState extends State<SettingsPage> {
         height: 56,
         child: Row(
           children: [
-            Icon(icon, size: 24, color: Colors.black87),
+            Icon(
+              icon,
+              size: 24,
+              color: Theme.of(context).colorScheme.onSurface,
+            ),
             const SizedBox(width: 16),
             Expanded(
               child: Text(
@@ -204,17 +208,17 @@ class _SettingsPageState extends State<SettingsPage> {
                 style: GoogleFonts.readexPro(
                   fontSize: 14,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
             ),
-            const SizedBox(
+            SizedBox(
               width: 50,
               child: Center(
                 child: Icon(
                   Icons.chevron_right,
                   size: 24,
-                  color: Colors.black87,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
             ),

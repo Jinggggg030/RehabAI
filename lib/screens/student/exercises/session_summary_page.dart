@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:rehab_ai/utils/current_user_id.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 class SessionSummaryPage extends StatefulWidget {
   final String exerciseName;
@@ -110,7 +111,7 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 32.0),

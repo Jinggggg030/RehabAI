@@ -19,6 +19,13 @@ abstract final class RehabColors {
   static const admin = Color(0xFF9B8DC8);
   static const amber = Color(0xFFF59E0B);
   static const danger = Color(0xFFDC2626);
+  static const darkBackground = Color(0xFF070B16);
+  static const darkSurface = Color(0xFF111827);
+  static const darkSurfaceElevated = Color(0xFF172033);
+  static const darkBorder = Color(0xFF26344D);
+  static const darkInput = Color(0xFF182235);
+  static const darkInk = Color(0xFFF1F5F9);
+  static const darkMuted = Color(0xFF9CAEC6);
 
   static const patientGradient = LinearGradient(
     begin: Alignment.topLeft,
@@ -182,4 +189,168 @@ abstract final class RehabTheme {
       ),
     );
   }
+
+  static ThemeData get dark {
+    final colorScheme = ColorScheme.fromSeed(
+      seedColor: const Color(0xFF60A5FA),
+      brightness: Brightness.dark,
+      primary: const Color(0xFF60A5FA),
+      secondary: const Color(0xFF22D3EE),
+      surface: RehabColors.darkSurface,
+      error: const Color(0xFFF87171),
+    );
+    final textTheme = GoogleFonts.plusJakartaSansTextTheme(
+      ThemeData.dark().textTheme,
+    ).apply(bodyColor: RehabColors.darkInk, displayColor: RehabColors.darkInk);
+
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.dark,
+      colorScheme: colorScheme,
+      scaffoldBackgroundColor: RehabColors.darkBackground,
+      canvasColor: RehabColors.darkBackground,
+      textTheme: textTheme,
+      visualDensity: VisualDensity.standard,
+      appBarTheme: AppBarTheme(
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        centerTitle: false,
+        backgroundColor: Colors.transparent,
+        foregroundColor: RehabColors.darkInk,
+        titleTextStyle: textTheme.titleLarge?.copyWith(
+          fontWeight: FontWeight.w800,
+          color: RehabColors.darkInk,
+        ),
+      ),
+      cardTheme: const CardThemeData(
+        elevation: 0,
+        color: RehabColors.darkSurface,
+        surfaceTintColor: Colors.transparent,
+        margin: EdgeInsets.zero,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(20)),
+          side: BorderSide(color: RehabColors.darkBorder),
+        ),
+      ),
+      dialogTheme: const DialogThemeData(
+        backgroundColor: RehabColors.darkSurfaceElevated,
+        surfaceTintColor: Colors.transparent,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.all(Radius.circular(24)),
+        ),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        filled: true,
+        fillColor: RehabColors.darkInput,
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 16,
+          vertical: 14,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: BorderSide.none,
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: RehabColors.darkBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(14),
+          borderSide: const BorderSide(color: Color(0xFF60A5FA), width: 1.5),
+        ),
+        labelStyle: const TextStyle(color: RehabColors.darkMuted),
+        hintStyle: const TextStyle(color: Color(0xFF718198)),
+      ),
+      filledButtonTheme: FilledButtonThemeData(
+        style: FilledButton.styleFrom(
+          backgroundColor: const Color(0xFF2563EB),
+          foregroundColor: Colors.white,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          elevation: 0,
+          backgroundColor: const Color(0xFF2563EB),
+          foregroundColor: Colors.white,
+          surfaceTintColor: Colors.transparent,
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+      outlinedButtonTheme: OutlinedButtonThemeData(
+        style: OutlinedButton.styleFrom(
+          foregroundColor: const Color(0xFF93C5FD),
+          side: const BorderSide(color: RehabColors.darkBorder),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 13),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          textStyle: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+      ),
+      chipTheme: ChipThemeData(
+        backgroundColor: RehabColors.darkInput,
+        selectedColor: const Color(0xFF2563EB),
+        secondarySelectedColor: const Color(0xFF2563EB),
+        side: const BorderSide(color: RehabColors.darkBorder),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        labelStyle: const TextStyle(
+          color: RehabColors.darkMuted,
+          fontWeight: FontWeight.w600,
+        ),
+        secondaryLabelStyle: const TextStyle(color: Colors.white),
+      ),
+      dividerTheme: const DividerThemeData(
+        color: RehabColors.darkBorder,
+        thickness: 1,
+        space: 1,
+      ),
+      progressIndicatorTheme: const ProgressIndicatorThemeData(
+        color: Color(0xFF60A5FA),
+        linearTrackColor: RehabColors.darkInput,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: RehabColors.darkSurfaceElevated,
+        contentTextStyle: const TextStyle(color: RehabColors.darkInk),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+      ),
+      navigationBarTheme: const NavigationBarThemeData(
+        backgroundColor: Colors.transparent,
+        indicatorColor: Color(0xFF1E3A5F),
+      ),
+      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+        backgroundColor: RehabColors.darkSurface,
+        selectedItemColor: Color(0xFF60A5FA),
+        unselectedItemColor: RehabColors.darkMuted,
+        type: BottomNavigationBarType.fixed,
+        elevation: 0,
+      ),
+    );
+  }
+}
+
+extension RehabThemeContext on BuildContext {
+  bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
+
+  Color get rehabBackground =>
+      isDarkMode ? RehabColors.darkBackground : RehabColors.background;
+  Color get rehabSurface =>
+      isDarkMode ? RehabColors.darkSurface : RehabColors.surface;
+  Color get rehabSurfaceElevated =>
+      isDarkMode ? RehabColors.darkSurfaceElevated : RehabColors.surface;
+  Color get rehabBorder =>
+      isDarkMode ? RehabColors.darkBorder : RehabColors.border;
+  Color get rehabInput =>
+      isDarkMode ? RehabColors.darkInput : RehabColors.input;
+  Color get rehabMuted =>
+      isDarkMode ? RehabColors.darkMuted : RehabColors.muted;
 }

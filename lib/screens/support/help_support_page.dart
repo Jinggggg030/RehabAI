@@ -8,7 +8,7 @@ class HelpSupportPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: RehabColors.background,
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: Column(
           children: [
@@ -121,7 +121,7 @@ class PhysiotherapyDictionaryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: RehabColors.background,
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: Column(
           children: [
@@ -219,10 +219,10 @@ class _HelpTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: context.rehabSurface,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(22),
-        side: const BorderSide(color: RehabColors.border),
+        side: BorderSide(color: context.rehabBorder),
       ),
       child: InkWell(
         onTap: onTap,
@@ -283,9 +283,9 @@ class _DictionaryCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(17),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.rehabSurface,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: RehabColors.border),
+        border: Border.all(color: context.rehabBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,

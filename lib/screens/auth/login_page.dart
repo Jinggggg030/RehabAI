@@ -12,6 +12,7 @@ import 'package:rehab_ai/screens/auth/profile_setup_page.dart';
 import 'package:rehab_ai/screens/physiotherapist/physio_dashboard.dart';
 import 'package:rehab_ai/screens/admin/admin_dashboard.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -166,12 +167,18 @@ class _LoginPageState extends State<LoginPage> {
         if (data['role'] == 'P') {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const PhysioDashboard()),
+            MaterialPageRoute(
+              builder: (context) =>
+                  Theme(data: RehabTheme.light, child: const PhysioDashboard()),
+            ),
           );
         } else if (data['role'] == 'A') {
           Navigator.pushReplacement(
             context,
-            MaterialPageRoute(builder: (context) => const AdminDashboard()),
+            MaterialPageRoute(
+              builder: (context) =>
+                  Theme(data: RehabTheme.light, child: const AdminDashboard()),
+            ),
           );
         } else {
           Navigator.pushReplacement(
@@ -199,7 +206,7 @@ class _LoginPageState extends State<LoginPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 40.0, vertical: 50.0),
@@ -216,7 +223,7 @@ class _LoginPageState extends State<LoginPage> {
                     child: Container(
                       padding: const EdgeInsets.all(10),
                       decoration: BoxDecoration(
-                        color: Colors.white,
+                        color: context.rehabSurface,
                         borderRadius: BorderRadius.circular(12),
                         boxShadow: [
                           BoxShadow(
@@ -226,10 +233,10 @@ class _LoginPageState extends State<LoginPage> {
                           ),
                         ],
                       ),
-                      child: const Icon(
+                      child: Icon(
                         Icons.arrow_back_ios_new,
                         size: 16,
-                        color: Colors.black54,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
                       ),
                     ),
                   ),
@@ -244,7 +251,7 @@ class _LoginPageState extends State<LoginPage> {
                           style: GoogleFonts.readexPro(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                       ),
@@ -435,7 +442,7 @@ class _LoginPageState extends State<LoginPage> {
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(30),
                   ),
-                  foregroundColor: Colors.black87,
+                  foregroundColor: Theme.of(context).colorScheme.onSurface,
                 ),
                 child: _isLoading
                     ? const SizedBox(

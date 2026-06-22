@@ -180,7 +180,7 @@ class _ProgressPageState extends State<ProgressPage> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: RefreshIndicator(
           color: const Color(0xFF1565C0),
@@ -358,12 +358,12 @@ class _ProgressPageState extends State<ProgressPage> {
         backgroundColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
               ? const Color(0xFF1565C0)
-              : Colors.white,
+              : context.rehabSurface,
         ),
         foregroundColor: WidgetStateProperty.resolveWith(
           (states) => states.contains(WidgetState.selected)
               ? Colors.white
-              : Colors.black87,
+              : Theme.of(context).colorScheme.onSurface,
         ),
       ),
       onSelectionChanged: (selection) {
@@ -478,7 +478,7 @@ class _ProgressPageState extends State<ProgressPage> {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.rehabSurface,
         borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
@@ -501,7 +501,10 @@ class _ProgressPageState extends State<ProgressPage> {
           const SizedBox(height: 4),
           Text(
             'Active exercise minutes',
-            style: GoogleFonts.readexPro(fontSize: 12, color: Colors.black54),
+            style: GoogleFonts.readexPro(
+              fontSize: 12,
+              color: context.rehabMuted,
+            ),
           ),
           const SizedBox(height: 20),
           _ActivityBars(days: _lastSevenDays),
@@ -520,7 +523,7 @@ class _ProgressPageState extends State<ProgressPage> {
           style: GoogleFonts.readexPro(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: Colors.black87,
+            color: Theme.of(context).colorScheme.onSurface,
           ),
         ),
         const SizedBox(height: 12),
@@ -545,9 +548,9 @@ class _ProgressPageState extends State<ProgressPage> {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.rehabSurface,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFE8ECEB)),
+        border: Border.all(color: context.rehabBorder),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -579,7 +582,7 @@ class _ProgressPageState extends State<ProgressPage> {
                       : DateFormat('MMM dd, yyyy • hh:mm a').format(date),
                   style: GoogleFonts.readexPro(
                     fontSize: 11,
-                    color: Colors.black54,
+                    color: context.rehabMuted,
                   ),
                 ),
                 const SizedBox(height: 10),
@@ -616,7 +619,7 @@ class _ProgressPageState extends State<ProgressPage> {
             Text(
               _errorMessage!,
               textAlign: TextAlign.center,
-              style: GoogleFonts.readexPro(color: Colors.black54),
+              style: GoogleFonts.readexPro(color: context.rehabMuted),
             ),
             const SizedBox(height: 14),
             OutlinedButton.icon(
@@ -663,7 +666,7 @@ class _ProgressPageState extends State<ProgressPage> {
               textAlign: TextAlign.center,
               style: GoogleFonts.readexPro(
                 fontSize: 13,
-                color: Colors.black54,
+                color: context.rehabMuted,
                 height: 1.4,
               ),
             ),
@@ -678,13 +681,13 @@ class _ProgressPageState extends State<ProgressPage> {
       width: double.infinity,
       padding: const EdgeInsets.all(22),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.rehabSurface,
         borderRadius: BorderRadius.circular(14),
       ),
       child: Text(
         'No completed sessions in this period.',
         textAlign: TextAlign.center,
-        style: GoogleFonts.readexPro(color: Colors.black54),
+        style: GoogleFonts.readexPro(color: context.rehabMuted),
       ),
     );
   }
@@ -714,7 +717,7 @@ class _StatCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.rehabSurface,
         borderRadius: BorderRadius.circular(15),
         border: Border.all(color: color.withValues(alpha: 0.16)),
       ),
@@ -731,14 +734,14 @@ class _StatCard extends StatelessWidget {
                 style: GoogleFonts.readexPro(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               Text(
                 label,
                 style: GoogleFonts.readexPro(
                   fontSize: 11,
-                  color: Colors.black54,
+                  color: context.rehabMuted,
                 ),
               ),
             ],
@@ -759,12 +762,16 @@ class _MetricPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
       decoration: BoxDecoration(
-        color: const Color(0xFFF0F5F4),
+        color: context.rehabInput,
         borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: context.rehabBorder),
       ),
       child: Text(
         text,
-        style: GoogleFonts.readexPro(fontSize: 10, color: Colors.black87),
+        style: GoogleFonts.readexPro(
+          fontSize: 10,
+          color: Theme.of(context).colorScheme.onSurface,
+        ),
       ),
     );
   }
@@ -804,7 +811,7 @@ class _ActivityBars extends StatelessWidget {
                     day.minutes == 0 ? '' : day.minutes.toStringAsFixed(0),
                     style: GoogleFonts.readexPro(
                       fontSize: 9,
-                      color: Colors.black54,
+                      color: context.rehabMuted,
                     ),
                   ),
                   const SizedBox(height: 3),
@@ -823,7 +830,7 @@ class _ActivityBars extends StatelessWidget {
                     DateFormat('E').format(day.day).substring(0, 1),
                     style: GoogleFonts.readexPro(
                       fontSize: 10,
-                      color: Colors.black54,
+                      color: context.rehabMuted,
                     ),
                   ),
                 ],

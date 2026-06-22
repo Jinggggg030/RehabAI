@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 class ExerciseSummaryPage extends StatelessWidget {
   const ExerciseSummaryPage({super.key});
@@ -7,7 +8,7 @@ class ExerciseSummaryPage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: Column(
           children: [

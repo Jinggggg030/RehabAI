@@ -151,12 +151,14 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
       bottomNavigationBar: Container(
         margin: const EdgeInsets.fromLTRB(14, 0, 14, 12),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.96),
+          color: context.rehabSurface.withValues(alpha: 0.96),
           borderRadius: BorderRadius.circular(24),
-          border: Border.all(color: RehabColors.border),
-          boxShadow: const [
+          border: Border.all(color: context.rehabBorder),
+          boxShadow: [
             BoxShadow(
-              color: Color(0x18204A87),
+              color: context.isDarkMode
+                  ? Colors.black.withValues(alpha: 0.35)
+                  : const Color(0x18204A87),
               blurRadius: 28,
               offset: Offset(0, 10),
             ),
@@ -168,7 +170,9 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
             height: 70,
             elevation: 0,
             backgroundColor: Colors.transparent,
-            indicatorColor: RehabColors.primaryLight,
+            indicatorColor: context.isDarkMode
+                ? const Color(0xFF1E3A5F)
+                : RehabColors.primaryLight,
             selectedIndex: _selectedIndex,
             onDestinationSelected: _onItemTapped,
             labelBehavior: NavigationDestinationLabelBehavior.alwaysShow,

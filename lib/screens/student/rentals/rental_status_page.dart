@@ -82,7 +82,7 @@ class _RentalStatusPageState extends State<RentalStatusPage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF),
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: Column(
           children: [

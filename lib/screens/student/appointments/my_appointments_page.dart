@@ -166,7 +166,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
       return const Scaffold(backgroundColor: Colors.transparent);
     }
     return Scaffold(
-      backgroundColor: const Color(0xFFF8FAFF), // Match HomePage background
+      backgroundColor: context.rehabBackground,
       body: SafeArea(
         child: Column(
           children: [
@@ -243,9 +243,9 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
               margin: const EdgeInsets.symmetric(horizontal: 20),
               padding: const EdgeInsets.all(5),
               decoration: BoxDecoration(
-                color: Colors.white,
+                color: context.rehabSurface,
                 borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: RehabColors.border),
+                border: Border.all(color: context.rehabBorder),
               ),
               child: TabBar(
                 controller: _tabController,
@@ -345,9 +345,9 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
       child: Container(
         padding: const EdgeInsets.all(18),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: context.rehabSurface,
           borderRadius: BorderRadius.circular(22),
-          border: Border.all(color: RehabColors.border),
+          border: Border.all(color: context.rehabBorder),
           boxShadow: [
             BoxShadow(
               color: RehabColors.primary.withValues(alpha: 0.08),
@@ -387,7 +387,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                         style: GoogleFonts.readexPro(
                           fontSize: 14,
                           fontWeight: FontWeight.bold,
-                          color: Colors.black87,
+                          color: Theme.of(context).colorScheme.onSurface,
                         ),
                       ),
                       const SizedBox(height: 10),
@@ -450,7 +450,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                         appointment['specialization'] ?? 'Physiotherapy',
                         style: GoogleFonts.readexPro(
                           fontSize: 12,
-                          color: Colors.grey, // Light teal color
+                          color: context.rehabMuted, // Light teal color
                         ),
                       ),
                     ],
@@ -466,15 +466,15 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                     fontSize: 12,
                     color: Colors.grey.shade600,
                   ),
-                  children: const [
+                  children: [
                     TextSpan(
                       text: 'Prescription: ',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    TextSpan(text: 'N/A'),
+                    const TextSpan(text: 'N/A'),
                   ],
                 ),
               ),
@@ -486,11 +486,11 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                     color: Colors.grey.shade600,
                   ),
                   children: [
-                    const TextSpan(
+                    TextSpan(
                       text: 'Physiotherapist Review: ',
                       style: TextStyle(
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     TextSpan(text: appointment['evaluation'] ?? 'N/A'),
@@ -505,7 +505,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                 style: GoogleFonts.readexPro(
                   fontSize: 12,
                   fontWeight: FontWeight.bold,
-                  color: Colors.black87,
+                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               const SizedBox(height: 4),
@@ -540,7 +540,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
       context: context,
       builder: (BuildContext context) {
         return Dialog(
-          backgroundColor: Colors.white,
+          backgroundColor: context.rehabSurfaceElevated,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(24),
           ),
@@ -559,17 +559,17 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                       style: GoogleFonts.readexPro(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
-                        color: Colors.black87,
+                        color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
                     Align(
                       alignment: Alignment.centerRight,
                       child: GestureDetector(
                         onTap: () => Navigator.pop(context),
-                        child: const Icon(
+                        child: Icon(
                           Icons.close,
                           size: 20,
-                          color: Colors.black54,
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
                         ),
                       ),
                     ),
@@ -580,8 +580,8 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                 // Calendar View
                 Container(
                   decoration: BoxDecoration(
-                    color: Colors.white,
-                    border: Border.all(color: Colors.grey.shade200),
+                    color: context.rehabSurface,
+                    border: Border.all(color: context.rehabBorder),
                     boxShadow: [
                       BoxShadow(
                         color: Colors.black.withOpacity(0.08),
@@ -698,7 +698,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
         return StatefulBuilder(
           builder: (context, setState) {
             return Dialog(
-              backgroundColor: Colors.white,
+              backgroundColor: context.rehabSurfaceElevated,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -725,7 +725,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                           style: GoogleFonts.readexPro(
                             fontSize: 14,
                             fontWeight: FontWeight.bold,
-                            color: Colors.black87,
+                            color: Theme.of(context).colorScheme.onSurface,
                           ),
                         ),
                         const SizedBox(width: 12),
@@ -734,8 +734,8 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                             height: 36,
                             padding: const EdgeInsets.symmetric(horizontal: 12),
                             decoration: BoxDecoration(
-                              color: Colors.white,
-                              border: Border.all(color: Colors.grey.shade300),
+                              color: context.rehabSurface,
+                              border: Border.all(color: context.rehabBorder),
                               borderRadius: BorderRadius.circular(6),
                               boxShadow: [
                                 BoxShadow(
@@ -778,8 +778,8 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                         vertical: 8,
                       ),
                       decoration: BoxDecoration(
-                        color: Colors.white,
-                        border: Border.all(color: Colors.grey.shade300),
+                        color: context.rehabSurface,
+                        border: Border.all(color: context.rehabBorder),
                         borderRadius: BorderRadius.circular(6),
                         boxShadow: [
                           BoxShadow(
@@ -913,7 +913,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: Colors.white,
+      backgroundColor: context.rehabSurfaceElevated,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -991,7 +991,8 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12),
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
+                        color: context.rehabSurface,
+                        border: Border.all(color: context.rehabBorder),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: DropdownButtonHideUnderline(
@@ -1004,7 +1005,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                             return DropdownMenuItem<int>(
                               value: p['therapist_id'],
                               child: Text(
-                                "${p['name']} (${p['specialization']}) ${p['recommended'] ? 'â­' : ''}",
+                                "${p['name']} (${p['specialization']}) ${p['recommended'] ? '⭐ ' : ''}",
                               ),
                             );
                           }).toList(),
@@ -1022,7 +1023,8 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                     const SizedBox(height: 8),
                     Container(
                       decoration: BoxDecoration(
-                        border: Border.all(color: Colors.grey.shade300),
+                        color: context.rehabSurface,
+                        border: Border.all(color: context.rehabBorder),
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: TableCalendar(
@@ -1118,7 +1120,8 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                         width: double.infinity,
                         padding: const EdgeInsets.all(12),
                         decoration: BoxDecoration(
-                          border: Border.all(color: Colors.grey.shade300),
+                          color: context.rehabSurface,
+                          border: Border.all(color: context.rehabBorder),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Row(
@@ -1209,7 +1212,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
             style: GoogleFonts.readexPro(
               fontSize: 14,
               fontWeight: FontWeight.bold,
-              color: Colors.black87,
+              color: Theme.of(context).colorScheme.onSurface,
             ),
           ),
         ),
@@ -1218,7 +1221,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
             value,
             style: GoogleFonts.readexPro(
               fontSize: 14,
-              color: Colors.black87,
+              color: Theme.of(context).colorScheme.onSurface,
               height: 1.4,
             ),
           ),
