@@ -11,6 +11,8 @@ import 'package:rehab_ai/screens/record_session_dialog.dart';
 import 'package:rehab_ai/screens/physio_progress_tab.dart';
 import '../services/teleconference_service.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/widgets/portal_backdrop.dart';
+import 'package:intl/intl.dart';
 
 class PhysioDashboard extends StatefulWidget {
   const PhysioDashboard({super.key});
@@ -299,160 +301,217 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: RehabColors.portalBackground,
-      body: Row(
-        children: [
-          Container(
-            width: 220,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(right: BorderSide(color: RehabColors.border)),
-            ),
-            child: Column(
-              children: [
-                _portalBrand(accent: RehabColors.physio, role: 'Physio Portal'),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: ListView(
-                    padding: const EdgeInsets.symmetric(horizontal: 12),
-                    children: [
-                      _portalNavItem(
-                        0,
-                        Icons.forum_outlined,
-                        'Live Chat',
-                        showBadge:
-                            _unreadChats.isNotEmpty || _hasNotification('chat'),
-                      ),
-                      _portalNavItem(
-                        1,
-                        Icons.insights_outlined,
-                        'Patient Progress',
-                        showBadge: _hasNotification('exercise'),
-                      ),
-                      _portalNavItem(
-                        2,
-                        Icons.calendar_month_outlined,
-                        'Appointments',
-                        showBadge: _hasNotification('appointment'),
-                      ),
-                      _portalNavItem(
-                        3,
-                        Icons.medical_services_outlined,
-                        'Equipment',
-                        showBadge: _hasNotification('rental'),
-                      ),
-                    ],
+      body: PortalBackdrop(
+        accent: RehabColors.primary,
+        child: Row(
+          children: [
+            Container(
+              width: 236,
+              margin: const EdgeInsets.all(14),
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                gradient: RehabColors.darkGradient,
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: RehabColors.primary.withValues(alpha: 0.20),
+                    blurRadius: 28,
+                    offset: const Offset(0, 12),
                   ),
-                ),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: TextButton.icon(
-                    onPressed: () async {
-                      await _supabase.auth.signOut();
-                      if (mounted) {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const LoginPage()),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Exit Portal'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: RehabColors.danger,
-                      minimumSize: const Size(double.infinity, 46),
-                      alignment: Alignment.centerLeft,
+                ],
+              ),
+              child: Column(
+                children: [
+                  _portalBrand(
+                    accent: RehabColors.physio,
+                    role: 'Physio Portal',
+                  ),
+                  const SizedBox(height: 12),
+                  Expanded(
+                    child: ListView(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      children: [
+                        _portalNavItem(
+                          0,
+                          Icons.forum_outlined,
+                          'Live Chat',
+                          showBadge:
+                              _unreadChats.isNotEmpty ||
+                              _hasNotification('chat'),
+                        ),
+                        _portalNavItem(
+                          1,
+                          Icons.insights_outlined,
+                          'Patient Progress',
+                          showBadge: _hasNotification('exercise'),
+                        ),
+                        _portalNavItem(
+                          2,
+                          Icons.calendar_month_outlined,
+                          'Appointments',
+                          showBadge: _hasNotification('appointment'),
+                        ),
+                        _portalNavItem(
+                          3,
+                          Icons.medical_services_outlined,
+                          'Equipment',
+                          showBadge: _hasNotification('rental'),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Column(
-              children: [
-                Container(
-                  height: 70,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    border: Border(
-                      bottom: BorderSide(color: RehabColors.border),
+                  const PortalSystemStatus(label: 'Clinical network online'),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        await _supabase.auth.signOut();
+                        if (mounted) {
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (_) => const LoginPage(),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text('Exit Portal'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white70,
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                        minimumSize: const Size(double.infinity, 46),
+                        alignment: Alignment.centerLeft,
+                      ),
                     ),
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              const [
-                                'Live Chat',
-                                'Patient Progress',
-                                'Appointments',
-                                'Equipment Rentals',
-                              ][_selectedIndex],
-                              style: const TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.w800,
-                              ),
-                            ),
-                            const Text(
-                              'RehabAI clinical workspace',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: RehabColors.subtle,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      IconButton.filledTonal(
-                        tooltip: 'Refresh current page',
-                        onPressed: _refreshCurrentPage,
-                        icon: const Icon(Icons.refresh_rounded),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF0FDF4),
-                          borderRadius: BorderRadius.circular(13),
-                          border: Border.all(color: RehabColors.border),
-                        ),
-                        child: const Row(
-                          children: [
-                            CircleAvatar(
-                              radius: 12,
-                              backgroundColor: RehabColors.physio,
-                              child: Icon(
-                                Icons.person,
-                                size: 14,
-                                color: Colors.white,
-                              ),
-                            ),
-                            SizedBox(width: 8),
-                            Text(
-                              'Physiotherapist',
-                              style: TextStyle(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Expanded(child: _buildMainContent()),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+            Expanded(
+              child: Column(
+                children: [
+                  Container(
+                    height: 82,
+                    margin: const EdgeInsets.fromLTRB(0, 14, 14, 0),
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: RehabColors.border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: RehabColors.primary.withValues(alpha: 0.08),
+                          blurRadius: 22,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                const [
+                                  'Live Chat',
+                                  'Patient Progress',
+                                  'Appointments',
+                                  'Equipment Rentals',
+                                ][_selectedIndex],
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const Row(
+                                children: [
+                                  Icon(
+                                    Icons.auto_awesome_rounded,
+                                    size: 12,
+                                    color: RehabColors.cyan,
+                                  ),
+                                  SizedBox(width: 5),
+                                  Text(
+                                    'CLINICAL COMMAND CENTER',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      letterSpacing: 1.1,
+                                      color: RehabColors.subtle,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        PortalMetric(
+                          icon: Icons.notifications_active_outlined,
+                          value: '${_notifications.length}',
+                          label: 'NEW UPDATES',
+                          accent: RehabColors.cyan,
+                        ),
+                        const SizedBox(width: 10),
+                        IconButton.filledTonal(
+                          tooltip: 'Refresh current page',
+                          onPressed: _refreshCurrentPage,
+                          icon: const Icon(Icons.refresh_rounded),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF0FDF4),
+                            borderRadius: BorderRadius.circular(13),
+                            border: Border.all(color: RehabColors.border),
+                          ),
+                          child: const Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 12,
+                                backgroundColor: RehabColors.physio,
+                                child: Icon(
+                                  Icons.person,
+                                  size: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Physiotherapist',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 14, 14, 14),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: ColoredBox(
+                          color: Colors.white,
+                          child: _buildMainContent(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -461,8 +520,10 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
     return Container(
       height: 74,
       padding: const EdgeInsets.symmetric(horizontal: 18),
-      decoration: const BoxDecoration(
-        border: Border(bottom: BorderSide(color: RehabColors.border)),
+      decoration: BoxDecoration(
+        border: Border(
+          bottom: BorderSide(color: Colors.white.withValues(alpha: 0.10)),
+        ),
       ),
       child: Row(
         children: [
@@ -486,13 +547,18 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
             children: [
               const Text(
                 'RehabAI',
-                style: TextStyle(fontSize: 15, fontWeight: FontWeight.w900),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w900,
+                  color: Colors.white,
+                  letterSpacing: 0.3,
+                ),
               ),
               Text(
                 role,
                 style: TextStyle(
                   fontSize: 10,
-                  color: accent,
+                  color: Colors.white60,
                   fontWeight: FontWeight.w700,
                 ),
               ),
@@ -513,7 +579,9 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
     return Padding(
       padding: const EdgeInsets.only(bottom: 5),
       child: Material(
-        color: selected ? const Color(0xFFECFDF5) : Colors.transparent,
+        color: selected
+            ? Colors.white.withValues(alpha: 0.14)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(13),
         child: InkWell(
           onTap: () => _openDashboardSection(index),
@@ -525,7 +593,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                 Icon(
                   icon,
                   size: 19,
-                  color: selected ? RehabColors.physio : RehabColors.muted,
+                  color: selected ? Colors.cyanAccent : Colors.white54,
                 ),
                 const SizedBox(width: 11),
                 Expanded(
@@ -534,7 +602,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                      color: selected ? RehabColors.green : RehabColors.muted,
+                      color: selected ? Colors.white : Colors.white60,
                     ),
                   ),
                 ),
@@ -542,9 +610,15 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                   Container(
                     width: 8,
                     height: 8,
-                    decoration: const BoxDecoration(
+                    decoration: BoxDecoration(
                       color: RehabColors.danger,
                       shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: RehabColors.danger.withValues(alpha: 0.45),
+                          blurRadius: 8,
+                        ),
+                      ],
                     ),
                   ),
               ],
@@ -1812,6 +1886,325 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
     }
   }
 
+  void _showAppointmentDetails(Map<String, dynamic> appointment) {
+    final triage = appointment['triage_data'] is Map
+        ? Map<String, dynamic>.from(appointment['triage_data'] as Map)
+        : <String, dynamic>{};
+    final scheduledAt = DateTime.tryParse(
+      appointment['schedule_time']?.toString() ?? '',
+    )?.toLocal();
+    final isScheduled = appointment['status'] == 'Scheduled';
+    final now = DateTime.now();
+    final isToday =
+        scheduledAt != null &&
+        scheduledAt.year == now.year &&
+        scheduledAt.month == now.month &&
+        scheduledAt.day == now.day;
+
+    Widget detailTile(IconData icon, String label, dynamic rawValue) {
+      final value = rawValue?.toString().trim();
+      return Container(
+        width: 190,
+        padding: const EdgeInsets.all(13),
+        decoration: BoxDecoration(
+          color: RehabColors.primaryLight,
+          borderRadius: BorderRadius.circular(15),
+          border: Border.all(color: RehabColors.border),
+        ),
+        child: Row(
+          children: [
+            Icon(icon, size: 18, color: RehabColors.primary),
+            const SizedBox(width: 9),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    label.toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 8,
+                      letterSpacing: 0.8,
+                      color: RehabColors.subtle,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    value == null || value.isEmpty ? 'Not recorded' : value,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => Dialog(
+        backgroundColor: Colors.transparent,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680, maxHeight: 760),
+          child: Container(
+            clipBehavior: Clip.antiAlias,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(28),
+              boxShadow: [
+                BoxShadow(
+                  color: RehabColors.primary.withValues(alpha: 0.20),
+                  blurRadius: 36,
+                  offset: const Offset(0, 16),
+                ),
+              ],
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(22),
+                  decoration: const BoxDecoration(
+                    gradient: RehabColors.darkGradient,
+                  ),
+                  child: Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 25,
+                        backgroundColor: Colors.white12,
+                        child: Icon(Icons.person_rounded, color: Colors.white),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              appointment['student_name']?.toString() ??
+                                  'Patient',
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 19,
+                                fontWeight: FontWeight.w800,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            Text(
+                              '${appointment['matric_no'] ?? 'No matric number'} • ${scheduledAt == null ? 'Unknown schedule' : DateFormat('EEE, MMM d • hh:mm a').format(scheduledAt)}',
+                              style: const TextStyle(
+                                color: Colors.white60,
+                                fontSize: 11,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 11,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withValues(alpha: 0.12),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          appointment['status']?.toString() ?? 'Unknown',
+                          style: const TextStyle(
+                            color: Colors.cyanAccent,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      IconButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        color: Colors.white,
+                        icon: const Icon(Icons.close_rounded),
+                      ),
+                    ],
+                  ),
+                ),
+                Flexible(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(22),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Text(
+                          'AI Assessment',
+                          style: TextStyle(
+                            fontSize: 15,
+                            fontWeight: FontWeight.w800,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          appointment['assessment_subject']?.toString() ??
+                              'Patient triage information',
+                          style: const TextStyle(
+                            color: RehabColors.muted,
+                            fontSize: 11,
+                          ),
+                        ),
+                        const SizedBox(height: 14),
+                        if (triage.isEmpty)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.all(16),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFFFBEB),
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: const Text(
+                              'No AI assessment is linked to this appointment.',
+                              style: TextStyle(
+                                color: Color(0xFF92400E),
+                                fontSize: 11,
+                              ),
+                            ),
+                          )
+                        else
+                          Wrap(
+                            spacing: 10,
+                            runSpacing: 10,
+                            children: [
+                              detailTile(
+                                Icons.personal_injury_outlined,
+                                'Injury area',
+                                triage['pain_area'],
+                              ),
+                              detailTile(
+                                Icons.my_location_rounded,
+                                'Exact pain point',
+                                triage['pain_point'],
+                              ),
+                              detailTile(
+                                Icons.monitor_heart_outlined,
+                                'Severity',
+                                triage['severity'],
+                              ),
+                              detailTile(
+                                Icons.schedule_outlined,
+                                'Duration',
+                                triage['duration'],
+                              ),
+                              detailTile(
+                                Icons.medical_information_outlined,
+                                'Discipline',
+                                appointment['assessment_discipline'],
+                              ),
+                            ],
+                          ),
+                        const SizedBox(height: 22),
+                        _clinicalTextSection(
+                          'Physiotherapist Assessment',
+                          appointment['evaluation'],
+                        ),
+                        const SizedBox(height: 12),
+                        _clinicalTextSection(
+                          'Prescription',
+                          appointment['prescription'],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(22, 0, 22, 20),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      TextButton(
+                        onPressed: () => Navigator.pop(dialogContext),
+                        child: const Text('Close'),
+                      ),
+                      if (isScheduled && isToday) ...[
+                        const SizedBox(width: 8),
+                        FilledButton.icon(
+                          onPressed: () {
+                            Navigator.pop(dialogContext);
+                            _showRecordSessionDialog(appointment);
+                          },
+                          icon: const Icon(Icons.edit_document, size: 17),
+                          label: const Text('Record session'),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _clinicalTextSection(String title, dynamic rawValue) {
+    final value = rawValue?.toString().trim();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(15),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFF),
+        borderRadius: BorderRadius.circular(15),
+        border: Border.all(color: RehabColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            value == null || value.isEmpty ? 'Not recorded yet.' : value,
+            style: const TextStyle(
+              color: RehabColors.muted,
+              fontSize: 11,
+              height: 1.45,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _appointmentClinicalChip(IconData icon, String label, Color color) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(9),
+        border: Border.all(color: color.withValues(alpha: 0.13)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: color),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
@@ -1887,10 +2280,18 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                   final parsedDate = DateTime.tryParse(
                     a['schedule_time'] ?? '',
                   );
-                  final date =
-                      parsedDate?.toLocal().toString().split('.')[0] ??
-                      'Unknown';
+                  final date = parsedDate == null
+                      ? 'Unknown'
+                      : DateFormat(
+                          'EEE, MMM d • hh:mm a',
+                        ).format(parsedDate.toLocal());
                   final isScheduled = a['status'] == 'Scheduled';
+                  final triage = a['triage_data'] is Map
+                      ? Map<String, dynamic>.from(a['triage_data'] as Map)
+                      : <String, dynamic>{};
+                  final injuryArea =
+                      triage['pain_area']?.toString().trim() ?? '';
+                  final severity = triage['severity']?.toString().trim() ?? '';
 
                   final isToday =
                       parsedDate != null &&
@@ -1899,147 +2300,181 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                       parsedDate.toLocal().day == DateTime.now().day;
 
                   return Card(
-                    elevation: 2,
+                    elevation: 0,
                     margin: const EdgeInsets.only(bottom: 16),
                     shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(18),
+                      side: const BorderSide(color: RehabColors.border),
                     ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Row(
-                        children: [
-                          CircleAvatar(
-                            radius: 24,
-                            backgroundColor: Colors.blue.shade100,
-                            child: const Icon(Icons.person, color: Colors.blue),
-                          ),
-                          const SizedBox(width: 16),
-                          Expanded(
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(
-                                  a['student_name'] ?? 'Unknown',
-                                  style: GoogleFonts.readexPro(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  "Student ID: ${a['student_id'] ?? '—'}  •  Matric No: ${a['matric_no'] ?? 'Not provided'}",
-                                  style: GoogleFonts.readexPro(
-                                    fontSize: 13,
-                                    color: Colors.blueGrey.shade700,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Row(
-                                  children: [
-                                    const Icon(
-                                      Icons.calendar_today,
-                                      size: 14,
-                                      color: Colors.grey,
-                                    ),
-                                    const SizedBox(width: 4),
-                                    Text(
-                                      date,
-                                      style: GoogleFonts.readexPro(
-                                        fontSize: 14,
-                                        color: Colors.grey.shade700,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ],
-                            ),
-                          ),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.end,
-                            children: [
-                              Chip(
-                                label: Text(
-                                  a['status'] ?? '',
-                                  style: TextStyle(
-                                    color: isScheduled
-                                        ? Colors.blue.shade900
-                                        : Colors.grey.shade700,
-                                    fontWeight: FontWeight.bold,
-                                  ),
-                                ),
-                                backgroundColor: isScheduled
-                                    ? Colors.blue.shade50
-                                    : Colors.grey.shade200,
-                                side: BorderSide.none,
+                    child: InkWell(
+                      onTap: () =>
+                          _showAppointmentDetails(Map<String, dynamic>.from(a)),
+                      borderRadius: BorderRadius.circular(18),
+                      child: Padding(
+                        padding: const EdgeInsets.all(16),
+                        child: Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 24,
+                              backgroundColor: Colors.blue.shade100,
+                              child: const Icon(
+                                Icons.person,
+                                color: Colors.blue,
                               ),
-                              if (isScheduled) ...[
-                                const SizedBox(height: 8),
-                                Wrap(
-                                  spacing: 8,
-                                  runSpacing: 8,
-                                  alignment: WrapAlignment.end,
-                                  children: [
-                                    ElevatedButton.icon(
-                                      onPressed: () =>
-                                          TeleconferenceService.join(
-                                            context: context,
-                                            meetingRoom: a['meeting_room']
-                                                ?.toString(),
+                            ),
+                            const SizedBox(width: 16),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    a['student_name'] ?? 'Unknown',
+                                    style: GoogleFonts.readexPro(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 4),
+                                  Text(
+                                    "Student ID: ${a['student_id'] ?? '—'}  •  Matric No: ${a['matric_no'] ?? 'Not provided'}",
+                                    style: GoogleFonts.readexPro(
+                                      fontSize: 13,
+                                      color: Colors.blueGrey.shade700,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 7),
+                                  if (injuryArea.isNotEmpty ||
+                                      severity.isNotEmpty) ...[
+                                    Wrap(
+                                      spacing: 7,
+                                      runSpacing: 6,
+                                      children: [
+                                        if (injuryArea.isNotEmpty)
+                                          _appointmentClinicalChip(
+                                            Icons.personal_injury_outlined,
+                                            injuryArea,
+                                            RehabColors.primary,
                                           ),
-                                      icon: const Icon(
-                                        Icons.video_call_outlined,
-                                        size: 16,
-                                      ),
-                                      label: const Text("Video Call"),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.green.shade700,
-                                        foregroundColor: Colors.white,
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 10,
-                                        ),
-                                      ),
+                                        if (severity.isNotEmpty)
+                                          _appointmentClinicalChip(
+                                            Icons.monitor_heart_outlined,
+                                            'Severity $severity',
+                                            RehabColors.amber,
+                                          ),
+                                      ],
                                     ),
-                                    OutlinedButton.icon(
-                                      onPressed: () => _showTransferDialog(a),
-                                      icon: const Icon(
-                                        Icons.swap_horiz,
-                                        size: 16,
+                                    const SizedBox(height: 7),
+                                  ],
+                                  Row(
+                                    children: [
+                                      const Icon(
+                                        Icons.calendar_today,
+                                        size: 14,
+                                        color: Colors.grey,
                                       ),
-                                      label: const Text("Transfer"),
-                                      style: OutlinedButton.styleFrom(
-                                        foregroundColor: Colors.orange.shade800,
-                                        side: BorderSide(
-                                          color: Colors.orange.shade200,
-                                        ),
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 8,
+                                      const SizedBox(width: 4),
+                                      Text(
+                                        date,
+                                        style: GoogleFonts.readexPro(
+                                          fontSize: 14,
+                                          color: Colors.grey.shade700,
                                         ),
                                       ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Chip(
+                                  label: Text(
+                                    a['status'] ?? '',
+                                    style: TextStyle(
+                                      color: isScheduled
+                                          ? Colors.blue.shade900
+                                          : Colors.grey.shade700,
+                                      fontWeight: FontWeight.bold,
                                     ),
-                                    if (isToday) ...[
+                                  ),
+                                  backgroundColor: isScheduled
+                                      ? Colors.blue.shade50
+                                      : Colors.grey.shade200,
+                                  side: BorderSide.none,
+                                ),
+                                if (isScheduled) ...[
+                                  const SizedBox(height: 8),
+                                  Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    alignment: WrapAlignment.end,
+                                    children: [
                                       ElevatedButton.icon(
                                         onPressed: () =>
-                                            _showRecordSessionDialog(a),
+                                            TeleconferenceService.join(
+                                              context: context,
+                                              meetingRoom: a['meeting_room']
+                                                  ?.toString(),
+                                            ),
                                         icon: const Icon(
-                                          Icons.edit_document,
+                                          Icons.video_call_outlined,
                                           size: 16,
                                         ),
-                                        label: const Text("Record Session"),
+                                        label: const Text("Video Call"),
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: Colors.blue.shade800,
+                                          backgroundColor:
+                                              Colors.green.shade700,
                                           foregroundColor: Colors.white,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 10,
+                                          ),
+                                        ),
+                                      ),
+                                      OutlinedButton.icon(
+                                        onPressed: () => _showTransferDialog(a),
+                                        icon: const Icon(
+                                          Icons.swap_horiz,
+                                          size: 16,
+                                        ),
+                                        label: const Text("Transfer"),
+                                        style: OutlinedButton.styleFrom(
+                                          foregroundColor:
+                                              Colors.orange.shade800,
+                                          side: BorderSide(
+                                            color: Colors.orange.shade200,
+                                          ),
                                           padding: const EdgeInsets.symmetric(
                                             horizontal: 8,
                                           ),
                                         ),
                                       ),
+                                      if (isToday) ...[
+                                        ElevatedButton.icon(
+                                          onPressed: () =>
+                                              _showRecordSessionDialog(a),
+                                          icon: const Icon(
+                                            Icons.edit_document,
+                                            size: 16,
+                                          ),
+                                          label: const Text("Record Session"),
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor:
+                                                Colors.blue.shade800,
+                                            foregroundColor: Colors.white,
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 8,
+                                            ),
+                                          ),
+                                        ),
+                                      ],
                                     ],
-                                  ],
-                                ),
+                                  ),
+                                ],
                               ],
-                            ],
-                          ),
-                        ],
+                            ),
+                          ],
+                        ),
                       ),
                     ),
                   );

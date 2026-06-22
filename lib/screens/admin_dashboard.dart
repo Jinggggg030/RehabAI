@@ -11,6 +11,7 @@ import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:async';
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/widgets/portal_backdrop.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -873,155 +874,244 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: RehabColors.portalBackground,
-      body: Row(
-        children: [
-          Container(
-            width: 220,
-            decoration: const BoxDecoration(
-              color: Colors.white,
-              border: Border(right: BorderSide(color: RehabColors.border)),
-            ),
-            child: Column(
-              children: [
-                Container(
-                  height: 74,
-                  padding: const EdgeInsets.symmetric(horizontal: 18),
-                  decoration: const BoxDecoration(
-                    border: Border(
-                      bottom: BorderSide(color: RehabColors.border),
-                    ),
-                  ),
-                  child: const Row(
-                    children: [
-                      _AdminLogo(),
-                      SizedBox(width: 11),
-                      Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'RehabAI',
-                            style: TextStyle(
-                              fontSize: 15,
-                              fontWeight: FontWeight.w900,
-                            ),
-                          ),
-                          Text(
-                            'Admin Panel',
-                            style: TextStyle(
-                              fontSize: 10,
-                              color: RehabColors.admin,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+      body: PortalBackdrop(
+        accent: RehabColors.purple,
+        child: Row(
+          children: [
+            Container(
+              width: 236,
+              margin: const EdgeInsets.all(14),
+              clipBehavior: Clip.antiAlias,
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [Color(0xFF16142B), Color(0xFF40356F)],
                 ),
-                const SizedBox(height: 14),
-                _adminNavItem(
-                  0,
-                  Icons.assignment_turned_in_outlined,
-                  'Active Rentals',
-                ),
-                _adminNavItem(
-                  1,
-                  Icons.inventory_2_outlined,
-                  'Equipment Inventory',
-                ),
-                const Spacer(),
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: TextButton.icon(
-                    onPressed: () async {
-                      await _supabase.auth.signOut();
-                      if (mounted) {
-                        Navigator.of(context).pushReplacement(
-                          MaterialPageRoute(builder: (_) => const LoginPage()),
-                        );
-                      }
-                    },
-                    icon: const Icon(Icons.logout_rounded),
-                    label: const Text('Exit Portal'),
-                    style: TextButton.styleFrom(
-                      foregroundColor: RehabColors.danger,
-                      minimumSize: const Size(double.infinity, 46),
-                      alignment: Alignment.centerLeft,
-                    ),
+                borderRadius: BorderRadius.circular(28),
+                boxShadow: [
+                  BoxShadow(
+                    color: RehabColors.purple.withValues(alpha: 0.20),
+                    blurRadius: 28,
+                    offset: const Offset(0, 12),
                   ),
-                ),
-              ],
-            ),
-          ),
-          Expanded(
-            child: Column(
-              children: [
-                Container(
-                  height: 70,
-                  padding: const EdgeInsets.symmetric(horizontal: 24),
-                  decoration: const BoxDecoration(
-                    color: Colors.white,
-                    border: Border(
-                      bottom: BorderSide(color: RehabColors.border),
-                    ),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          _selectedIndex == 0
-                              ? 'Active Rentals'
-                              : 'Equipment Inventory',
-                          style: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w800,
-                          ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    height: 74,
+                    padding: const EdgeInsets.symmetric(horizontal: 18),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        bottom: BorderSide(
+                          color: Colors.white.withValues(alpha: 0.10),
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF3F0FF),
-                          borderRadius: BorderRadius.circular(13),
-                        ),
-                        child: const Row(
+                    ),
+                    child: const Row(
+                      children: [
+                        _AdminLogo(),
+                        SizedBox(width: 11),
+                        Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            CircleAvatar(
-                              radius: 12,
-                              backgroundColor: RehabColors.admin,
-                              child: Icon(
-                                Icons.admin_panel_settings,
-                                size: 14,
+                            Text(
+                              'RehabAI',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w900,
                                 color: Colors.white,
+                                letterSpacing: 0.3,
                               ),
                             ),
-                            SizedBox(width: 8),
                             Text(
-                              'Administrator',
+                              'Admin Panel',
                               style: TextStyle(
-                                fontSize: 12,
+                                fontSize: 10,
+                                color: Colors.white60,
                                 fontWeight: FontWeight.w700,
                               ),
                             ),
                           ],
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
-                ),
-                Expanded(
-                  child: _selectedIndex == 0
-                      ? _buildActiveRentals()
-                      : _buildInventory(),
-                ),
-              ],
+                  const SizedBox(height: 14),
+                  _adminNavItem(
+                    0,
+                    Icons.assignment_turned_in_outlined,
+                    'Active Rentals',
+                  ),
+                  _adminNavItem(
+                    1,
+                    Icons.inventory_2_outlined,
+                    'Equipment Inventory',
+                  ),
+                  const Spacer(),
+                  const PortalSystemStatus(label: 'Operations network online'),
+                  Padding(
+                    padding: const EdgeInsets.all(12),
+                    child: TextButton.icon(
+                      onPressed: () async {
+                        await _supabase.auth.signOut();
+                        if (mounted) {
+                          Navigator.of(context).pushReplacement(
+                            MaterialPageRoute(
+                              builder: (_) => const LoginPage(),
+                            ),
+                          );
+                        }
+                      },
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text('Exit Portal'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white70,
+                        backgroundColor: Colors.white.withValues(alpha: 0.08),
+                        minimumSize: const Size(double.infinity, 46),
+                        alignment: Alignment.centerLeft,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
-        ],
+            Expanded(
+              child: Column(
+                children: [
+                  Container(
+                    height: 82,
+                    margin: const EdgeInsets.fromLTRB(0, 14, 14, 0),
+                    padding: const EdgeInsets.symmetric(horizontal: 24),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: RehabColors.border),
+                      boxShadow: [
+                        BoxShadow(
+                          color: RehabColors.purple.withValues(alpha: 0.08),
+                          blurRadius: 22,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                _selectedIndex == 0
+                                    ? 'Rental Operations'
+                                    : 'Inventory Intelligence',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              const Row(
+                                children: [
+                                  Icon(
+                                    Icons.hub_outlined,
+                                    size: 12,
+                                    color: RehabColors.purple,
+                                  ),
+                                  SizedBox(width: 5),
+                                  Text(
+                                    'OPERATIONS COMMAND CENTER',
+                                    style: TextStyle(
+                                      fontSize: 9,
+                                      letterSpacing: 1.1,
+                                      color: RehabColors.subtle,
+                                      fontWeight: FontWeight.w700,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
+                        ),
+                        PortalMetric(
+                          icon: Icons.local_shipping_outlined,
+                          value:
+                              '${_rentals.where((r) => r['status'] == 'Approved' || r['status'] == 'Active').length}',
+                          label: 'ACTIVE RENTALS',
+                          accent: RehabColors.purple,
+                        ),
+                        const SizedBox(width: 8),
+                        PortalMetric(
+                          icon: Icons.inventory_2_outlined,
+                          value: '${_equipment.length}',
+                          label: 'ASSET TYPES',
+                          accent: RehabColors.cyan,
+                        ),
+                        const SizedBox(width: 10),
+                        IconButton.filledTonal(
+                          tooltip: 'Refresh data',
+                          onPressed: () {
+                            _fetchRentals();
+                            _fetchEquipment();
+                          },
+                          icon: const Icon(Icons.refresh_rounded),
+                        ),
+                        const SizedBox(width: 10),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 8,
+                          ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF3F0FF),
+                            borderRadius: BorderRadius.circular(13),
+                          ),
+                          child: const Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 12,
+                                backgroundColor: RehabColors.admin,
+                                child: Icon(
+                                  Icons.admin_panel_settings,
+                                  size: 14,
+                                  color: Colors.white,
+                                ),
+                              ),
+                              SizedBox(width: 8),
+                              Text(
+                                'Administrator',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(0, 14, 14, 14),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(24),
+                        child: ColoredBox(
+                          color: Colors.white,
+                          child: _selectedIndex == 0
+                              ? _buildActiveRentals()
+                              : _buildInventory(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -1031,7 +1121,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 0, 12, 5),
       child: Material(
-        color: selected ? const Color(0xFFF3F0FF) : Colors.transparent,
+        color: selected
+            ? Colors.white.withValues(alpha: 0.14)
+            : Colors.transparent,
         borderRadius: BorderRadius.circular(13),
         child: ListTile(
           dense: true,
@@ -1040,13 +1132,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
           ),
           leading: Icon(
             icon,
-            color: selected ? RehabColors.admin : RehabColors.muted,
+            color: selected ? const Color(0xFFC4B5FD) : Colors.white54,
             size: 19,
           ),
           title: Text(
             label,
             style: TextStyle(
-              color: selected ? RehabColors.admin : RehabColors.muted,
+              color: selected ? Colors.white : Colors.white60,
               fontSize: 12,
               fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
             ),
@@ -1067,8 +1159,16 @@ class _AdminLogo extends StatelessWidget {
       width: 36,
       height: 36,
       decoration: BoxDecoration(
-        color: RehabColors.admin,
+        gradient: const LinearGradient(
+          colors: [Color(0xFF8B5CF6), Color(0xFF22D3EE)],
+        ),
         borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: RehabColors.purple.withValues(alpha: 0.35),
+            blurRadius: 14,
+          ),
+        ],
       ),
       child: const Icon(
         Icons.health_and_safety_rounded,

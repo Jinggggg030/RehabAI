@@ -1518,6 +1518,15 @@ def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
     result = []
     for appt, username, matric_no in appointments:
         meeting_room = ensure_meeting_room(appt)
+        assessment_chat = db.query(models.LiveChatSession).filter(
+            models.LiveChatSession.consultation_appointment_id == appt.appointment_id
+        ).order_by(models.LiveChatSession.created_at.desc()).first()
+        if assessment_chat is None:
+            assessment_chat = db.query(models.LiveChatSession).filter(
+                models.LiveChatSession.student_id == appt.student_id,
+                models.LiveChatSession.therapist_id == physio_id,
+                models.LiveChatSession.created_at <= appt.schedule_time
+            ).order_by(models.LiveChatSession.created_at.desc()).first()
         result.append({
             "appointment_id": appt.appointment_id,
             "student_id": appt.student_id,
@@ -1526,6 +1535,11 @@ def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
             "schedule_time": appt.schedule_time,
             "status": appt.status,
             "evaluation": appt.evaluation,
+            "prescription": appt.prescription,
+            "assessment_subject": assessment_chat.subject if assessment_chat else None,
+            "assessment_discipline": assessment_chat.discipline if assessment_chat else None,
+            "triage_data": assessment_chat.triage_data if assessment_chat else None,
+            "chat_session_id": assessment_chat.session_id if assessment_chat else None,
             "meeting_room": meeting_room
         })
     db.commit()
