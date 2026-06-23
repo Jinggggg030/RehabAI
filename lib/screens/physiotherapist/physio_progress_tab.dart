@@ -334,45 +334,48 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
           ),
         ),
         const SizedBox(width: 12),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 12),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: Colors.grey.shade300),
-          ),
-          child: DropdownButtonHideUnderline(
-            child: DropdownButton<int>(
-              value: _selectedAppointmentId,
-              icon: const Icon(Icons.arrow_drop_down, color: Colors.blue),
-              style: const TextStyle(color: Colors.black87, fontSize: 14),
-              onChanged: (int? newValue) {
-                if (newValue != null) {
-                  setState(() {
-                    _selectedAppointmentId = newValue;
-                  });
-                }
-              },
-              items: appointments.map<DropdownMenuItem<int>>((dynamic appt) {
-                final dateStr = appt['date']?.toString();
-                String label = 'Unknown Date';
-                if (dateStr != null) {
-                  try {
-                    final dt = DateTime.parse(dateStr);
-                    label = DateFormat('MMM d, yyyy').format(dt);
-                  } catch (_) {}
-                }
-                final triage = appt['triage_data'] as Map?;
-                if (triage != null && triage['pain_area'] != null) {
-                  final area = triage['pain_area'].toString().trim();
-                  if (area.isNotEmpty) label = '$area ($label)';
-                }
-                if (appointments.indexOf(appt) == 0) label += ' (Active)';
-                return DropdownMenuItem<int>(
-                  value: appt['appointment_id'] as int,
-                  child: Text(label),
-                );
-              }).toList(),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                isExpanded: true,
+                value: _selectedAppointmentId,
+                icon: const Icon(Icons.arrow_drop_down, color: Colors.blue),
+                style: const TextStyle(color: Colors.black87, fontSize: 14),
+                onChanged: (int? newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      _selectedAppointmentId = newValue;
+                    });
+                  }
+                },
+                items: appointments.map<DropdownMenuItem<int>>((dynamic appt) {
+                  final dateStr = appt['date']?.toString();
+                  String label = 'Unknown Date';
+                  if (dateStr != null) {
+                    try {
+                      final dt = DateTime.parse(dateStr);
+                      label = DateFormat('MMM d, yyyy').format(dt);
+                    } catch (_) {}
+                  }
+                  final triage = appt['triage_data'] as Map?;
+                  if (triage != null && triage['pain_area'] != null) {
+                    final area = triage['pain_area'].toString().trim();
+                    if (area.isNotEmpty) label = '$area ($label)';
+                  }
+                  if (appointments.indexOf(appt) == 0) label += ' (Active)';
+                  return DropdownMenuItem<int>(
+                    value: appt['appointment_id'] as int,
+                    child: Text(label),
+                  );
+                }).toList(),
+              ),
             ),
           ),
         ),
@@ -536,7 +539,7 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
         physics: const NeverScrollableScrollPhysics(),
         mainAxisSpacing: 12,
         crossAxisSpacing: 12,
-        childAspectRatio: constraints.maxWidth < 700 ? 1.8 : 1.65,
+        childAspectRatio: constraints.maxWidth < 700 ? 1.4 : 1.3,
         children: cards,
       ),
     );
@@ -763,21 +766,28 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
                     session['exercise_name']?.toString() ?? 'Exercise',
                     style: const TextStyle(fontWeight: FontWeight.w600),
                   ),
-                  subtitle: Text(
-                    date == null
-                        ? 'Date unavailable'
-                        : DateFormat('MMM dd, yyyy • hh:mm a').format(date),
-                  ),
-                  trailing: Wrap(
-                    spacing: 8,
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      _SourceChip(source),
-                      if (accuracy != null)
-                        _OutcomeChip(
-                          '${accuracy.toStringAsFixed(0)}% accuracy',
-                        ),
-                      if (painBefore != null && painAfter != null)
-                        _OutcomeChip('Pain $painBefore → $painAfter'),
+                      Text(
+                        date == null
+                            ? 'Date unavailable'
+                            : DateFormat('MMM dd, yyyy • hh:mm a').format(date),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          _SourceChip(source),
+                          if (accuracy != null)
+                            _OutcomeChip(
+                              '${accuracy.toStringAsFixed(0)}% accuracy',
+                            ),
+                          if (painBefore != null && painAfter != null)
+                            _OutcomeChip('Pain $painBefore → $painAfter'),
+                        ],
+                      ),
                     ],
                   ),
                 );

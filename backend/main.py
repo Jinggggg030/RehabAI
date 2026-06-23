@@ -1559,7 +1559,6 @@ def get_physio_patient_progress(
             "completed_reps": session.completed_reps,
             "duration_seconds": session.duration_seconds,
             "completed_sets": session.completed_sets,
-            "planned_sets": session.planned_sets,
             "accuracy_score": session.accuracy_score,
             "pain_before": session.pain_before,
             "pain_after": session.pain_after
@@ -2186,3 +2185,308 @@ def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
     db.commit()
     db.refresh(new_log)
     return {"status": "success", "session_id": new_log.schedule_id}
+
+
+@app.get("/students/{student_id}/progress")
+def get_student_progress(
+    student_id: int,
+    db: Session = Depends(get_db)
+):
+    student = db.query(models.User).filter(models.User.user_id == student_id).first()
+    if not student:
+        raise HTTPException(status_code=404, detail="Student not found")
+
+    # Fetch all appointments for this student
+    appointments = db.query(models.Appointment).filter(
+        models.Appointment.student_id == student_id
+    ).order_by(models.Appointment.schedule_time.desc()).all()
+
+    appointments_data = []
+    exercise_assignments = {} # For all exercises
+    
+    sessions = db.query(models.SessionLog).filter(
+        models.SessionLog.student_id == student_id,
+        models.SessionLog.status == "Completed"
+    ).order_by(models.SessionLog.completion_date.desc()).all()
+
+    session_exercise_ids = {session.exercise_id for session in sessions}
+    exercise_catalog = {
+        exercise.exercise_id: exercise.name
+        for exercise in db.query(models.Exercise).filter(
+            models.Exercise.exercise_id.in_(session_exercise_ids)
+        ).all()
+    } if session_exercise_ids else {}
+    
+    from datetime import datetime, timedelta
+
+    for i, appt in enumerate(appointments):
+        prescribed_rows = db.query(models.PrescribedExercise, models.Exercise).join(
+            models.Exercise, models.PrescribedExercise.exercise_id == models.Exercise.exercise_id
+        ).filter(models.PrescribedExercise.appointment_id == appt.appointment_id).all()
+        
+        appt_exercises = []
+        appt_assigned_exercise_ids = set()
+        for prescribed, exercise in prescribed_rows:
+            ex_data = {
+                "exercise_id": exercise.exercise_id,
+                "name": exercise.name,
+                "assigned_sets": prescribed.assigned_sets,
+                "assigned_duration": prescribed.assigned_duration,
+                "assigned_reps": prescribed.assigned_reps,
+                "assigned_days": prescribed.assigned_days,
+                "assigned_tracking_mode": prescribed.assigned_tracking_mode,
+                "evaluation": prescribed.evaluation
+            }
+            appt_exercises.append(ex_data)
+            appt_assigned_exercise_ids.add(exercise.exercise_id)
+            exercise_assignments[exercise.exercise_id] = ex_data
+            
+        chat_session = db.query(models.LiveChatSession).filter(
+            models.LiveChatSession.consultation_appointment_id == appt.appointment_id
+        ).first()
+        triage_data = chat_session.triage_data if chat_session else None
+
+        # Determine time window for this appointment
+        start_time = appt.schedule_time
+        end_time = appointments[i-1].schedule_time if i > 0 else None
+
+        appt_sessions = []
+        for s in sessions:
+            if not s.completion_date: continue
+            if start_time and s.completion_date < start_time: continue
+            if end_time and s.completion_date >= end_time: continue
+            if s.exercise_id in appt_assigned_exercise_ids:
+                appt_sessions.append(s)
+
+        total_seconds = sum(s.duration_seconds or 0 for s in appt_sessions)
+        accuracy_values = [s.accuracy_score for s in appt_sessions if s.accuracy_score is not None]
+        pain_changes = [s.pain_before - s.pain_after for s in appt_sessions if s.pain_before is not None and s.pain_after is not None]
+        
+        session_days = sorted({s.completion_date.date() for s in appt_sessions}, reverse=True)
+        streak = 0
+        if session_days:
+            streak = 1
+            expected = session_days[0]
+            for day in session_days[1:]:
+                expected = expected - timedelta(days=1)
+                if day == expected:
+                    streak += 1
+                elif day < expected:
+                    break
+
+        appt_summary = {
+            "total_sessions": len(appt_sessions),
+            "total_duration_minutes": total_seconds // 60,
+            "average_accuracy": sum(accuracy_values) / len(accuracy_values) if accuracy_values else None,
+            "average_pain_change": sum(pain_changes) / len(pain_changes) if pain_changes else None,
+            "activity_streak": streak
+        }
+
+        reference_date = end_time.date() if end_time else datetime.utcnow().date()
+        appt_weekly = []
+        for days_ago in range(6, -1, -1):
+            day = reference_date - timedelta(days=days_ago)
+            day_sessions = [s for s in appt_sessions if s.completion_date.date() == day]
+            appt_weekly.append({
+                "date": day.isoformat(),
+                "session_count": len(day_sessions),
+                "duration_seconds": sum(s.duration_seconds or 0 for s in day_sessions)
+            })
+            
+        appt_recent = []
+        for s in appt_sessions[:20]:
+            ex_info = next((e for e in appt_exercises if e['exercise_id'] == s.exercise_id), {})
+            appt_recent.append({
+                "session_id": s.schedule_id,
+                "exercise_id": s.exercise_id,
+                "exercise_name": ex_info.get("name", exercise_catalog.get(s.exercise_id, "Exercise")),
+                "source": "Assigned",
+                "completion_date": s.completion_date.isoformat(),
+                "completed_reps": s.completed_reps,
+                "duration_seconds": s.duration_seconds,
+                "completed_sets": s.completed_sets,
+                "accuracy_score": s.accuracy_score,
+                "pain_before": s.pain_before,
+                "pain_after": s.pain_after
+            })
+
+        appointments_data.append({
+            "appointment_id": appt.appointment_id,
+            "date": appt.schedule_time.isoformat() if appt.schedule_time else None,
+            "status": appt.status,
+            "prescription": appt.prescription,
+            "assigned_exercises": appt_exercises,
+            "triage_data": triage_data,
+            "summary": appt_summary,
+            "weekly_activity": appt_weekly,
+            "recent_sessions": appt_recent
+        })
+
+    exercise_ids = set(exercise_assignments.keys())
+
+    def session_origin(session):
+        if session.session_origin in {"Assigned", "Self-selected"}:
+            return session.session_origin
+        assignment = exercise_assignments.get(session.exercise_id)
+        if assignment is None:
+            return "Self-selected"
+        if (
+            session.planned_sets is not None
+            and assignment["assigned_sets"] is not None
+            and session.planned_sets != assignment["assigned_sets"]
+        ):
+            return "Self-selected"
+        return "Assigned"
+
+    assigned_sessions = [
+        session for session in sessions if session_origin(session) == "Assigned"
+    ]
+    self_selected_sessions = [
+        session for session in sessions if session_origin(session) == "Self-selected"
+    ]
+
+    total_seconds = sum(session.duration_seconds or 0 for session in sessions)
+    accuracy_values = [
+        session.accuracy_score for session in sessions
+        if session.accuracy_score is not None
+    ]
+    pain_changes = [
+        session.pain_before - session.pain_after for session in sessions
+        if session.pain_before is not None and session.pain_after is not None
+    ]
+
+    session_days = sorted({
+        session.completion_date.date() for session in sessions
+        if session.completion_date is not None
+    }, reverse=True)
+    streak = 0
+    if session_days:
+        streak = 1
+        expected = session_days[0]
+        from datetime import timedelta
+        for day in session_days[1:]:
+            expected = expected - timedelta(days=1)
+            if day == expected:
+                streak += 1
+            elif day < expected:
+                break
+
+    per_exercise = []
+    for exercise_id, assignment in exercise_assignments.items():
+        exercise_sessions = [
+            session for session in assigned_sessions
+            if session.exercise_id == exercise_id
+        ]
+        exercise_accuracy = [
+            session.accuracy_score for session in exercise_sessions
+            if session.accuracy_score is not None
+        ]
+        latest = exercise_sessions[0] if exercise_sessions else None
+        per_exercise.append({
+            **assignment,
+            "source": "Assigned",
+            "session_count": len(exercise_sessions),
+            "total_duration_seconds": sum(
+                session.duration_seconds or 0 for session in exercise_sessions
+            ),
+            "average_accuracy": (
+                sum(exercise_accuracy) / len(exercise_accuracy)
+                if exercise_accuracy else None
+            ),
+            "last_completed": (
+                latest.completion_date.isoformat()
+                if latest and latest.completion_date else None
+            )
+        })
+
+    for exercise_id in sorted({
+        session.exercise_id for session in self_selected_sessions
+    }):
+        exercise_sessions = [
+            session for session in self_selected_sessions
+            if session.exercise_id == exercise_id
+        ]
+        exercise_accuracy = [
+            session.accuracy_score for session in exercise_sessions
+            if session.accuracy_score is not None
+        ]
+        latest = exercise_sessions[0]
+        per_exercise.append({
+            "exercise_id": exercise_id,
+            "name": exercise_catalog.get(exercise_id, "Exercise"),
+            "source": "Self-selected",
+            "assigned_sets": None,
+            "assigned_duration": None,
+            "evaluation": None,
+            "session_count": len(exercise_sessions),
+            "total_duration_seconds": sum(
+                session.duration_seconds or 0 for session in exercise_sessions
+            ),
+            "average_accuracy": (
+                sum(exercise_accuracy) / len(exercise_accuracy)
+                if exercise_accuracy else None
+            ),
+            "last_completed": (
+                latest.completion_date.isoformat()
+                if latest.completion_date else None
+            )
+        })
+
+    today = datetime.utcnow().date()
+    weekly_activity = []
+    for days_ago in range(6, -1, -1):
+        day = today - timedelta(days=days_ago)
+        day_sessions = [
+            session for session in sessions
+            if session.completion_date and session.completion_date.date() == day
+        ]
+        weekly_activity.append({
+            "date": day.isoformat(),
+            "session_count": len(day_sessions),
+            "duration_seconds": sum(
+                session.duration_seconds or 0 for session in day_sessions
+            )
+        })
+
+    recent_sessions = []
+    for session in sessions[:20]:
+        exercise = exercise_assignments.get(session.exercise_id, {})
+        recent_sessions.append({
+            "session_id": session.schedule_id,
+            "exercise_id": session.exercise_id,
+            "exercise_name": exercise.get(
+                "name", exercise_catalog.get(session.exercise_id, "Exercise")
+            ),
+            "source": session_origin(session),
+            "completion_date": (
+                session.completion_date.isoformat()
+                if session.completion_date else None
+            ),
+            "completed_reps": session.completed_reps,
+            "duration_seconds": session.duration_seconds,
+            "completed_sets": session.completed_sets,
+            "accuracy_score": session.accuracy_score,
+            "pain_before": session.pain_before,
+            "pain_after": session.pain_after
+        })
+
+    student_record = db.query(models.Student).filter(models.Student.student_id == student.user_id).first()
+
+    return {
+        "patient": {
+            "student_id": student.user_id,
+            "student_name": student.username,
+            "profile_picture": student_record.profile_picture if student_record else None,
+        },
+        "appointments": appointments_data,
+        "summary": {
+            "total_sessions": len(sessions),
+            "total_duration_minutes": total_seconds // 60,
+            "average_accuracy": sum(accuracy_values) / len(accuracy_values) if accuracy_values else None,
+            "average_pain_change": sum(pain_changes) / len(pain_changes) if pain_changes else None,
+            "activity_streak": streak
+        },
+        "exercises": per_exercise,
+        "recent_sessions": recent_sessions,
+        "weekly_activity": weekly_activity
+    }

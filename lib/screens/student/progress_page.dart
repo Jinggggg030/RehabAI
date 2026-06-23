@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
@@ -9,8 +8,6 @@ import 'package:intl/intl.dart';
 import 'package:rehab_ai/widgets/notification_bell.dart';
 import 'package:rehab_ai/utils/current_user_id.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
-
-enum _ProgressRange { sevenDays, thirtyDays, allTime }
 
 class ProgressPage extends StatefulWidget {
   const ProgressPage({super.key});
@@ -24,8 +21,8 @@ class _ProgressPageState extends State<ProgressPage> {
       ? 'http://127.0.0.1:8000'
       : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
 
-  List<Map<String, dynamic>> _sessions = [];
-  _ProgressRange _selectedRange = _ProgressRange.thirtyDays;
+  Map<String, dynamic>? _progress;
+  int? _selectedAppointmentId;
   bool _isLoading = true;
   String? _errorMessage;
 
@@ -46,135 +43,31 @@ class _ProgressPageState extends State<ProgressPage> {
     try {
       final studentId = await getCurrentBackendUserId();
       final response = await http.get(
-        Uri.parse('$_apiUrl/students/$studentId/completed_exercises'),
+        Uri.parse('$_apiUrl/students/$studentId/progress'),
       );
       if (response.statusCode != 200) {
         throw Exception('Server returned ${response.statusCode}');
       }
 
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      final items = decoded['completed_exercises'] as List<dynamic>? ?? [];
-      final sessions =
-          items
-              .whereType<Map>()
-              .map((item) => Map<String, dynamic>.from(item))
-              .toList()
-            ..sort((a, b) {
-              final aDate =
-                  _sessionDate(a) ?? DateTime.fromMillisecondsSinceEpoch(0);
-              final bDate =
-                  _sessionDate(b) ?? DateTime.fromMillisecondsSinceEpoch(0);
-              return bDate.compareTo(aDate);
-            });
-
+      
       if (!mounted) return;
       setState(() {
-        _sessions = sessions;
+        _progress = decoded;
+        final appointments = decoded['appointments'] as List<dynamic>? ?? [];
+        if (appointments.isNotEmpty && _selectedAppointmentId == null) {
+          _selectedAppointmentId = appointments.first['appointment_id'] as int?;
+        }
         _isLoading = false;
       });
     } catch (error) {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage =
-            'Unable to load progress. Check the backend connection.';
+        _errorMessage = 'Unable to load progress. Check the backend connection.';
       });
       debugPrint('Progress loading error: $error');
     }
-  }
-
-  List<Map<String, dynamic>> get _filteredSessions {
-    final cutoff = switch (_selectedRange) {
-      _ProgressRange.sevenDays => DateTime.now().subtract(
-        const Duration(days: 7),
-      ),
-      _ProgressRange.thirtyDays => DateTime.now().subtract(
-        const Duration(days: 30),
-      ),
-      _ProgressRange.allTime => null,
-    };
-    if (cutoff == null) return _sessions;
-    return _sessions.where((session) {
-      final date = _sessionDate(session);
-      return date != null && !date.isBefore(cutoff);
-    }).toList();
-  }
-
-  int get _totalSeconds => _filteredSessions.fold(
-    0,
-    (total, session) =>
-        total + ((session['duration_seconds'] as num?)?.toInt() ?? 0),
-  );
-
-  double? get _averageAccuracy {
-    final values = _filteredSessions
-        .map((session) => (session['accuracy_score'] as num?)?.toDouble())
-        .whereType<double>()
-        .toList();
-    if (values.isEmpty) return null;
-    return values.reduce((a, b) => a + b) / values.length;
-  }
-
-  double? get _averagePainChange {
-    final changes = <double>[];
-    for (final session in _filteredSessions) {
-      final before = (session['pain_before'] as num?)?.toDouble();
-      final after = (session['pain_after'] as num?)?.toDouble();
-      if (before != null && after != null) changes.add(before - after);
-    }
-    if (changes.isEmpty) return null;
-    return changes.reduce((a, b) => a + b) / changes.length;
-  }
-
-  int get _currentStreak {
-    final days =
-        _sessions
-            .map(_sessionDate)
-            .whereType<DateTime>()
-            .map((date) => DateTime(date.year, date.month, date.day))
-            .toSet()
-            .toList()
-          ..sort((a, b) => b.compareTo(a));
-    if (days.isEmpty) return 0;
-
-    var streak = 1;
-    var expected = days.first.subtract(const Duration(days: 1));
-    for (final day in days.skip(1)) {
-      if (day == expected) {
-        streak++;
-        expected = expected.subtract(const Duration(days: 1));
-      } else if (day.isBefore(expected)) {
-        break;
-      }
-    }
-    return streak;
-  }
-
-  List<_DailyActivity> get _lastSevenDays {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    return List.generate(7, (index) {
-      final day = today.subtract(Duration(days: 6 - index));
-      final seconds = _sessions
-          .where((session) {
-            final date = _sessionDate(session);
-            return date != null &&
-                date.year == day.year &&
-                date.month == day.month &&
-                date.day == day.day;
-          })
-          .fold<int>(
-            0,
-            (total, session) =>
-                total + ((session['duration_seconds'] as num?)?.toInt() ?? 0),
-          );
-      return _DailyActivity(day: day, minutes: seconds / 60);
-    });
-  }
-
-  DateTime? _sessionDate(Map<String, dynamic> session) {
-    final value = session['completion_date']?.toString();
-    return value == null ? null : DateTime.tryParse(value)?.toLocal();
   }
 
   @override
@@ -204,19 +97,9 @@ class _ProgressPageState extends State<ProgressPage> {
                       )
                     else if (_errorMessage != null)
                       _buildErrorState()
-                    else if (_sessions.isEmpty)
-                      _buildEmptyState()
-                    else ...[
-                      _buildRangeSelector(),
-                      const SizedBox(height: 20),
-                      _buildStatsGrid(),
-                      const SizedBox(height: 20),
-                      _buildInsightCard(),
-                      const SizedBox(height: 20),
-                      _buildActivityChart(),
-                      const SizedBox(height: 28),
-                      _buildRecentSessions(),
-                    ],
+                    else if (_progress == null)
+                       const Center(child: Text('No progress data.'))
+                    else ..._buildContent(),
                   ]),
                 ),
               ),
@@ -227,10 +110,31 @@ class _ProgressPageState extends State<ProgressPage> {
     );
   }
 
+  List<Widget> _buildContent() {
+    final progress = _progress!;
+    final appointments = progress['appointments'] as List<dynamic>? ?? [];
+    final selectedAppt = appointments.firstWhere(
+      (dynamic appt) => appt['appointment_id'] == _selectedAppointmentId,
+      orElse: () => appointments.isNotEmpty ? appointments.first : null,
+    ) as Map<String, dynamic>?;
+
+    return [
+      _buildTimelineSelector(progress),
+      const SizedBox(height: 22),
+      _buildSummaryCards(selectedAppt),
+      const SizedBox(height: 22),
+      _buildPainInsight(selectedAppt),
+      const SizedBox(height: 22),
+      _buildWeeklyActivity(selectedAppt),
+      const SizedBox(height: 22),
+      _buildExercisePerformance(progress),
+      const SizedBox(height: 22),
+      _buildRecentSessions(selectedAppt),
+    ];
+  }
+
   Widget _buildHeader() {
-    final completion = _sessions.isEmpty
-        ? 0.0
-        : (_filteredSessions.length / _sessions.length).clamp(0.0, 1.0);
+    final patient = _progress?['patient'] as Map?;
     return Container(
       height: 215,
       padding: const EdgeInsets.fromLTRB(24, 52, 20, 24),
@@ -293,50 +197,30 @@ class _ProgressPageState extends State<ProgressPage> {
                 ],
               ),
               const Spacer(),
-              Container(
-                padding: const EdgeInsets.all(13),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.11),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white24),
-                ),
-                child: Column(
-                  children: [
-                    Row(
-                      children: [
-                        const Expanded(
-                          child: Text(
-                            'Sessions in selected period',
-                            style: TextStyle(
-                              color: Colors.white70,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          '${(completion * 100).round()}%',
+              if (patient != null)
+                Container(
+                  padding: const EdgeInsets.all(13),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withValues(alpha: 0.11),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.verified_user, color: Colors.white),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Tracking active progress for ${patient['student_name'] ?? 'you'}',
                           style: const TextStyle(
-                            color: Color(0xFF4ADE80),
-                            fontWeight: FontWeight.w900,
+                            color: Colors.white,
+                            fontSize: 13,
                           ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: LinearProgressIndicator(
-                        value: completion,
-                        minHeight: 8,
-                        backgroundColor: Colors.white12,
-                        valueColor: const AlwaysStoppedAnimation(
-                          Color(0xFF4ADE80),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
             ],
           ),
         ],
@@ -344,368 +228,409 @@ class _ProgressPageState extends State<ProgressPage> {
     );
   }
 
-  Widget _buildRangeSelector() {
-    return SegmentedButton<_ProgressRange>(
-      segments: const [
-        ButtonSegment(value: _ProgressRange.sevenDays, label: Text('7 Days')),
-        ButtonSegment(value: _ProgressRange.thirtyDays, label: Text('30 Days')),
-        ButtonSegment(value: _ProgressRange.allTime, label: Text('All Time')),
-      ],
-      selected: {_selectedRange},
-      showSelectedIcon: false,
-      style: ButtonStyle(
-        visualDensity: VisualDensity.compact,
-        backgroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected)
-              ? const Color(0xFF1565C0)
-              : context.rehabSurface,
-        ),
-        foregroundColor: WidgetStateProperty.resolveWith(
-          (states) => states.contains(WidgetState.selected)
-              ? Colors.white
-              : Theme.of(context).colorScheme.onSurface,
-        ),
-      ),
-      onSelectionChanged: (selection) {
-        setState(() => _selectedRange = selection.first);
-      },
-    );
-  }
-
-  Widget _buildStatsGrid() {
-    final painChange = _averagePainChange;
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.45,
-      children: [
-        _StatCard(
-          label: 'Sessions',
-          value: '${_filteredSessions.length}',
-          icon: Icons.check_circle_outline,
-          color: const Color(0xFF1565C0),
-        ),
-        _StatCard(
-          label: 'Active Minutes',
-          value: (_totalSeconds / 60).toStringAsFixed(1),
-          icon: Icons.timer_outlined,
-          color: const Color(0xFF5267C9),
-        ),
-        _StatCard(
-          label: 'AI Accuracy',
-          value: _averageAccuracy == null
-              ? '—'
-              : '${_averageAccuracy!.toStringAsFixed(0)}%',
-          icon: Icons.auto_awesome,
-          color: const Color(0xFFE29A24),
-        ),
-        _StatCard(
-          label: 'Pain Change',
-          value: painChange == null
-              ? '—'
-              : '${painChange >= 0 ? '↓' : '↑'}${painChange.abs().toStringAsFixed(1)}',
-          icon: Icons.monitor_heart_outlined,
-          color: painChange == null || painChange >= 0
-              ? const Color(0xFF3B8C6E)
-              : const Color(0xFFC75151),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildInsightCard() {
-    final painChange = _averagePainChange;
-    final message = painChange == null
-        ? 'Complete pain ratings before and after sessions to unlock your pain trend.'
-        : painChange > 0
-        ? 'Your pain is ${painChange.toStringAsFixed(1)} points lower after sessions on average.'
-        : painChange < 0
-        ? 'Pain is ${painChange.abs().toStringAsFixed(1)} points higher after sessions. Consider discussing this with your physiotherapist.'
-        : 'Your pain level is unchanged immediately after sessions.';
-
+  Widget _buildErrorState() {
     return Container(
-      padding: const EdgeInsets.all(18),
+      padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF1565C0), Color(0xFF2C9A82)],
-        ),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Row(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.18),
-              shape: BoxShape.circle,
-            ),
-            child: const Icon(Icons.insights, color: Colors.white),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '$_currentStreak day activity streak',
-                  style: GoogleFonts.readexPro(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 15,
-                  ),
-                ),
-                const SizedBox(height: 5),
-                Text(
-                  message,
-                  style: GoogleFonts.readexPro(
-                    color: Colors.white.withValues(alpha: 0.9),
-                    fontSize: 12,
-                    height: 1.35,
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildActivityChart() {
-    return Container(
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: context.rehabSurface,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
+        color: Colors.red.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: Colors.red.withValues(alpha: 0.1)),
       ),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Icon(Icons.error_outline, size: 48, color: Colors.red[300]),
+          const SizedBox(height: 16),
           Text(
-            'Activity — Last 7 Days',
-            style: GoogleFonts.readexPro(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
+            _errorMessage!,
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.red[700]),
+          ),
+          const SizedBox(height: 24),
+          OutlinedButton.icon(
+            onPressed: _fetchProgress,
+            icon: const Icon(Icons.refresh),
+            label: const Text('Try Again'),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: Colors.red[700],
+              side: BorderSide(color: Colors.red.withValues(alpha: 0.2)),
             ),
           ),
-          const SizedBox(height: 4),
-          Text(
-            'Active exercise minutes',
-            style: GoogleFonts.readexPro(
-              fontSize: 12,
-              color: context.rehabMuted,
-            ),
-          ),
-          const SizedBox(height: 20),
-          _ActivityBars(days: _lastSevenDays),
         ],
       ),
     );
   }
 
-  Widget _buildRecentSessions() {
-    final sessions = _filteredSessions.take(8).toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+  Widget _buildTimelineSelector(Map<String, dynamic> progress) {
+    final appointments = progress['appointments'] as List<dynamic>? ?? [];
+    if (appointments.isEmpty) return const SizedBox.shrink();
+
+    return Row(
       children: [
         Text(
-          'Recent Sessions',
+          'Treatment Plan History:',
           style: GoogleFonts.readexPro(
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: Theme.of(context).colorScheme.onSurface,
+            color: Colors.blue.shade900,
           ),
         ),
-        const SizedBox(height: 12),
-        if (sessions.isEmpty)
-          _buildNoSessionsInRange()
-        else
-          ...sessions.map(_buildSessionCard),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey.shade300),
+            ),
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<int>(
+                isExpanded: true,
+                value: _selectedAppointmentId,
+                icon: const Icon(Icons.arrow_drop_down, color: Colors.blue),
+                style: const TextStyle(color: Colors.black87, fontSize: 14),
+                onChanged: (int? newValue) {
+                  if (newValue != null) {
+                    setState(() {
+                      _selectedAppointmentId = newValue;
+                    });
+                  }
+                },
+                items: appointments.map<DropdownMenuItem<int>>((dynamic appt) {
+                  final dateStr = appt['date']?.toString();
+                  String label = 'Unknown Date';
+                  if (dateStr != null) {
+                    try {
+                      final dt = DateTime.parse(dateStr);
+                      label = DateFormat('MMM d, yyyy').format(dt);
+                    } catch (_) {}
+                  }
+                  final triage = appt['triage_data'] as Map?;
+                  if (triage != null && triage['pain_area'] != null) {
+                    final area = triage['pain_area'].toString().trim();
+                    if (area.isNotEmpty) label = '$area ($label)';
+                  }
+                  if (appointments.indexOf(appt) == 0) label += ' (Active)';
+                  return DropdownMenuItem<int>(
+                    value: appt['appointment_id'] as int,
+                    child: Text(label),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
-
-  Widget _buildSessionCard(Map<String, dynamic> session) {
-    final date = _sessionDate(session);
-    final seconds = (session['duration_seconds'] as num?)?.toInt();
-    final reps = (session['completed_reps'] as num?)?.toInt();
-    final sets = (session['completed_sets'] as num?)?.toInt();
-    final accuracy = (session['accuracy_score'] as num?)?.toDouble();
-    final painBefore = (session['pain_before'] as num?)?.toInt();
-    final painAfter = (session['pain_after'] as num?)?.toInt();
-
+  
+  Widget _buildSummaryCards(Map<String, dynamic>? selectedAppt) {
+    if (selectedAppt == null || selectedAppt['summary'] == null) return const SizedBox.shrink();
+    final summary = Map<String, dynamic>.from(selectedAppt['summary'] as Map);
+    final accuracy = (summary['average_accuracy'] as num?)?.toDouble();
+    final pain = (summary['average_pain_change'] as num?)?.toDouble();
+    final seconds = (summary['total_duration_minutes'] as num?)?.toInt() ?? 0;
+    final cards = [
+      _AnalysisCard(
+        label: 'Completed Sessions',
+        value: '${summary['total_sessions'] ?? 0}',
+        icon: Icons.check_circle_outline,
+        color: Colors.blue,
+      ),
+      _AnalysisCard(
+        label: 'Active Minutes',
+        value: seconds.toString(),
+        icon: Icons.timer_outlined,
+        color: Colors.indigo,
+      ),
+      _AnalysisCard(
+        label: 'Average Accuracy',
+        value: accuracy == null ? '—' : '${accuracy.toStringAsFixed(0)}%',
+        icon: Icons.auto_awesome,
+        color: Colors.orange,
+      ),
+      _AnalysisCard(
+        label: 'Pain Change',
+        value: pain == null
+            ? '—'
+            : '${pain >= 0 ? '↓' : '↑'}${pain.abs().toStringAsFixed(1)}',
+        icon: Icons.monitor_heart_outlined,
+        color: pain == null || pain >= 0 ? Colors.green : Colors.red,
+      ),
+    ];
+    return LayoutBuilder(
+      builder: (context, constraints) => GridView.count(
+        crossAxisCount: constraints.maxWidth < 700 ? 2 : 4,
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        mainAxisSpacing: 12,
+        crossAxisSpacing: 12,
+        childAspectRatio: constraints.maxWidth < 700 ? 1.4 : 1.3,
+        children: cards,
+      ),
+    );
+  }
+  
+  Widget _buildPainInsight(Map<String, dynamic>? selectedAppt) {
+    if (selectedAppt == null || selectedAppt['summary'] == null) return const SizedBox.shrink();
+    final summary = Map<String, dynamic>.from(selectedAppt['summary'] as Map);
+    final pain = (summary['average_pain_change'] as num?)?.toDouble();
+    final streak = (summary['activity_streak'] as num?)?.toInt() ?? 0;
+    final text = pain == null
+        ? 'Not enough paired pain ratings to calculate a trend.'
+        : pain >= 0
+        ? 'Pain decreases by ${pain.toStringAsFixed(1)} points after exercise on average.'
+        : 'Pain increases by ${pain.abs().toStringAsFixed(1)} points after exercise on average. Review exercise intensity with this patient.';
     return Container(
-      margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: context.rehabSurface,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.rehabBorder),
+        color: pain != null && pain < 0
+            ? Colors.red.withValues(alpha: 0.07)
+            : Colors.green.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(
+          color: pain != null && pain < 0
+              ? Colors.red.withValues(alpha: 0.2)
+              : Colors.green.withValues(alpha: 0.2),
+        ),
       ),
       child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: const Color(0xFF1565C0).withValues(alpha: 0.1),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: const Icon(Icons.fitness_center, color: Color(0xFF1565C0)),
+          Icon(
+            pain != null && pain < 0 ? Icons.warning_amber : Icons.insights,
+            color: pain != null && pain < 0 ? Colors.red : Colors.green[800],
           ),
           const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  session['name']?.toString() ?? 'Exercise',
-                  style: GoogleFonts.readexPro(
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                Text(
-                  date == null
-                      ? 'Date unavailable'
-                      : DateFormat('MMM dd, yyyy • hh:mm a').format(date),
-                  style: GoogleFonts.readexPro(
-                    fontSize: 11,
-                    color: context.rehabMuted,
-                  ),
-                ),
-                const SizedBox(height: 10),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 7,
-                  children: [
-                    if (sets != null) _MetricPill('$sets sets'),
-                    if (reps != null) _MetricPill('$reps reps'),
-                    if (seconds != null) _MetricPill(_formatDuration(seconds)),
-                    if (accuracy != null)
-                      _MetricPill('${accuracy.toStringAsFixed(0)}% accuracy'),
-                    if (painBefore != null && painAfter != null)
-                      _MetricPill('Pain $painBefore → $painAfter'),
-                  ],
-                ),
-              ],
-            ),
+          Expanded(child: Text(text)),
+          const SizedBox(width: 16),
+          Text(
+            '$streak day streak',
+            style: const TextStyle(fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
   }
-
-  Widget _buildErrorState() {
-    return SizedBox(
-      height: 420,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            const Icon(Icons.cloud_off_outlined, size: 54, color: Colors.grey),
-            const SizedBox(height: 14),
-            Text(
-              _errorMessage!,
-              textAlign: TextAlign.center,
-              style: GoogleFonts.readexPro(color: context.rehabMuted),
-            ),
-            const SizedBox(height: 14),
-            OutlinedButton.icon(
-              onPressed: _fetchProgress,
-              icon: const Icon(Icons.refresh),
-              label: const Text('Try Again'),
-            ),
-          ],
+  
+  Widget _buildWeeklyActivity(Map<String, dynamic>? selectedAppt) {
+    if (selectedAppt == null || selectedAppt['weekly_activity'] == null) return const SizedBox.shrink();
+    final activity = (selectedAppt['weekly_activity'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    final maxSeconds = activity.fold<int>(0, (current, item) {
+      final seconds = (item['duration_seconds'] as num?)?.toInt() ?? 0;
+      return seconds > current ? seconds : current;
+    });
+    return _SectionCard(
+      title: 'Activity — Last 7 Days',
+      subtitle: 'Minutes completed for assigned exercises',
+      child: SizedBox(
+        height: 150,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.end,
+          children: activity.map((item) {
+            final seconds = (item['duration_seconds'] as num?)?.toInt() ?? 0;
+            final ratio = maxSeconds == 0 ? 0.0 : seconds / maxSeconds;
+            final date = DateTime.tryParse(item['date']?.toString() ?? '');
+            return Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.end,
+                  children: [
+                    Text(
+                      seconds == 0 ? '' : (seconds / 60).toStringAsFixed(0),
+                      style: const TextStyle(
+                        fontSize: 10,
+                        color: Colors.black54,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Container(
+                      width: double.infinity,
+                      height: maxSeconds == 0 ? 4 : 92 * ratio + 4,
+                      decoration: BoxDecoration(
+                        color: seconds == 0
+                            ? Colors.grey[200]
+                            : Colors.blue[700],
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                    ),
+                    const SizedBox(height: 7),
+                    Text(
+                      date == null
+                          ? '—'
+                          : DateFormat('E').format(date).substring(0, 1),
+                      style: const TextStyle(
+                        fontSize: 11,
+                        color: Colors.black54,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }).toList(),
         ),
       ),
     );
   }
+  
+  Widget _buildExercisePerformance(Map<String, dynamic> progress) {
+    final appointments = progress['appointments'] as List<dynamic>? ?? [];
+    final selectedAppt = appointments.firstWhere(
+      (appt) => appt['appointment_id'] == _selectedAppointmentId,
+      orElse: () => appointments.isNotEmpty ? appointments.first : null,
+    );
+    final exercises = (selectedAppt?['assigned_exercises'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    
+    // Get global exercises list from backend to fetch global sessions count and accuracy for the assigned exercises
+    final globalExercises = (progress['exercises'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
 
-  Widget _buildEmptyState() {
-    return SizedBox(
-      height: 420,
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: const BoxDecoration(
-                color: Color(0xFFE8F4F1),
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.insights_outlined,
-                size: 44,
-                color: Color(0xFF1565C0),
+    return _SectionCard(
+      title: 'Assigned Exercises Progress',
+      subtitle: 'Performance for the selected treatment plan',
+      child: exercises.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(child: Text('No exercises assigned for this plan.')),
+            )
+          : SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: DataTable(
+                headingRowColor: WidgetStatePropertyAll(Colors.grey.shade100),
+                columns: const [
+                  DataColumn(label: Text('Exercise')),
+                  DataColumn(label: Text('Source')),
+                  DataColumn(label: Text('Target')),
+                  DataColumn(label: Text('Sessions')),
+                  DataColumn(label: Text('Minutes')),
+                  DataColumn(label: Text('Accuracy')),
+                  DataColumn(label: Text('Last completed')),
+                ],
+                rows: exercises.map((exercise) {
+                  // Find the corresponding global exercise stats for this specific exercise_id
+                  final globalEx = globalExercises.firstWhere(
+                    (g) => g['exercise_id'] == exercise['exercise_id'] && g['source'] == 'Assigned',
+                    orElse: () => <String, dynamic>{},
+                  );
+                  
+                  final seconds = (globalEx['total_duration_seconds'] as num?)?.toInt() ?? 0;
+                  final accuracy = (globalEx['average_accuracy'] as num?)?.toDouble();
+                  final last = DateTime.tryParse(globalEx['last_completed']?.toString() ?? '');
+
+                  return DataRow(
+                    cells: [
+                      DataCell(Text(exercise['name']?.toString() ?? 'Exercise')),
+                      DataCell(_SourceChip('Assigned')),
+                      DataCell(
+                        Text(
+                          exercise['assigned_tracking_mode'] == 'reps'
+                              ? '${exercise['assigned_sets'] ?? 0} × ${exercise['assigned_reps'] ?? 0} reps for ${exercise['assigned_days'] ?? 1} days'
+                              : '${exercise['assigned_sets'] ?? 0} × ${exercise['assigned_duration'] ?? 0}s for ${exercise['assigned_days'] ?? 1} days'
+                        ),
+                      ),
+                      DataCell(Text('${globalEx['session_count'] ?? 0}')),
+                      DataCell(Text((seconds / 60).toStringAsFixed(1))),
+                      DataCell(
+                        Text(
+                          accuracy == null ? '—' : '${accuracy.toStringAsFixed(0)}%',
+                        ),
+                      ),
+                      DataCell(
+                        Text(
+                          last == null ? 'Not completed' : DateFormat('MMM dd').format(last),
+                        ),
+                      ),
+                    ],
+                  );
+                }).toList(),
               ),
             ),
-            const SizedBox(height: 18),
-            Text(
-              'Your progress starts here',
-              style: GoogleFonts.readexPro(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-              ),
+    );
+  }
+  
+  Widget _buildRecentSessions(Map<String, dynamic>? selectedAppt) {
+    if (selectedAppt == null || selectedAppt['recent_sessions'] == null) return const SizedBox.shrink();
+    final sessions = (selectedAppt['recent_sessions'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .take(8)
+        .toList();
+    return _SectionCard(
+      title: 'Recent Sessions',
+      subtitle: 'Latest outcomes for this patient',
+      child: sessions.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(22),
+              child: Center(child: Text('No completed sessions yet.')),
+            )
+          : Column(
+              children: sessions.map((session) {
+                final date = DateTime.tryParse(
+                  session['completion_date']?.toString() ?? '',
+                )?.toLocal();
+                final accuracy = (session['accuracy_score'] as num?)
+                    ?.toDouble();
+                final painBefore = (session['pain_before'] as num?)?.toInt();
+                final painAfter = (session['pain_after'] as num?)?.toInt();
+                final source = session['source']?.toString() ?? 'Assigned';
+                return ListTile(
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 4),
+                  leading: CircleAvatar(
+                    backgroundColor: Colors.blue.withValues(alpha: 0.1),
+                    child: const Icon(Icons.fitness_center, color: Colors.blue),
+                  ),
+                  title: Text(
+                    session['exercise_name']?.toString() ?? 'Exercise',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        date == null
+                            ? 'Date unavailable'
+                            : DateFormat('MMM dd, yyyy • hh:mm a').format(date),
+                      ),
+                      const SizedBox(height: 8),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 4,
+                        children: [
+                          _SourceChip(source),
+                          if (accuracy != null)
+                            _OutcomeChip(
+                              '${accuracy.toStringAsFixed(0)}% accuracy',
+                            ),
+                          if (painBefore != null && painAfter != null)
+                            _OutcomeChip('Pain $painBefore → $painAfter'),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }).toList(),
             ),
-            const SizedBox(height: 8),
-            Text(
-              'Complete your first exercise session to see activity, accuracy, and pain trends.',
-              textAlign: TextAlign.center,
-              style: GoogleFonts.readexPro(
-                fontSize: 13,
-                color: context.rehabMuted,
-                height: 1.4,
-              ),
-            ),
-          ],
-        ),
-      ),
     );
   }
 
-  Widget _buildNoSessionsInRange() {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(22),
-      decoration: BoxDecoration(
-        color: context.rehabSurface,
-        borderRadius: BorderRadius.circular(14),
-      ),
-      child: Text(
-        'No completed sessions in this period.',
-        textAlign: TextAlign.center,
-        style: GoogleFonts.readexPro(color: context.rehabMuted),
-      ),
-    );
-  }
-
-  String _formatDuration(int seconds) {
-    final minutes = seconds ~/ 60;
-    final remainder = seconds % 60;
-    return minutes > 0 ? '${minutes}m ${remainder}s' : '${remainder}s';
-  }
 }
 
-class _StatCard extends StatelessWidget {
+class _AnalysisCard extends StatelessWidget {
   final String label;
   final String value;
   final IconData icon;
-  final Color color;
+  final MaterialColor color;
 
-  const _StatCard({
+  const _AnalysisCard({
     required this.label,
     required this.value,
     required this.icon,
@@ -715,17 +640,17 @@ class _StatCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(14),
+      padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: context.rehabSurface,
-        borderRadius: BorderRadius.circular(15),
-        border: Border.all(color: color.withValues(alpha: 0.16)),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Icon(icon, color: color, size: 22),
+          Icon(icon, color: color[700]),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -734,15 +659,11 @@ class _StatCard extends StatelessWidget {
                 style: GoogleFonts.readexPro(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Theme.of(context).colorScheme.onSurface,
                 ),
               ),
               Text(
                 label,
-                style: GoogleFonts.readexPro(
-                  fontSize: 11,
-                  color: context.rehabMuted,
-                ),
+                style: const TextStyle(fontSize: 11, color: Colors.black54),
               ),
             ],
           ),
@@ -752,95 +673,95 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _MetricPill extends StatelessWidget {
-  final String text;
+class _SectionCard extends StatelessWidget {
+  final String title;
+  final String subtitle;
+  final Widget child;
 
-  const _MetricPill(this.text);
+  const _SectionCard({
+    required this.title,
+    required this.subtitle,
+    required this.child,
+  });
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: context.rehabInput,
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            subtitle,
+            style: const TextStyle(fontSize: 12, color: Colors.black54),
+          ),
+          const SizedBox(height: 16),
+          child,
+        ],
+      ),
+    );
+  }
+}
+
+
+
+class _SourceChip extends StatelessWidget {
+  final String source;
+
+  const _SourceChip(this.source);
+
+  @override
+  Widget build(BuildContext context) {
+    final isAssigned = source == 'Assigned';
+    final color = isAssigned ? Colors.blue : Colors.teal;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: context.rehabBorder),
       ),
       child: Text(
-        text,
-        style: GoogleFonts.readexPro(
-          fontSize: 10,
-          color: Theme.of(context).colorScheme.onSurface,
+        source,
+        style: TextStyle(
+          color: color.shade700,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
         ),
       ),
     );
   }
 }
 
-class _DailyActivity {
-  final DateTime day;
-  final double minutes;
+class _OutcomeChip extends StatelessWidget {
+  final String label;
 
-  const _DailyActivity({required this.day, required this.minutes});
-}
-
-class _ActivityBars extends StatelessWidget {
-  final List<_DailyActivity> days;
-
-  const _ActivityBars({required this.days});
+  const _OutcomeChip(this.label);
 
   @override
   Widget build(BuildContext context) {
-    final maximum = days.fold<double>(
-      0,
-      (current, day) => maxDouble(current, day.minutes),
-    );
-    return SizedBox(
-      height: 150,
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: days.map((day) {
-          final ratio = maximum == 0 ? 0.0 : day.minutes / maximum;
-          return Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 4),
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  Text(
-                    day.minutes == 0 ? '' : day.minutes.toStringAsFixed(0),
-                    style: GoogleFonts.readexPro(
-                      fontSize: 9,
-                      color: context.rehabMuted,
-                    ),
-                  ),
-                  const SizedBox(height: 3),
-                  Container(
-                    width: double.infinity,
-                    height: maximum == 0 ? 4 : 92 * ratio + 4,
-                    decoration: BoxDecoration(
-                      color: day.minutes == 0
-                          ? const Color(0xFFE5E9E8)
-                          : const Color(0xFF1565C0),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                  const SizedBox(height: 7),
-                  Text(
-                    DateFormat('E').format(day.day).substring(0, 1),
-                    style: GoogleFonts.readexPro(
-                      fontSize: 10,
-                      color: context.rehabMuted,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        }).toList(),
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+      decoration: BoxDecoration(
+        color: Colors.blue.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
       ),
+      child: Text(label, style: const TextStyle(fontSize: 11)),
     );
   }
 }
-
-double maxDouble(double a, double b) => a > b ? a : b;
