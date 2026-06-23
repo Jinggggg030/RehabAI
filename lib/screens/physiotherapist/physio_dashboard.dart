@@ -988,6 +988,7 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
                   myUserId: widget.myUserId,
                   studentName:
                       _selectedChat!['student_name']?.toString() ?? 'Patient',
+                  studentId: _selectedChat!['student_id'] as int?,
                   triageData: _selectedChat!['triage_data'],
                   teleconferenceStatus: _selectedChat!['teleconference_status']
                       ?.toString(),
@@ -1004,6 +1005,7 @@ class PhysioChatInterface extends StatefulWidget {
   final int sessionId;
   final int myUserId;
   final String studentName;
+  final int? studentId;
   final dynamic triageData;
   final String? teleconferenceStatus;
   final bool isClosed;
@@ -1014,6 +1016,7 @@ class PhysioChatInterface extends StatefulWidget {
     required this.sessionId,
     required this.myUserId,
     required this.studentName,
+    this.studentId,
     required this.triageData,
     required this.isClosed,
     required this.onChatClosed,
@@ -1129,7 +1132,10 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
     final saved = await showDialog<bool>(
       context: context,
       builder: (dialogContext) => RecordSessionDialog(
-        appointment: {'student_name': widget.studentName},
+        appointment: {
+          'student_name': widget.studentName,
+          'student_id': widget.studentId,
+        },
         chatSessionId: widget.sessionId,
         physioId: widget.myUserId,
       ),
@@ -1256,7 +1262,7 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
                         Icons.medical_information_outlined,
                         size: 18,
                       ),
-                      label: const Text('Record Prescription'),
+                      label: const Text('Rehab Prescription'),
                     ),
                     OutlinedButton.icon(
                       onPressed: _endChat,
@@ -2187,7 +2193,7 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                             _showRecordSessionDialog(appointment);
                           },
                           icon: const Icon(Icons.edit_document, size: 17),
-                          label: const Text('Record session'),
+                          label: const Text('Rehab session'),
                         ),
                       ],
                     ],
@@ -2510,7 +2516,7 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                                             Icons.edit_document,
                                             size: 16,
                                           ),
-                                          label: const Text("Record Session"),
+                                          label: const Text("Record Rehab Session"),
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor:
                                                 Colors.blue.shade800,

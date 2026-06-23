@@ -21,6 +21,9 @@ models.Base.metadata.create_all(bind=engine)
 # migration here so existing installations can start safely after upgrading.
 with engine.begin() as connection:
     connection.execute(text(
+        'DROP TABLE IF EXISTS "Ai_Feedback" CASCADE'
+    ))
+    connection.execute(text(
         'ALTER TABLE "Session_Log" '
         'ADD COLUMN IF NOT EXISTS session_origin VARCHAR(20)'
     ))
@@ -31,6 +34,11 @@ with engine.begin() as connection:
     connection.execute(text(
         'ALTER TABLE "Appointment" '
         'ADD COLUMN IF NOT EXISTS meeting_room VARCHAR(100) UNIQUE'
+    ))
+    connection.execute(text(
+        'ALTER TABLE "Appointment" '
+        'ADD COLUMN IF NOT EXISTS parent_appointment_id INTEGER '
+        'REFERENCES "Appointment"(appointment_id)'
     ))
     missing_appointment_ids = connection.execute(text(
         'SELECT appointment_id FROM "Appointment" WHERE meeting_room IS NULL'
@@ -83,6 +91,12 @@ with engine.begin() as connection:
     ))
 
 app = FastAPI(title="Rehab AI Backend")
+
+# In-memory dictionary tracking physiotherapist activity: therapist_id -> last_activity_datetime
+physio_heartbeats = {}
+
+def record_physio_heartbeat(physio_id: int):
+    physio_heartbeats[physio_id] = datetime.utcnow()
 
 def ensure_meeting_room(appointment: models.Appointment) -> str:
     """Return a non-guessable room shared only through appointment responses."""
@@ -342,6 +356,22 @@ def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
             "reference_id": appt.appointment_id
         })
 
+    # 3b. New Appointment Scheduled Notifications (All future scheduled appointments)
+    all_upcoming = db.query(models.Appointment).filter(
+        models.Appointment.student_id == user_id,
+        models.Appointment.status == 'Scheduled',
+        models.Appointment.schedule_time >= now
+    ).all()
+    for appt in all_upcoming:
+        notifications.append({
+            "notification_id": f"appointment_new:{appt.appointment_id}",
+            "type": "appointment",
+            "title": "New Appointment Scheduled",
+            "message": f"Your physiotherapist has scheduled a new session on {appt.schedule_time.strftime('%b %d, %Y at %I:%M %p')}.",
+            "reference_id": appt.appointment_id
+        })
+
+
     # 4. Physiotherapist-assigned exercise notifications
     assigned_exercises = db.query(
         models.PrescribedExercise,
@@ -427,6 +457,7 @@ def mark_notification_read(
 
 @app.get("/physio/{physio_id}/notifications")
 def get_physio_notifications(physio_id: int, db: Session = Depends(get_db)):
+    record_physio_heartbeat(physio_id)
     from datetime import timedelta
 
     physio = db.query(models.Physiotherapist).filter(
@@ -1054,10 +1085,7 @@ def update_scheduled_exercise_status(schedule_id: int, request: UpdateScheduledE
     db.commit()
     return {"message": "Status updated successfully"}
 
-@app.get("/ai_feedback")
-def get_all_ai_feedback(db: Session = Depends(get_db)):
-    feedback = db.query(models.AIFeedback).all()
-    return {"ai_feedback": feedback}
+
 
 @app.get("/live_chat_sessions")
 def get_all_live_chat_sessions(db: Session = Depends(get_db)):
@@ -1112,27 +1140,61 @@ class StartChatReq(BaseModel):
     message: str
 
 def assign_physio(db: Session, session_id: int, discipline: str):
-    # Find physio with matching specialization
-    physio = db.query(models.Physiotherapist).filter(models.Physiotherapist.specialization.ilike(f"%{discipline}%")).first()
-    if not physio:
-        physio = db.query(models.Physiotherapist).first()
+    # Retrieve all physiotherapists with matching specialization
+    matching_physios = db.query(models.Physiotherapist).filter(
+        models.Physiotherapist.specialization.ilike(f"%{discipline}%")
+    ).all()
+    
+    # If no matching physiotherapists are found, search among all physiotherapists
+    if not matching_physios:
+        matching_physios = db.query(models.Physiotherapist).all()
         
-    if physio:
-        session = db.query(models.LiveChatSession).filter(models.LiveChatSession.session_id == session_id).first()
-        if session:
-            session.therapist_id = physio.therapist_id
-            db.commit()
+    if not matching_physios:
+        return
+        
+    # Check if any matching physiotherapist is online (active heartbeat within the last 15 seconds)
+    now = datetime.utcnow()
+    online_physios = []
+    for p in matching_physios:
+        last_active = physio_heartbeats.get(p.therapist_id)
+        if last_active and (now - last_active).total_seconds() < 15:
+            # Gather active chat load (number of Active live chat sessions assigned to them)
+            active_chats_count = db.query(models.LiveChatSession).filter(
+                models.LiveChatSession.therapist_id == p.therapist_id,
+                models.LiveChatSession.session_status == "Active"
+            ).count()
+            online_physios.append((p, active_chats_count))
+            
+    # If we have online physiotherapists, assign to the one with the lowest active chat load
+    if online_physios:
+        online_physios.sort(key=lambda item: item[1])
+        assigned_physio = online_physios[0][0]
+    else:
+        # Graceful fallback: none are online, assign to the matching one with the lowest active chat load
+        physio_loads = []
+        for p in matching_physios:
+            active_chats_count = db.query(models.LiveChatSession).filter(
+                models.LiveChatSession.therapist_id == p.therapist_id,
+                models.LiveChatSession.session_status == "Active"
+            ).count()
+            physio_loads.append((p, active_chats_count))
+        physio_loads.sort(key=lambda item: item[1])
+        assigned_physio = physio_loads[0][0]
+        
+    # Update the live chat session with the selected therapist_id
+    session = db.query(models.LiveChatSession).filter(models.LiveChatSession.session_id == session_id).first()
+    if session:
+        session.therapist_id = assigned_physio.therapist_id
+        db.commit()
 
 def check_posture_integration(db: Session, student_id: int, auto_reply: str) -> str:
     # Phase 6: Link AI Posture feedback to the triage output
-    feedback = db.query(models.AIFeedback)\
-        .join(models.PrescribedExercise, models.AIFeedback.prescribed_exercise_id == models.PrescribedExercise.prescribed_exercise_id)\
-        .join(models.Appointment, models.PrescribedExercise.appointment_id == models.Appointment.appointment_id)\
-        .filter(models.Appointment.student_id == student_id)\
-        .order_by(models.AIFeedback.timestamp.desc())\
-        .first()
+    latest_session = db.query(models.SessionLog).filter(
+        models.SessionLog.student_id == student_id,
+        models.SessionLog.status == "Completed"
+    ).order_by(models.SessionLog.completion_date.desc()).first()
     
-    if feedback and feedback.accuracy_score is not None and feedback.accuracy_score < 70:
+    if latest_session and latest_session.accuracy_score is not None and latest_session.accuracy_score < 70:
         auto_reply += "\n\n(AI Posture Alert: We noticed your recent exercise accuracy was low. This movement issue may be contributing to your current symptoms. Your therapist has been notified.)"
     return auto_reply
 
@@ -1237,6 +1299,7 @@ def send_message(req: SendMessageReq, db: Session = Depends(get_db)):
 
 @app.get("/physio/chats/{physio_id}")
 def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
+    record_physio_heartbeat(physio_id)
     chats = db.query(
         models.LiveChatSession.session_id,
         models.LiveChatSession.subject,
@@ -1833,6 +1896,7 @@ class RecordSessionReq(BaseModel):
     prescription: str
     evaluation: str | None = None
     exercises: list[AssignedExercise]
+    next_appointment_time: Optional[str] = None
 
 
 class TeleconsultationReq(RecordSessionReq):
@@ -1872,6 +1936,25 @@ def record_session(appointment_id: int, req: RecordSessionReq, db: Session = Dep
             evaluation=ex.evaluation
         )
         db.add(pe)
+        
+    if req.next_appointment_time:
+        time_str = req.next_appointment_time
+        if time_str.endswith("Z"):
+            time_str = time_str[:-1] + "+00:00"
+        try:
+            next_time = datetime.fromisoformat(time_str).replace(tzinfo=None)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid next appointment time format: {e}")
+        
+        next_appt = models.Appointment(
+            student_id=appointment.student_id,
+            therapist_id=appointment.therapist_id,
+            schedule_time=next_time,
+            status="Scheduled",
+            parent_appointment_id=appointment_id
+        )
+        ensure_meeting_room(next_appt)
+        db.add(next_appt)
         
     db.commit()
     return {"message": "Session recorded successfully"}
@@ -1943,6 +2026,26 @@ def record_teleconsultation(
         sender_id=chat.therapist_id,
         content=f"Consultation prescription:\n{appointment.prescription}",
     ))
+
+    if req.next_appointment_time:
+        time_str = req.next_appointment_time
+        if time_str.endswith("Z"):
+            time_str = time_str[:-1] + "+00:00"
+        try:
+            next_time = datetime.fromisoformat(time_str).replace(tzinfo=None)
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid next appointment time format: {e}")
+        
+        next_appt = models.Appointment(
+            student_id=appointment.student_id,
+            therapist_id=appointment.therapist_id,
+            schedule_time=next_time,
+            status="Scheduled",
+            parent_appointment_id=appointment.appointment_id
+        )
+        ensure_meeting_room(next_appt)
+        db.add(next_appt)
+
     db.commit()
     return {
         "message": "Teleconsultation prescription recorded successfully",
@@ -2118,15 +2221,24 @@ def get_student_appointments(student_id: int, db: Session = Depends(get_db)):
             if reason:
                 reason_desc = reason.description
                 
+        parent_appt_time = None
+        if appt.parent_appointment_id:
+            parent_appt = db.query(models.Appointment).filter(models.Appointment.appointment_id == appt.parent_appointment_id).first()
+            if parent_appt:
+                parent_appt_time = parent_appt.schedule_time
+
         result.append({
             "appointment_id": appt.appointment_id,
             "physiotherapist_name": physio_name,
             "specialization": spec,
             "schedule_time": appt.schedule_time,
             "status": appt.status,
+            "prescription": appt.prescription,
             "evaluation": appt.evaluation,
             "cancellation_reason": reason_desc,
-            "meeting_room": meeting_room
+            "meeting_room": meeting_room,
+            "parent_appointment_id": appt.parent_appointment_id,
+            "parent_appointment_time": parent_appt_time
         })
     db.commit()
     return {"appointments": result}

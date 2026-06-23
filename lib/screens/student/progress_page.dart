@@ -56,7 +56,11 @@ class _ProgressPageState extends State<ProgressPage> {
         _progress = decoded;
         final appointments = decoded['appointments'] as List<dynamic>? ?? [];
         if (appointments.isNotEmpty && _selectedAppointmentId == null) {
-          _selectedAppointmentId = appointments.first['appointment_id'] as int?;
+          final activeAppt = appointments.firstWhere(
+            (a) => (a['status'] ?? '').toString().toLowerCase() == 'completed',
+            orElse: () => appointments.first,
+          );
+          _selectedAppointmentId = activeAppt['appointment_id'] as int?;
         }
         _isLoading = false;
       });
@@ -310,7 +314,11 @@ class _ProgressPageState extends State<ProgressPage> {
                     final area = triage['pain_area'].toString().trim();
                     if (area.isNotEmpty) label = '$area ($label)';
                   }
-                  if (appointments.indexOf(appt) == 0) label += ' (Active)';
+                  final activeAppt = appointments.firstWhere(
+                    (a) => (a['status'] ?? '').toString().toLowerCase() == 'completed',
+                    orElse: () => null,
+                  );
+                  if (appt == activeAppt) label += ' (Active)';
                   return DropdownMenuItem<int>(
                     value: appt['appointment_id'] as int,
                     child: Text(label),

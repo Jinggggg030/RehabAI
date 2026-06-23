@@ -102,22 +102,18 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                   'cancelled',
             )
             .toList();
-        final notCancelled = all
-            .where(
-              (a) =>
-                  (a['status'] ?? '').toString().trim().toLowerCase() !=
-                  'cancelled',
-            )
-            .toList();
 
-        _upcoming = notCancelled.where((a) {
+        _upcoming = all.where((a) {
+          final status = (a['status'] ?? '').toString().trim().toLowerCase();
           final time = DateTime.tryParse(a['schedule_time'] ?? '');
-          return time != null && time.isAfter(now);
+          return status == 'scheduled' && time != null && time.isAfter(now);
         }).toList();
 
-        _past = notCancelled.where((a) {
+        _past = all.where((a) {
+          final status = (a['status'] ?? '').toString().trim().toLowerCase();
           final time = DateTime.tryParse(a['schedule_time'] ?? '');
-          return time != null && time.isBefore(now);
+          return status == 'completed' ||
+              (status == 'scheduled' && time != null && time.isBefore(now));
         }).toList();
       });
     }
@@ -309,26 +305,41 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
     List<dynamic> list = isUpcoming ? _upcoming : (isPast ? _past : _cancelled);
 
     if (list.isEmpty) {
-      return Center(
-        child: Text(
-          'No appointments found.',
-          style: GoogleFonts.readexPro(fontSize: 16, color: Colors.grey),
+      return RefreshIndicator(
+        onRefresh: _fetchAppointments,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: [
+            SizedBox(
+              height: MediaQuery.of(context).size.height * 0.5,
+              child: Center(
+                child: Text(
+                  'No appointments found.',
+                  style: GoogleFonts.readexPro(fontSize: 16, color: Colors.grey),
+                ),
+              ),
+            ),
+          ],
         ),
       );
     }
 
-    return ListView.separated(
-      padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
-      itemCount: list.length,
-      separatorBuilder: (context, index) => const SizedBox(height: 16),
-      itemBuilder: (context, index) {
-        return _buildAppointmentCard(
-          list[index],
-          isUpcoming: isUpcoming,
-          isPast: isPast,
-          isCancelled: isCancelled,
-        );
-      },
+    return RefreshIndicator(
+      onRefresh: _fetchAppointments,
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+        itemCount: list.length,
+        separatorBuilder: (context, index) => const SizedBox(height: 16),
+        itemBuilder: (context, index) {
+          return _buildAppointmentCard(
+            list[index],
+            isUpcoming: isUpcoming,
+            isPast: isPast,
+            isCancelled: isCancelled,
+          );
+        },
+      ),
     );
   }
 
@@ -359,30 +370,30 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Container(
-                  width: 5,
-                  height: 84,
-                  decoration: BoxDecoration(
-                    gradient: isCancelled
-                        ? const LinearGradient(
-                            colors: [Color(0xFFEF4444), Color(0xFFF97316)],
-                            begin: Alignment.topCenter,
-                            end: Alignment.bottomCenter,
-                          )
-                        : RehabColors.patientGradient,
-                    borderRadius: BorderRadius.circular(8),
+            IntrinsicHeight(
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Container(
+                    width: 5,
+                    decoration: BoxDecoration(
+                      gradient: isCancelled
+                          ? const LinearGradient(
+                              colors: [Color(0xFFEF4444), Color(0xFFF97316)],
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                            )
+                          : RehabColors.patientGradient,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 14),
-                // Appointment Details
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
+                  const SizedBox(width: 14),
+                  // Appointment Details
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
                         'Appointment with ${appointment['physiotherapist_name']}',
                         style: GoogleFonts.readexPro(
                           fontSize: 14,
@@ -453,12 +464,35 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                           color: context.rehabMuted, // Light teal color
                         ),
                       ),
+                      if (appointment['parent_appointment_time'] != null) ...[
+                        const SizedBox(height: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.blue.shade50,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.blue.shade100),
+                          ),
+                          child: Text(
+                            'Follow-up for appointment on: ${DateFormat('EEE, MMM d, h:mm a').format(DateTime.parse(appointment['parent_appointment_time']))}',
+                            style: GoogleFonts.readexPro(
+                              fontSize: 10,
+                              color: Colors.blue.shade900,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
               ],
             ),
-            if (isPast && !isCancelled) ...[
+          ),
+          if (isPast && !isCancelled) ...[
               const SizedBox(height: 16),
               RichText(
                 text: TextSpan(
@@ -474,7 +508,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                         color: Theme.of(context).colorScheme.onSurface,
                       ),
                     ),
-                    const TextSpan(text: 'N/A'),
+                    TextSpan(text: appointment['prescription'] ?? 'N/A'),
                   ],
                 ),
               ),
@@ -955,7 +989,9 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                           MaterialPageRoute(
                             builder: (context) => const LiveChatPage(),
                           ),
-                        );
+                        ).then((_) {
+                          _fetchAppointments();
+                        });
                       },
                       child: Container(
                         margin: const EdgeInsets.only(bottom: 12),

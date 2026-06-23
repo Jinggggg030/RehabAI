@@ -643,7 +643,6 @@ class PosePainter extends CustomPainter {
         break;
       case InputImageRotation.rotation270deg:
         x =
-            canvasSize.width -
             landmark.x *
                 canvasSize.width /
                 (Platform.isIOS

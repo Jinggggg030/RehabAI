@@ -29,6 +29,9 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
   final List<Map<String, dynamic>> _selectedExercises = [];
   bool _isLoading = true;
   bool _isSubmitting = false;
+  bool _scheduleNextAppointment = false;
+  DateTime? _nextAppointmentDate;
+  TimeOfDay? _nextAppointmentTime;
 
   @override
   void initState() {
@@ -73,7 +76,7 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
   Future<void> _submitSession() async {
     if (_prescriptionController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a prescription/diagnosis.')),
+        const SnackBar(content: Text('Please enter a rehab prescription/diagnosis.')),
       );
       return;
     }
@@ -95,11 +98,38 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
       return;
     }
 
+    if (_scheduleNextAppointment) {
+      if (_nextAppointmentDate == null || _nextAppointmentTime == null) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select a date and time for the follow-up appointment.'),
+          ),
+        );
+        return;
+      }
+      final nextDt = DateTime(
+        _nextAppointmentDate!.year,
+        _nextAppointmentDate!.month,
+        _nextAppointmentDate!.day,
+        _nextAppointmentTime!.hour,
+        _nextAppointmentTime!.minute,
+      );
+      if (nextDt.isBefore(DateTime.now())) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('The follow-up appointment date and time must be in the future.'),
+          ),
+        );
+        return;
+      }
+    }
+
     setState(() => _isSubmitting = true);
     try {
       final apiUrl = kIsWeb
           ? 'http://127.0.0.1:8000'
           : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      
       final payload = {
         "prescription": _prescriptionController.text,
         "evaluation": _evaluationController.text.isNotEmpty
@@ -107,6 +137,14 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
             : null,
         "exercises": _selectedExercises,
         if (widget.chatSessionId != null) "physio_id": widget.physioId,
+        if (_scheduleNextAppointment && _nextAppointmentDate != null && _nextAppointmentTime != null)
+          "next_appointment_time": DateTime(
+            _nextAppointmentDate!.year,
+            _nextAppointmentDate!.month,
+            _nextAppointmentDate!.day,
+            _nextAppointmentTime!.hour,
+            _nextAppointmentTime!.minute,
+          ).toIso8601String(),
       };
 
       final res = await http.post(
@@ -177,8 +215,8 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
               children: [
                 Text(
                   widget.chatSessionId == null
-                      ? "Record Session"
-                      : "Record Teleconsultation Prescription",
+                      ? "Rehab Session"
+                      : "Rehab Session",
                   style: GoogleFonts.readexPro(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
@@ -206,7 +244,7 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                       controller: _prescriptionController,
                       maxLines: 3,
                       decoration: const InputDecoration(
-                        labelText: 'Diagnosis & Prescription Notes *',
+                        labelText: 'Diagnosis & Rehab Prescription Notes *',
                         border: OutlineInputBorder(),
                         alignLabelWithHint: true,
                       ),
@@ -219,6 +257,128 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                         labelText: 'Evaluation (Time taken, rounds, feedback)',
                         border: OutlineInputBorder(),
                         alignLabelWithHint: true,
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.shade50.withAlpha(128),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.blue.shade100),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Row(
+                                children: [
+                                  Icon(Icons.calendar_today_outlined, color: Colors.blue.shade800),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    "Schedule Follow-up",
+                                    style: GoogleFonts.readexPro(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 16,
+                                      color: Colors.blue.shade900,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              Switch(
+                                value: _scheduleNextAppointment,
+                                activeThumbColor: Colors.blue.shade800,
+                                onChanged: (val) {
+                                  setState(() {
+                                    _scheduleNextAppointment = val;
+                                  });
+                                },
+                              ),
+                            ],
+                          ),
+                          if (_scheduleNextAppointment) ...[
+                            const SizedBox(height: 12),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () async {
+                                      final picked = await showDatePicker(
+                                        context: context,
+                                        initialDate: _nextAppointmentDate ?? DateTime.now().add(const Duration(days: 7)),
+                                        firstDate: DateTime.now(),
+                                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                                        builder: (context, child) {
+                                          return Theme(
+                                            data: Theme.of(context).copyWith(
+                                              colorScheme: ColorScheme.light(
+                                                primary: Colors.blue.shade800,
+                                                onPrimary: Colors.white,
+                                                onSurface: Colors.black87,
+                                              ),
+                                            ),
+                                            child: child!,
+                                          );
+                                        },
+                                      );
+                                      if (picked != null) {
+                                        setState(() => _nextAppointmentDate = picked);
+                                      }
+                                    },
+                                    icon: const Icon(Icons.date_range),
+                                    label: Text(
+                                      _nextAppointmentDate == null
+                                          ? "Select Date"
+                                          : "${_nextAppointmentDate!.year}-${_nextAppointmentDate!.month.toString().padLeft(2, '0')}-${_nextAppointmentDate!.day.toString().padLeft(2, '0')}",
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      side: BorderSide(color: Colors.blue.shade200),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 12),
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: () async {
+                                      final picked = await showTimePicker(
+                                        context: context,
+                                        initialTime: _nextAppointmentTime ?? const TimeOfDay(hour: 10, minute: 0),
+                                        builder: (context, child) {
+                                          return Theme(
+                                            data: Theme.of(context).copyWith(
+                                              colorScheme: ColorScheme.light(
+                                                primary: Colors.blue.shade800,
+                                                onPrimary: Colors.white,
+                                                onSurface: Colors.black87,
+                                              ),
+                                            ),
+                                            child: child!,
+                                          );
+                                        },
+                                      );
+                                      if (picked != null) {
+                                        setState(() => _nextAppointmentTime = picked);
+                                      }
+                                    },
+                                    icon: const Icon(Icons.access_time),
+                                    label: Text(
+                                      _nextAppointmentTime == null
+                                          ? "Select Time"
+                                          : _nextAppointmentTime!.format(context),
+                                    ),
+                                    style: OutlinedButton.styleFrom(
+                                      padding: const EdgeInsets.symmetric(vertical: 16),
+                                      side: BorderSide(color: Colors.blue.shade200),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ],
                       ),
                     ),
                     const SizedBox(height: 24),
@@ -461,8 +621,8 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                         )
                       : Text(
                           widget.chatSessionId == null
-                              ? "Submit Session"
-                              : "Save Prescription",
+                              ? "Submit Rehab Session"
+                              : "Save Rehab Prescription",
                         ),
                 ),
               ],

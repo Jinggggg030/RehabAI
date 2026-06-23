@@ -149,6 +149,7 @@ class Appointment(Base):
     therapist_id = Column(Integer, ForeignKey("Physiotherapist.therapist_id"), nullable=False)
     student_id = Column(Integer, ForeignKey("Student.student_id"), nullable=False)
     reason_id = Column(Integer, ForeignKey("Cancellation_Reason.reason_id"), nullable=True)
+    parent_appointment_id = Column(Integer, ForeignKey("Appointment.appointment_id"), nullable=True)
     
     schedule_time = Column(DateTime, nullable=False)
     status = Column(String(50), default="Scheduled")
@@ -199,18 +200,6 @@ class PrescribedExercise(Base):
     assigned_tracking_mode = Column(String(20), nullable=False, default="duration")
     assigned_at = Column(DateTime, nullable=False, default=datetime.utcnow)
     evaluation = Column(Text, nullable=True)
-
-class AIFeedback(Base):
-    __tablename__ = "Ai_Feedback"
-
-    feedback_id = Column(Integer, primary_key=True)
-    prescribed_exercise_id = Column(Integer, ForeignKey("Prescribed_Exercise.prescribed_exercise_id"), nullable=False)
-    
-    joint_angle = Column(Float, nullable=True)
-    accuracy_score = Column(Float, nullable=True)
-    deviation_score = Column(Float, nullable=True)
-    set_number = Column(Integer, nullable=True)
-    timestamp = Column(DateTime, default=datetime.utcnow)
 
 class LiveChatSession(Base):
     __tablename__ = "Live_Chat_Session"
