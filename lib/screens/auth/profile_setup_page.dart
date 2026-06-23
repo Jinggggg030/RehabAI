@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/student/main_screen.dart';
+import 'package:rehab_ai/screens/physiotherapist/physio_dashboard.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -32,6 +33,68 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
   String _gender = 'Male';
   String _hostel = 'Yes';
   bool _isLoading = false;
+
+  bool _isPreRegistered = false;
+  String _preRegisteredRole = 'S';
+  String _specialization = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _checkPreRegistration();
+  }
+
+  Future<void> _checkPreRegistration() async {
+    setState(() {
+      _isLoading = true;
+    });
+    try {
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final response = await http.get(
+        Uri.parse('$apiUrl/users/pre-registered/${widget.email}'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['exists'] == true) {
+          setState(() {
+            _isPreRegistered = true;
+            _preRegisteredRole = data['role'] ?? 'P';
+            _contactController.text = data['contact_number'] ?? '';
+            _identityController.text = data['identity_number'] ?? '';
+            _gender = data['gender'] ?? 'Male';
+            _address1Controller.text = data['address'] ?? '';
+            _specialization = data['specialization'] ?? '';
+
+            // Auto populate date of birth if identity number is valid
+            final cleanVal = _identityController.text.replaceAll('-', '');
+            if (cleanVal.length >= 6) {
+              final yy = cleanVal.substring(0, 2);
+              final mm = cleanVal.substring(2, 4);
+              final dd = cleanVal.substring(4, 6);
+
+              int year = int.tryParse(yy) ?? 0;
+              if (year > 30) {
+                _dobYearController.text = '19$yy';
+              } else {
+                _dobYearController.text = '20$yy';
+              }
+              _dobMonthController.text = mm;
+              _dobDayController.text = dd;
+            }
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint("Error checking pre-registration: $e");
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
+  }
 
   @override
   void dispose() {
@@ -68,6 +131,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           ? 'http://127.0.0.1:8000'
           : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
 
+      final isPhysio = _isPreRegistered && _preRegisteredRole == 'P';
+
       final response = await http.post(
         Uri.parse('$apiUrl/users/profile'),
         headers: {'Content-Type': 'application/json'},
@@ -79,8 +144,8 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           "gender": _gender,
           "contact_number": _contactController.text.trim(),
           "address": address,
-          "accommodation_type": _hostel == 'Yes' ? 'Hostel' : 'Outside',
-          "matric_no": _matricController.text.trim(),
+          "accommodation_type": isPhysio ? null : (_hostel == 'Yes' ? 'Hostel' : 'Outside'),
+          "matric_no": isPhysio ? null : _matricController.text.trim(),
         }),
       );
 
@@ -150,14 +215,26 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
           },
         );
 
-        // Navigate to MainScreen after 3 seconds
+        // Navigate to appropriate home screen after 3 seconds
         Future.delayed(const Duration(seconds: 3), () {
           if (Navigator.canPop(context)) {
             Navigator.pop(context); // Close dialog
-            Navigator.pushReplacement(
-              context,
-              MaterialPageRoute(builder: (context) => const MainScreen()),
-            );
+            if (isPhysio) {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => Theme(
+                    data: RehabTheme.light,
+                    child: const PhysioDashboard(),
+                  ),
+                ),
+              );
+            } else {
+              Navigator.pushReplacement(
+                context,
+                MaterialPageRoute(builder: (context) => const MainScreen()),
+              );
+            }
           }
         });
       } else {
@@ -246,15 +323,28 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               ),
               const SizedBox(height: 24),
 
-              // Matric Number
-              _buildLabel('Matric Number'),
-              const SizedBox(height: 8),
-              _buildTextField(
-                controller: _matricController,
-                hintText: 'Enter your matric number (e.g. B032123456)',
-                icon: Icons.badge_outlined,
-              ),
-              const SizedBox(height: 24),
+              if (!_isPreRegistered || _preRegisteredRole == 'S') ...[
+                // Matric Number
+                _buildLabel('Matric Number'),
+                const SizedBox(height: 8),
+                _buildTextField(
+                  controller: _matricController,
+                  hintText: 'Enter your matric number (e.g. B032123456)',
+                  icon: Icons.badge_outlined,
+                ),
+                const SizedBox(height: 24),
+              ] else if (_preRegisteredRole == 'P') ...[
+                // Specialization
+                _buildLabel('Specialization'),
+                const SizedBox(height: 8),
+                _buildTextField(
+                  controller: TextEditingController(text: _specialization),
+                  hintText: 'Specialization',
+                  icon: Icons.workspace_premium_outlined,
+                  enabled: false,
+                ),
+                const SizedBox(height: 24),
+              ],
 
               // Date of Birth
               _buildLabel('Date of Birth'),
@@ -314,68 +404,70 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
               ),
               const SizedBox(height: 24),
 
-              // UTeM Hostels
-              _buildLabel('Are you staying in UTeM Hostels?'),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  _buildRadioButton(
-                    title: 'Yes',
-                    value: 'Yes',
-                    groupValue: _hostel,
-                    onChanged: (value) => setState(() => _hostel = value!),
-                  ),
-                  const SizedBox(width: 24),
-                  _buildRadioButton(
-                    title: 'No',
-                    value: 'No',
-                    groupValue: _hostel,
-                    onChanged: (value) => setState(() => _hostel = value!),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 24),
-
-              // Specific Hostel selection
-              if (_hostel == 'Yes') ...[
-                _buildLabel('Select Hostel'),
+              if (!_isPreRegistered || _preRegisteredRole == 'S') ...[
+                // UTeM Hostels
+                _buildLabel('Are you staying in UTeM Hostels?'),
                 const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  decoration: InputDecoration(
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 16,
-                      vertical: 12,
+                Row(
+                  children: [
+                    _buildRadioButton(
+                      title: 'Yes',
+                      value: 'Yes',
+                      groupValue: _hostel,
+                      onChanged: (value) => setState(() => _hostel = value!),
                     ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
+                    const SizedBox(width: 24),
+                    _buildRadioButton(
+                      title: 'No',
+                      value: 'No',
+                      groupValue: _hostel,
+                      onChanged: (value) => setState(() => _hostel = value!),
                     ),
-                  ),
-                  items:
-                      [
-                            'Lekir',
-                            'Lekiu',
-                            'Jebat',
-                            'Kasturi',
-                            'Al Jazari',
-                            'Lestari Blok A',
-                            'Lestari Blok B',
-                          ]
-                          .map(
-                            (h) => DropdownMenuItem(value: h, child: Text(h)),
-                          )
-                          .toList(),
-                  onChanged: (val) {
-                    if (val != null) {
-                      setState(() {
-                        _address1Controller.text = val;
-                        _address2Controller.text = '76100 Durian Tunggal';
-                        _address3Controller.text = 'Malacca';
-                      });
-                    }
-                  },
-                  hint: const Text('Select your hostel'),
+                  ],
                 ),
                 const SizedBox(height: 24),
+
+                // Specific Hostel selection
+                if (_hostel == 'Yes') ...[
+                  _buildLabel('Select Hostel'),
+                  const SizedBox(height: 8),
+                  DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    items:
+                        [
+                              'Lekir',
+                              'Lekiu',
+                              'Jebat',
+                              'Kasturi',
+                              'Al Jazari',
+                              'Lestari Blok A',
+                              'Lestari Blok B',
+                            ]
+                            .map(
+                              (h) => DropdownMenuItem(value: h, child: Text(h)),
+                            )
+                            .toList(),
+                    onChanged: (val) {
+                      if (val != null) {
+                        setState(() {
+                          _address1Controller.text = val;
+                          _address2Controller.text = '76100 Durian Tunggal';
+                          _address3Controller.text = 'Malacca';
+                        });
+                      }
+                    },
+                    hint: const Text('Select your hostel'),
+                  ),
+                  const SizedBox(height: 24),
+                ],
               ],
 
               // Address Line 1
@@ -460,10 +552,11 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
     TextInputType keyboardType = TextInputType.text,
     TextAlign textAlign = TextAlign.start,
     ValueChanged<String>? onChanged,
+    bool enabled = true,
   }) {
     return Container(
       decoration: BoxDecoration(
-        color: context.rehabInput,
+        color: enabled ? context.rehabInput : Colors.grey.shade200,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.grey.shade200),
       ),
@@ -472,9 +565,12 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         keyboardType: keyboardType,
         textAlign: textAlign,
         onChanged: onChanged,
+        enabled: enabled,
         style: GoogleFonts.readexPro(
           fontSize: 14,
-          color: Theme.of(context).colorScheme.onSurface,
+          color: enabled
+              ? Theme.of(context).colorScheme.onSurface
+              : Theme.of(context).colorScheme.onSurface.withOpacity(0.5),
         ),
         decoration: InputDecoration(
           hintText: hintText,

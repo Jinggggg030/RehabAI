@@ -119,6 +119,31 @@ def create_user_profile(profile: UserProfileCreate, db: Session = Depends(get_db
     if existing_user:
         raise HTTPException(status_code=400, detail="User profile already exists")
     
+    # Check if this email was pre-registered by the admin
+    pre_registered = db.query(models.User).filter(
+        models.User.email == profile.email,
+        models.User.supabase_id.is_(None)
+    ).first()
+    
+    if pre_registered:
+        pre_registered.supabase_id = profile.supabase_id
+        if profile.username:
+            pre_registered.username = profile.username
+        if profile.identity_number:
+            pre_registered.identity_number = profile.identity_number
+        if profile.gender:
+            pre_registered.gender = profile.gender
+        if profile.contact_number:
+            pre_registered.contact_number = profile.contact_number
+        if profile.address:
+            pre_registered.address = profile.address
+        if profile.accommodation_type:
+            pre_registered.accommodation_type = profile.accommodation_type
+            
+        db.commit()
+        db.refresh(pre_registered)
+        return {"message": "Profile linked successfully", "user_id": pre_registered.user_id, "role": pre_registered.role}
+        
     new_user = models.User(
         supabase_id=profile.supabase_id,
         username=profile.username,
@@ -141,7 +166,7 @@ def create_user_profile(profile: UserProfileCreate, db: Session = Depends(get_db
     db.add(new_student)
     db.commit()
     
-    return {"message": "Profile created successfully", "user_id": new_user.user_id}
+    return {"message": "Profile created successfully", "user_id": new_user.user_id, "role": new_user.role}
 
 
 class UserProfileUpdate(BaseModel):
@@ -197,22 +222,61 @@ def check_user_profile(supabase_id: str, db: Session = Depends(get_db)):
         user = db.query(models.User).filter(models.User.supabase_id == supabase_id).first()
     
     if user:
-        student = db.query(models.Student).filter(models.Student.student_id == user.user_id).first()
+        if user.role == 'P':
+            therapist = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == user.user_id).first()
+            return {
+                "exists": True, 
+                "user_id": user.user_id, 
+                "role": user.role,
+                "username": user.username,
+                "email": user.email,
+                "identity_number": user.identity_number,
+                "gender": user.gender,
+                "contact_number": user.contact_number,
+                "address": user.address,
+                "accommodation_type": user.accommodation_type,
+                "profile_picture": None,
+                "matric_no": None,
+                "specialization": therapist.specialization if therapist else ""
+            }
+        else:
+            student = db.query(models.Student).filter(models.Student.student_id == user.user_id).first()
+            return {
+                "exists": True, 
+                "user_id": user.user_id, 
+                "role": user.role,
+                "username": user.username,
+                "email": user.email,
+                "identity_number": user.identity_number,
+                "gender": user.gender,
+                "contact_number": user.contact_number,
+                "address": user.address,
+                "accommodation_type": user.accommodation_type,
+                "profile_picture": student.profile_picture if student else None,
+                "matric_no": student.matric_no if student else None
+            }
+    return {"exists": False}
+
+@app.get("/users/pre-registered/{email}")
+def check_pre_registered_email(email: str, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(
+        models.User.email == email,
+        models.User.supabase_id.is_(None)
+    ).first()
+    if user:
+        therapist = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == user.user_id).first()
         return {
-            "exists": True, 
-            "user_id": user.user_id, 
+            "exists": True,
             "role": user.role,
             "username": user.username,
-            "email": user.email,
             "identity_number": user.identity_number,
             "gender": user.gender,
             "contact_number": user.contact_number,
             "address": user.address,
-            "accommodation_type": user.accommodation_type,
-            "profile_picture": student.profile_picture if student else None,
-            "matric_no": student.matric_no if student else None
+            "specialization": therapist.specialization if therapist else ""
         }
     return {"exists": False}
+
 
 @app.get("/users")
 def get_all_users(db: Session = Depends(get_db)):
@@ -529,10 +593,126 @@ def get_all_rental_reasons(db: Session = Depends(get_db)):
     reasons = db.query(models.RentalReason).all()
     return {"rental_reasons": reasons}
 
-@app.get("/rental_records")
-def get_all_rental_records(db: Session = Depends(get_db)):
-    records = db.query(models.RentalRecord).all()
-    return {"rental_records": records}
+class PhysiotherapistCreate(BaseModel):
+    email: str
+    username: str
+    identity_number: str
+    contact_number: str
+    gender: str
+    address: str
+    specialization: str
+
+class PhysiotherapistUpdate(BaseModel):
+    username: Optional[str] = None
+    identity_number: Optional[str] = None
+    contact_number: Optional[str] = None
+    gender: Optional[str] = None
+    address: Optional[str] = None
+    specialization: Optional[str] = None
+
+@app.get("/admin/physiotherapists")
+def get_admin_physiotherapists(db: Session = Depends(get_db)):
+    physios = db.query(models.User).filter(models.User.role == 'P').all()
+    result = []
+    for p in physios:
+        therapist = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == p.user_id).first()
+        result.append({
+            "user_id": p.user_id,
+            "supabase_id": p.supabase_id,
+            "username": p.username,
+            "email": p.email,
+            "identity_number": p.identity_number,
+            "gender": p.gender,
+            "contact_number": p.contact_number,
+            "address": p.address,
+            "specialization": therapist.specialization if therapist else "",
+        })
+    return {"physiotherapists": result}
+
+@app.post("/admin/physiotherapists")
+def create_admin_physiotherapist(data: PhysiotherapistCreate, db: Session = Depends(get_db)):
+    # Check if email is already in use
+    existing = db.query(models.User).filter(models.User.email == data.email).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="User with this email already exists")
+        
+    new_user = models.User(
+        supabase_id=None,
+        username=data.username,
+        identity_number=data.identity_number,
+        email=data.email,
+        gender=data.gender,
+        contact_number=data.contact_number,
+        address=data.address,
+        role='P'
+    )
+    db.add(new_user)
+    db.commit()
+    db.refresh(new_user)
+    
+    new_therapist = models.Physiotherapist(
+        therapist_id=new_user.user_id,
+        specialization=data.specialization
+    )
+    db.add(new_therapist)
+    db.commit()
+    
+    return {"message": "Physiotherapist pre-registered successfully", "user_id": new_user.user_id}
+
+@app.put("/admin/physiotherapists/{user_id}")
+def update_admin_physiotherapist(user_id: int, data: PhysiotherapistUpdate, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Physiotherapist not found")
+    if user.role != 'P':
+        raise HTTPException(status_code=400, detail="User is not a physiotherapist")
+        
+    if data.username is not None:
+        user.username = data.username
+    if data.identity_number is not None:
+        user.identity_number = data.identity_number
+    if data.contact_number is not None:
+        user.contact_number = data.contact_number
+    if data.gender is not None:
+        user.gender = data.gender
+    if data.address is not None:
+        user.address = data.address
+        
+    therapist = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == user_id).first()
+    if therapist:
+        if data.specialization is not None:
+            therapist.specialization = data.specialization
+    else:
+        if data.specialization is not None:
+            new_therapist = models.Physiotherapist(
+                therapist_id=user_id,
+                specialization=data.specialization
+            )
+            db.add(new_therapist)
+            
+    db.commit()
+    return {"message": "Physiotherapist updated successfully"}
+
+@app.delete("/admin/physiotherapists/{user_id}")
+def delete_admin_physiotherapist(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Physiotherapist not found")
+    if user.role != 'P':
+        raise HTTPException(status_code=400, detail="User is not a physiotherapist")
+        
+    # Check if they have active appointments
+    appointments_count = db.query(models.Appointment).filter(models.Appointment.therapist_id == user_id).count()
+    if appointments_count > 0:
+         raise HTTPException(status_code=400, detail="Cannot delete physiotherapist: they have active appointments")
+         
+    # Delete from Physiotherapist and User
+    therapist = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == user_id).first()
+    if therapist:
+        db.delete(therapist)
+    db.delete(user)
+    db.commit()
+    return {"message": "Physiotherapist deleted successfully"}
 
 @app.get("/admin/rentals")
 def get_admin_rentals(db: Session = Depends(get_db)):
