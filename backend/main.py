@@ -348,13 +348,31 @@ def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
         models.Appointment.schedule_time <= two_days_later
     ).all()
     for appt in upcoming_appointments:
+        appt_date = appt.schedule_time.date()
+        today_date = now.date()
+        tomorrow_date = today_date + timedelta(days=1)
+        
+        if appt_date == today_date:
+            title = "Appointment Today"
+            msg = f"You have an appointment today at {appt.schedule_time.strftime('%I:%M %p')}."
+            notif_id = f"appointment:{appt.appointment_id}:today"
+        elif appt_date == tomorrow_date:
+            title = "Appointment Tomorrow"
+            msg = f"You have an appointment tomorrow at {appt.schedule_time.strftime('%I:%M %p')}."
+            notif_id = f"appointment:{appt.appointment_id}:tomorrow"
+        else:
+            title = "Upcoming Appointment"
+            msg = f"You have an appointment on {appt.schedule_time.strftime('%b %d, %Y at %I:%M %p')}."
+            notif_id = f"appointment:{appt.appointment_id}:generic"
+            
         notifications.append({
-            "notification_id": f"appointment:{appt.appointment_id}",
+            "notification_id": notif_id,
             "type": "appointment",
-            "title": "Upcoming Appointment",
-            "message": f"You have an appointment on {appt.schedule_time.strftime('%b %d, %Y at %I:%M %p')}.",
+            "title": title,
+            "message": msg,
             "reference_id": appt.appointment_id
         })
+
 
     # 3b. New Appointment Scheduled Notifications (All future scheduled appointments)
     all_upcoming = db.query(models.Appointment).filter(
@@ -2222,10 +2240,23 @@ def get_student_appointments(student_id: int, db: Session = Depends(get_db)):
                 reason_desc = reason.description
                 
         parent_appt_time = None
+        parent_injury = None
         if appt.parent_appointment_id:
             parent_appt = db.query(models.Appointment).filter(models.Appointment.appointment_id == appt.parent_appointment_id).first()
             if parent_appt:
                 parent_appt_time = parent_appt.schedule_time
+                parent_chat = db.query(models.LiveChatSession).filter(
+                    models.LiveChatSession.consultation_appointment_id == parent_appt.appointment_id
+                ).first()
+                if parent_chat and parent_chat.triage_data:
+                    parent_injury = parent_chat.triage_data.get("pain_area")
+                if not parent_injury and parent_chat:
+                    parent_injury = parent_chat.subject
+                if not parent_injury and parent_appt.prescription:
+                    notes = parent_appt.prescription.strip()
+                    if "\n" in notes:
+                        notes = notes.split("\n")[0]
+                    parent_injury = notes[:30] + "..." if len(notes) > 30 else notes
 
         result.append({
             "appointment_id": appt.appointment_id,
@@ -2238,7 +2269,8 @@ def get_student_appointments(student_id: int, db: Session = Depends(get_db)):
             "cancellation_reason": reason_desc,
             "meeting_room": meeting_room,
             "parent_appointment_id": appt.parent_appointment_id,
-            "parent_appointment_time": parent_appt_time
+            "parent_appointment_time": parent_appt_time,
+            "parent_injury": parent_injury
         })
     db.commit()
     return {"appointments": result}

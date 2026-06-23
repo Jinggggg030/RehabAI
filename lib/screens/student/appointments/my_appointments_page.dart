@@ -477,7 +477,9 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                             border: Border.all(color: Colors.blue.shade100),
                           ),
                           child: Text(
-                            'Follow-up for appointment on: ${DateFormat('EEE, MMM d, h:mm a').format(DateTime.parse(appointment['parent_appointment_time']))}',
+                            appointment['parent_injury'] != null
+                                ? 'Follow-up for: ${appointment['parent_injury']} (Appointment on: ${DateFormat('EEE, MMM d, h:mm a').format(DateTime.parse(appointment['parent_appointment_time']))})'
+                                : 'Follow-up for appointment on: ${DateFormat('EEE, MMM d, h:mm a').format(DateTime.parse(appointment['parent_appointment_time']))}',
                             style: GoogleFonts.readexPro(
                               fontSize: 10,
                               color: Colors.blue.shade900,
