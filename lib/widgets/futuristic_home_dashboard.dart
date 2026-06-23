@@ -13,7 +13,7 @@ class FuturisticHomeDashboard extends StatelessWidget {
     required this.adviceController,
     required this.onSubmitAdvice,
     required this.onOpenExercises,
-    required this.onOpenProgress,
+    required this.onOpenRentals,
     required this.onOpenAppointments,
     required this.onBookAppointment,
     required this.onOpenChat,
@@ -29,7 +29,7 @@ class FuturisticHomeDashboard extends StatelessWidget {
   final TextEditingController adviceController;
   final VoidCallback onSubmitAdvice;
   final VoidCallback onOpenExercises;
-  final VoidCallback onOpenProgress;
+  final VoidCallback onOpenRentals;
   final VoidCallback onOpenAppointments;
   final VoidCallback onBookAppointment;
   final VoidCallback onOpenChat;
@@ -64,7 +64,7 @@ class FuturisticHomeDashboard extends StatelessWidget {
             ),
           ),
           SliverPadding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 32),
+            padding: const EdgeInsets.fromLTRB(20, 28, 20, 32),
             sliver: SliverList.list(
               children: [
                 const _SectionTitle(title: 'Quick Access'),
@@ -99,11 +99,11 @@ class FuturisticHomeDashboard extends StatelessWidget {
                       onTap: onOpenExercises,
                     ),
                     _QuickTile(
-                      icon: Icons.monitor_heart_rounded,
-                      title: 'Progress',
-                      subtitle: 'View insights',
+                      icon: Icons.wheelchair_pickup_rounded,
+                      title: 'Rentals',
+                      subtitle: 'Equipment',
                       colors: const [Color(0xFF7C3AED), Color(0xFF8B5CF6)],
-                      onTap: onOpenProgress,
+                      onTap: onOpenRentals,
                     ),
                   ],
                 ),

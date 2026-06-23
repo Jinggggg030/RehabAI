@@ -14,6 +14,7 @@ import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:rehab_ai/widgets/futuristic_home_dashboard.dart';
 import 'package:rehab_ai/screens/student/progress_page.dart';
+import 'package:rehab_ai/screens/student/rentals/rental_status_page.dart';
 import 'package:rehab_ai/services/local_notification_service.dart'; //testing
 
 class HomePage extends StatefulWidget {
@@ -181,9 +182,9 @@ class _HomePageState extends State<HomePage> {
         context,
         MaterialPageRoute(builder: (_) => const RehabilitationExercisesPage()),
       ),
-      onOpenProgress: () => Navigator.push(
+      onOpenRentals: () => Navigator.push(
         context,
-        MaterialPageRoute(builder: (_) => const ProgressPage()),
+        MaterialPageRoute(builder: (_) => const RentalStatusPage()),
       ),
       onOpenAppointments: () => Navigator.push(
         context,
