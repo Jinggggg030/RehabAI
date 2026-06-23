@@ -191,7 +191,11 @@ def update_user_profile(supabase_id: str, profile: UserProfileUpdate, db: Sessio
 
 @app.get("/users/profile/{supabase_id}")
 def check_user_profile(supabase_id: str, db: Session = Depends(get_db)):
-    user = db.query(models.User).filter(models.User.supabase_id == supabase_id).first()
+    if supabase_id.isdigit():
+        user = db.query(models.User).filter(models.User.user_id == int(supabase_id)).first()
+    else:
+        user = db.query(models.User).filter(models.User.supabase_id == supabase_id).first()
+    
     if user:
         student = db.query(models.Student).filter(models.Student.student_id == user.user_id).first()
         return {
@@ -1280,34 +1284,15 @@ def get_physio_patient_progress(
     if not student:
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    prescribed_rows = db.query(
-        models.PrescribedExercise,
-        models.Exercise
-    ).join(
-        models.Exercise,
-        models.PrescribedExercise.exercise_id == models.Exercise.exercise_id
-    ).join(
-        models.Appointment,
-        models.PrescribedExercise.appointment_id == models.Appointment.appointment_id
-    ).filter(
+    # Fetch all appointments for this student and physio
+    appointments = db.query(models.Appointment).filter(
         models.Appointment.therapist_id == physio_id,
         models.Appointment.student_id == student_id
-    ).all()
+    ).order_by(models.Appointment.schedule_time.desc()).all()
 
-    exercise_assignments = {}
-    for prescribed, exercise in prescribed_rows:
-        exercise_assignments[exercise.exercise_id] = {
-            "exercise_id": exercise.exercise_id,
-            "name": exercise.name,
-            "assigned_sets": prescribed.assigned_sets,
-            "assigned_duration": prescribed.assigned_duration,
-            "assigned_reps": prescribed.assigned_reps,
-            "assigned_days": prescribed.assigned_days,
-            "assigned_tracking_mode": prescribed.assigned_tracking_mode,
-            "evaluation": prescribed.evaluation
-        }
-
-    exercise_ids = set(exercise_assignments.keys())
+    appointments_data = []
+    exercise_assignments = {} # For all exercises
+    
     sessions = db.query(models.SessionLog).filter(
         models.SessionLog.student_id == student_id,
         models.SessionLog.status == "Completed"
@@ -1320,6 +1305,113 @@ def get_physio_patient_progress(
             models.Exercise.exercise_id.in_(session_exercise_ids)
         ).all()
     } if session_exercise_ids else {}
+    
+    from datetime import datetime, timedelta
+
+    for i, appt in enumerate(appointments):
+        prescribed_rows = db.query(models.PrescribedExercise, models.Exercise).join(
+            models.Exercise, models.PrescribedExercise.exercise_id == models.Exercise.exercise_id
+        ).filter(models.PrescribedExercise.appointment_id == appt.appointment_id).all()
+        
+        appt_exercises = []
+        appt_assigned_exercise_ids = set()
+        for prescribed, exercise in prescribed_rows:
+            ex_data = {
+                "exercise_id": exercise.exercise_id,
+                "name": exercise.name,
+                "assigned_sets": prescribed.assigned_sets,
+                "assigned_duration": prescribed.assigned_duration,
+                "assigned_reps": prescribed.assigned_reps,
+                "assigned_days": prescribed.assigned_days,
+                "assigned_tracking_mode": prescribed.assigned_tracking_mode,
+                "evaluation": prescribed.evaluation
+            }
+            appt_exercises.append(ex_data)
+            appt_assigned_exercise_ids.add(exercise.exercise_id)
+            exercise_assignments[exercise.exercise_id] = ex_data
+            
+        chat_session = db.query(models.LiveChatSession).filter(
+            models.LiveChatSession.consultation_appointment_id == appt.appointment_id
+        ).first()
+        triage_data = chat_session.triage_data if chat_session else None
+
+        # Determine time window for this appointment
+        start_time = appt.schedule_time
+        end_time = appointments[i-1].schedule_time if i > 0 else None
+
+        appt_sessions = []
+        for s in sessions:
+            if not s.completion_date: continue
+            if start_time and s.completion_date < start_time: continue
+            if end_time and s.completion_date >= end_time: continue
+            if s.exercise_id in appt_assigned_exercise_ids:
+                appt_sessions.append(s)
+
+        total_seconds = sum(s.duration_seconds or 0 for s in appt_sessions)
+        accuracy_values = [s.accuracy_score for s in appt_sessions if s.accuracy_score is not None]
+        pain_changes = [s.pain_before - s.pain_after for s in appt_sessions if s.pain_before is not None and s.pain_after is not None]
+        
+        session_days = sorted({s.completion_date.date() for s in appt_sessions}, reverse=True)
+        streak = 0
+        if session_days:
+            streak = 1
+            expected = session_days[0]
+            for day in session_days[1:]:
+                expected = expected - timedelta(days=1)
+                if day == expected:
+                    streak += 1
+                elif day < expected:
+                    break
+
+        appt_summary = {
+            "total_sessions": len(appt_sessions),
+            "total_duration_minutes": total_seconds // 60,
+            "average_accuracy": sum(accuracy_values) / len(accuracy_values) if accuracy_values else None,
+            "average_pain_change": sum(pain_changes) / len(pain_changes) if pain_changes else None,
+            "activity_streak": streak
+        }
+
+        reference_date = end_time.date() if end_time else datetime.utcnow().date()
+        appt_weekly = []
+        for days_ago in range(6, -1, -1):
+            day = reference_date - timedelta(days=days_ago)
+            day_sessions = [s for s in appt_sessions if s.completion_date.date() == day]
+            appt_weekly.append({
+                "date": day.isoformat(),
+                "session_count": len(day_sessions),
+                "duration_seconds": sum(s.duration_seconds or 0 for s in day_sessions)
+            })
+            
+        appt_recent = []
+        for s in appt_sessions[:20]:
+            ex_info = next((e for e in appt_exercises if e['exercise_id'] == s.exercise_id), {})
+            appt_recent.append({
+                "session_id": s.schedule_id,
+                "exercise_id": s.exercise_id,
+                "exercise_name": ex_info.get("name", exercise_catalog.get(s.exercise_id, "Exercise")),
+                "source": "Assigned",
+                "completion_date": s.completion_date.isoformat(),
+                "completed_reps": s.completed_reps,
+                "duration_seconds": s.duration_seconds,
+                "completed_sets": s.completed_sets,
+                "accuracy_score": s.accuracy_score,
+                "pain_before": s.pain_before,
+                "pain_after": s.pain_after
+            })
+
+        appointments_data.append({
+            "appointment_id": appt.appointment_id,
+            "date": appt.schedule_time.isoformat() if appt.schedule_time else None,
+            "status": appt.status,
+            "prescription": appt.prescription,
+            "assigned_exercises": appt_exercises,
+            "triage_data": triage_data,
+            "summary": appt_summary,
+            "weekly_activity": appt_weekly,
+            "recent_sessions": appt_recent
+        })
+
+    exercise_ids = set(exercise_assignments.keys())
 
     def session_origin(session):
         if session.session_origin in {"Assigned", "Self-selected"}:
@@ -1473,11 +1565,14 @@ def get_physio_patient_progress(
             "pain_after": session.pain_after
         })
 
+    student_record = db.query(models.Student).filter(models.Student.student_id == student.user_id).first()
+
     return {
         "patient": {
             "student_id": student.user_id,
             "student_name": student.username,
-            "email": student.email
+            "email": student.email,
+            "profile_picture": student_record.profile_picture if student_record else None
         },
         "summary": {
             "total_sessions": len(sessions),
@@ -1498,6 +1593,7 @@ def get_physio_patient_progress(
                 if sessions and sessions[0].completion_date else None
             )
         },
+        "appointments": appointments_data,
         "exercises": per_exercise,
         "weekly_activity": weekly_activity,
         "recent_sessions": recent_sessions

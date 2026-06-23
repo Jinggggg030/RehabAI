@@ -5,7 +5,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
+import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:rehab_ai/screens/physiotherapist/student_profile_dialog.dart';
 
 class PhysioProgressTab extends StatefulWidget {
   final int physioId;
@@ -29,6 +31,7 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
   bool _loadingProgress = false;
   String _searchTerm = '';
   String? _error;
+  int? _selectedAppointmentId;
 
   @override
   void initState() {
@@ -105,6 +108,12 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
       }
       setState(() {
         _progress = Map<String, dynamic>.from(jsonDecode(response.body) as Map);
+        final appointments = _progress!['appointments'] as List<dynamic>?;
+        if (appointments != null && appointments.isNotEmpty) {
+          _selectedAppointmentId = appointments.first['appointment_id'] as int?;
+        } else {
+          _selectedAppointmentId = null;
+        }
         _loadingProgress = false;
       });
     } catch (error) {
@@ -280,6 +289,12 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
       return const Center(child: Text('Select a patient to view progress.'));
     }
 
+    final appointments = progress['appointments'] as List<dynamic>? ?? [];
+    final selectedAppt = appointments.firstWhere(
+      (dynamic appt) => appt['appointment_id'] == _selectedAppointmentId,
+      orElse: () => appointments.isNotEmpty ? appointments.first : null,
+    ) as Map<String, dynamic>?;
+
     return RefreshIndicator(
       onRefresh: () => _selectPatient(_selectedPatient!),
       child: ListView(
@@ -287,30 +302,111 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
         padding: const EdgeInsets.all(26),
         children: [
           _buildPatientHeader(progress),
+          const SizedBox(height: 16),
+          _buildTimelineSelector(progress),
           const SizedBox(height: 22),
-          _buildSummaryCards(progress),
+          _buildSummaryCards(selectedAppt),
           const SizedBox(height: 22),
-          _buildPainInsight(progress),
+          _buildPainInsight(selectedAppt),
           const SizedBox(height: 22),
-          _buildWeeklyActivity(progress),
+          _buildWeeklyActivity(selectedAppt),
           const SizedBox(height: 22),
           _buildExercisePerformance(progress),
           const SizedBox(height: 22),
-          _buildRecentSessions(progress),
+          _buildRecentSessions(selectedAppt),
         ],
       ),
     );
   }
 
+  Widget _buildTimelineSelector(Map<String, dynamic> progress) {
+    final appointments = progress['appointments'] as List<dynamic>? ?? [];
+    if (appointments.isEmpty) return const SizedBox.shrink();
+
+    return Row(
+      children: [
+        Text(
+          'Treatment Plan History:',
+          style: GoogleFonts.readexPro(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: Colors.blue.shade900,
+          ),
+        ),
+        const SizedBox(width: 12),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: Colors.grey.shade300),
+          ),
+          child: DropdownButtonHideUnderline(
+            child: DropdownButton<int>(
+              value: _selectedAppointmentId,
+              icon: const Icon(Icons.arrow_drop_down, color: Colors.blue),
+              style: const TextStyle(color: Colors.black87, fontSize: 14),
+              onChanged: (int? newValue) {
+                if (newValue != null) {
+                  setState(() {
+                    _selectedAppointmentId = newValue;
+                  });
+                }
+              },
+              items: appointments.map<DropdownMenuItem<int>>((dynamic appt) {
+                final dateStr = appt['date']?.toString();
+                String label = 'Unknown Date';
+                if (dateStr != null) {
+                  try {
+                    final dt = DateTime.parse(dateStr);
+                    label = DateFormat('MMM d, yyyy').format(dt);
+                  } catch (_) {}
+                }
+                final triage = appt['triage_data'] as Map?;
+                if (triage != null && triage['pain_area'] != null) {
+                  final area = triage['pain_area'].toString().trim();
+                  if (area.isNotEmpty) label = '$area ($label)';
+                }
+                if (appointments.indexOf(appt) == 0) label += ' (Active)';
+                return DropdownMenuItem<int>(
+                  value: appt['appointment_id'] as int,
+                  child: Text(label),
+                );
+              }).toList(),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
   Widget _buildPatientHeader(Map<String, dynamic> progress) {
     final patient = Map<String, dynamic>.from(progress['patient'] as Map);
-    final prescription = _selectedPatient?['active_prescription'];
+    final appointments = progress['appointments'] as List<dynamic>? ?? [];
+    final selectedAppt = appointments.firstWhere(
+      (appt) => appt['appointment_id'] == _selectedAppointmentId,
+      orElse: () => appointments.isNotEmpty ? appointments.first : null,
+    );
+    final prescription = selectedAppt?['prescription'];
+    final profilePic = patient['profile_picture']?.toString();
+
     Widget identity() => Row(
       children: [
         CircleAvatar(
           radius: 28,
           backgroundColor: Colors.blue[100],
-          child: Icon(Icons.person, size: 30, color: Colors.blue[800]),
+          backgroundImage: profilePic != null && profilePic.isNotEmpty
+              ? NetworkImage(
+                  profilePic.startsWith('http')
+                      ? profilePic
+                      : Supabase.instance.client.storage
+                          .from('profile_picture')
+                          .getPublicUrl(profilePic),
+                )
+              : null,
+          child: profilePic == null || profilePic.isEmpty
+              ? Icon(Icons.person, size: 30, color: Colors.blue[800])
+              : null,
         ),
         const SizedBox(width: 14),
         Expanded(
@@ -336,6 +432,19 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
             ],
           ),
         ),
+        if (patient['student_id'] != null)
+          IconButton(
+            tooltip: 'View Patient Profile',
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (context) => StudentProfileDialog(
+                  studentId: patient['student_id'].toString(),
+                ),
+              );
+            },
+            icon: const Icon(Icons.info_outline, color: Colors.blue),
+          ),
       ],
     );
 
@@ -354,6 +463,8 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
       ),
     );
 
+    final hasPrescription = prescription != null && prescription.toString().trim().isNotEmpty;
+
     return LayoutBuilder(
       builder: (context, constraints) {
         if (constraints.maxWidth < 700) {
@@ -361,7 +472,7 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               identity(),
-              if (prescription != null) ...[
+              if (hasPrescription) ...[
                 const SizedBox(height: 12),
                 Align(
                   alignment: Alignment.centerLeft,
@@ -374,7 +485,7 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
         return Row(
           children: [
             Expanded(child: identity()),
-            if (prescription != null) ...[
+            if (hasPrescription) ...[
               const SizedBox(width: 16),
               prescriptionCard(),
             ],
@@ -384,11 +495,12 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
     );
   }
 
-  Widget _buildSummaryCards(Map<String, dynamic> progress) {
-    final summary = Map<String, dynamic>.from(progress['summary'] as Map);
+  Widget _buildSummaryCards(Map<String, dynamic>? selectedAppt) {
+    if (selectedAppt == null || selectedAppt['summary'] == null) return const SizedBox.shrink();
+    final summary = Map<String, dynamic>.from(selectedAppt['summary'] as Map);
     final accuracy = (summary['average_accuracy'] as num?)?.toDouble();
     final pain = (summary['average_pain_change'] as num?)?.toDouble();
-    final seconds = (summary['total_duration_seconds'] as num?)?.toInt() ?? 0;
+    final seconds = (summary['total_duration_minutes'] as num?)?.toInt() ?? 0;
     final cards = [
       _AnalysisCard(
         label: 'Completed Sessions',
@@ -398,7 +510,7 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
       ),
       _AnalysisCard(
         label: 'Active Minutes',
-        value: (seconds / 60).toStringAsFixed(1),
+        value: seconds.toString(),
         icon: Icons.timer_outlined,
         color: Colors.indigo,
       ),
@@ -430,8 +542,9 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
     );
   }
 
-  Widget _buildPainInsight(Map<String, dynamic> progress) {
-    final summary = Map<String, dynamic>.from(progress['summary'] as Map);
+  Widget _buildPainInsight(Map<String, dynamic>? selectedAppt) {
+    if (selectedAppt == null || selectedAppt['summary'] == null) return const SizedBox.shrink();
+    final summary = Map<String, dynamic>.from(selectedAppt['summary'] as Map);
     final pain = (summary['average_pain_change'] as num?)?.toDouble();
     final streak = (summary['activity_streak'] as num?)?.toInt() ?? 0;
     final text = pain == null
@@ -470,8 +583,9 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
     );
   }
 
-  Widget _buildWeeklyActivity(Map<String, dynamic> progress) {
-    final activity = (progress['weekly_activity'] as List<dynamic>? ?? [])
+  Widget _buildWeeklyActivity(Map<String, dynamic>? selectedAppt) {
+    if (selectedAppt == null || selectedAppt['weekly_activity'] == null) return const SizedBox.shrink();
+    final activity = (selectedAppt['weekly_activity'] as List<dynamic>? ?? [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
@@ -535,17 +649,29 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
   }
 
   Widget _buildExercisePerformance(Map<String, dynamic> progress) {
-    final exercises = (progress['exercises'] as List<dynamic>? ?? [])
+    final appointments = progress['appointments'] as List<dynamic>? ?? [];
+    final selectedAppt = appointments.firstWhere(
+      (appt) => appt['appointment_id'] == _selectedAppointmentId,
+      orElse: () => appointments.isNotEmpty ? appointments.first : null,
+    );
+    final exercises = (selectedAppt?['assigned_exercises'] as List<dynamic>? ?? [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
+    
+    // Get global exercises list from backend to fetch global sessions count and accuracy for the assigned exercises
+    final globalExercises = (progress['exercises'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+
     return _SectionCard(
-      title: 'Exercise Performance',
-      subtitle: 'Compare assigned and patient-selected activity',
+      title: 'Assigned Exercises Progress',
+      subtitle: 'Performance for the selected treatment plan',
       child: exercises.isEmpty
           ? const Padding(
               padding: EdgeInsets.all(20),
-              child: Center(child: Text('No exercise activity yet.')),
+              child: Center(child: Text('No exercises assigned for this plan.')),
             )
           : SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -561,48 +687,37 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
                   DataColumn(label: Text('Last completed')),
                 ],
                 rows: exercises.map((exercise) {
-                  final seconds =
-                      (exercise['total_duration_seconds'] as num?)?.toInt() ??
-                      0;
-                  final accuracy = (exercise['average_accuracy'] as num?)
-                      ?.toDouble();
-                  final last = DateTime.tryParse(
-                    exercise['last_completed']?.toString() ?? '',
+                  // Find the corresponding global exercise stats for this specific exercise_id
+                  final globalEx = globalExercises.firstWhere(
+                    (g) => g['exercise_id'] == exercise['exercise_id'] && g['source'] == 'Assigned',
+                    orElse: () => <String, dynamic>{},
                   );
-                  final source = exercise['source']?.toString() ?? 'Assigned';
+                  
+                  final seconds = (globalEx['total_duration_seconds'] as num?)?.toInt() ?? 0;
+                  final accuracy = (globalEx['average_accuracy'] as num?)?.toDouble();
+                  final last = DateTime.tryParse(globalEx['last_completed']?.toString() ?? '');
+
                   return DataRow(
                     cells: [
-                      DataCell(
-                        Text(exercise['name']?.toString() ?? 'Exercise'),
-                      ),
-                      DataCell(_SourceChip(source)),
+                      DataCell(Text(exercise['name']?.toString() ?? 'Exercise')),
+                      DataCell(_SourceChip('Assigned')),
                       DataCell(
                         Text(
-                          source == 'Assigned'
-                              ? exercise['assigned_tracking_mode'] == 'reps'
-                                    ? '${exercise['assigned_sets'] ?? 0} × '
-                                          '${exercise['assigned_reps'] ?? 0} reps '
-                                          'for ${exercise['assigned_days'] ?? 1} days'
-                                    : '${exercise['assigned_sets'] ?? 0} × '
-                                          '${exercise['assigned_duration'] ?? 0}s '
-                                          'for ${exercise['assigned_days'] ?? 1} days'
-                              : 'Patient selected',
+                          exercise['assigned_tracking_mode'] == 'reps'
+                              ? '${exercise['assigned_sets'] ?? 0} × ${exercise['assigned_reps'] ?? 0} reps for ${exercise['assigned_days'] ?? 1} days'
+                              : '${exercise['assigned_sets'] ?? 0} × ${exercise['assigned_duration'] ?? 0}s for ${exercise['assigned_days'] ?? 1} days'
                         ),
                       ),
-                      DataCell(Text('${exercise['session_count'] ?? 0}')),
+                      DataCell(Text('${globalEx['session_count'] ?? 0}')),
                       DataCell(Text((seconds / 60).toStringAsFixed(1))),
                       DataCell(
                         Text(
-                          accuracy == null
-                              ? '—'
-                              : '${accuracy.toStringAsFixed(0)}%',
+                          accuracy == null ? '—' : '${accuracy.toStringAsFixed(0)}%',
                         ),
                       ),
                       DataCell(
                         Text(
-                          last == null
-                              ? 'Not completed'
-                              : DateFormat('MMM dd').format(last),
+                          last == null ? 'Not completed' : DateFormat('MMM dd').format(last),
                         ),
                       ),
                     ],
@@ -613,8 +728,9 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
     );
   }
 
-  Widget _buildRecentSessions(Map<String, dynamic> progress) {
-    final sessions = (progress['recent_sessions'] as List<dynamic>? ?? [])
+  Widget _buildRecentSessions(Map<String, dynamic>? selectedAppt) {
+    if (selectedAppt == null || selectedAppt['recent_sessions'] == null) return const SizedBox.shrink();
+    final sessions = (selectedAppt['recent_sessions'] as List<dynamic>? ?? [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .take(8)
