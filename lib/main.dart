@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:rehab_ai/screens/auth/landing_page.dart';
+import 'package:rehab_ai/screens/auth/splash_screen.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
 import 'package:rehab_ai/theme/theme_controller.dart';
 
@@ -36,7 +36,7 @@ class MyApp extends StatelessWidget {
         theme: RehabTheme.light,
         darkTheme: RehabTheme.dark,
         themeMode: themeMode,
-        home: const LandingPage(),
+        home: const SplashScreen(),
       ),
     );
   }

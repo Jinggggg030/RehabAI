@@ -247,7 +247,7 @@ class _LoginPageState extends State<LoginPage> {
                           right: 36.0,
                         ), // Offset for back button to center title
                         child: Text(
-                          'Login',
+                          'Sign In',
                           style: GoogleFonts.readexPro(
                             fontSize: 24,
                             fontWeight: FontWeight.bold,
@@ -353,7 +353,7 @@ class _LoginPageState extends State<LoginPage> {
               ),
               const SizedBox(height: 24),
 
-              // Login Button
+              // Sign In Button
               ElevatedButton(
                 onPressed: _isLoading ? null : _signIn,
                 style: ElevatedButton.styleFrom(
@@ -375,7 +375,7 @@ class _LoginPageState extends State<LoginPage> {
                         ),
                       )
                     : Text(
-                        'Login',
+                        'Sign In',
                         style: GoogleFonts.readexPro(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
