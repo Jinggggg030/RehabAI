@@ -357,18 +357,57 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
                 },
                 items: appointments.map<DropdownMenuItem<int>>((dynamic appt) {
                   final dateStr = appt['date']?.toString();
-                  String label = 'Unknown Date';
+                  final latestDateStr = appt['latest_date']?.toString();
+                  String dateLabel = 'Unknown Date';
                   if (dateStr != null) {
                     try {
                       final dt = DateTime.parse(dateStr);
-                      label = DateFormat('MMM d, yyyy').format(dt);
+                      if (latestDateStr != null && latestDateStr != dateStr) {
+                        final ldt = DateTime.parse(latestDateStr);
+                        dateLabel = '${DateFormat('MMM d, yyyy').format(dt)} to ${DateFormat('MMM d, yyyy').format(ldt)}';
+                      } else {
+                        dateLabel = DateFormat('MMM d, yyyy').format(dt);
+                      }
                     } catch (_) {}
                   }
+
+                  String details = '';
+                  final subject = appt['subject']?.toString().trim() ?? '';
+                  if (subject.isNotEmpty) {
+                    details = subject;
+                  }
+
+                  if (details.isEmpty) {
+                    final exercises = appt['assigned_exercises'] as List<dynamic>? ?? [];
+                    if (exercises.isNotEmpty) {
+                      final names = exercises
+                          .map((dynamic ex) => ex['name']?.toString() ?? '')
+                          .where((name) => name.isNotEmpty)
+                          .toSet()
+                          .toList();
+                      if (names.isNotEmpty) {
+                        details = names.join(', ');
+                      }
+                    }
+                  }
+
                   final triage = appt['triage_data'] as Map?;
                   if (triage != null && triage['pain_area'] != null) {
                     final area = triage['pain_area'].toString().trim();
-                    if (area.isNotEmpty) label = '$area ($label)';
+                    if (area.isNotEmpty) {
+                      if (details.isNotEmpty) {
+                        details = '$details ($area)';
+                      } else {
+                        details = '$area Rehab';
+                      }
+                    }
                   }
+
+                  if (details.isEmpty) {
+                    details = appt['status'] == 'Completed' ? 'Follow-up Rehab' : 'General Consultation';
+                  }
+
+                  String label = '$details — $dateLabel';
                   if (appointments.indexOf(appt) == 0) label += ' (Active)';
                   return DropdownMenuItem<int>(
                     value: appt['appointment_id'] as int,

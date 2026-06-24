@@ -1592,6 +1592,17 @@ def get_physio_patients(physio_id: int, db: Session = Depends(get_db)):
         })
     return {"patients": result}
 
+def get_root_appointment(db: Session, appointment: models.Appointment) -> models.Appointment:
+    curr = appointment
+    visited = {curr.appointment_id}
+    while curr.parent_appointment_id is not None:
+        parent = db.query(models.Appointment).filter(models.Appointment.appointment_id == curr.parent_appointment_id).first()
+        if not parent or parent.appointment_id in visited:
+            break
+        curr = parent
+        visited.add(curr.appointment_id)
+    return curr
+
 @app.get("/physio/{physio_id}/patients/{student_id}/progress")
 def get_physio_patient_progress(
     physio_id: int,
@@ -1615,6 +1626,21 @@ def get_physio_patient_progress(
         models.Appointment.student_id == student_id
     ).order_by(models.Appointment.schedule_time.desc()).all()
 
+    # Walk appointments and group by root parent
+    groups = {}
+    for appt in appointments:
+        root_appt = get_root_appointment(db, appt)
+        root_id = root_appt.appointment_id
+        groups.setdefault(root_id, []).append(appt)
+
+    # Build list of chains, sorted by start date descending
+    chains = []
+    for root_id, appt_list in groups.items():
+        chain = sorted(appt_list, key=lambda x: x.schedule_time)
+        chains.append(chain)
+    
+    chains.sort(key=lambda c: c[0].schedule_time, reverse=True)
+
     appointments_data = []
     exercise_assignments = {} # For all exercises
     
@@ -1633,36 +1659,53 @@ def get_physio_patient_progress(
     
     from datetime import datetime, timedelta
 
-    for i, appt in enumerate(appointments):
-        prescribed_rows = db.query(models.PrescribedExercise, models.Exercise).join(
-            models.Exercise, models.PrescribedExercise.exercise_id == models.Exercise.exercise_id
-        ).filter(models.PrescribedExercise.appointment_id == appt.appointment_id).all()
+    for idx, chain in enumerate(chains):
+        first_appt = chain[0]
+        latest_appt = chain[-1]
         
-        appt_exercises = []
-        appt_assigned_exercise_ids = set()
-        for prescribed, exercise in prescribed_rows:
-            ex_data = {
-                "exercise_id": exercise.exercise_id,
-                "name": exercise.name,
-                "assigned_sets": prescribed.assigned_sets,
-                "assigned_duration": prescribed.assigned_duration,
-                "assigned_reps": prescribed.assigned_reps,
-                "assigned_days": prescribed.assigned_days,
-                "assigned_tracking_mode": prescribed.assigned_tracking_mode,
-                "evaluation": prescribed.evaluation
-            }
-            appt_exercises.append(ex_data)
-            appt_assigned_exercise_ids.add(exercise.exercise_id)
-            exercise_assignments[exercise.exercise_id] = ex_data
+        chain_exercises = {}
+        for appt in chain:
+            prescribed_rows = db.query(models.PrescribedExercise, models.Exercise).join(
+                models.Exercise, models.PrescribedExercise.exercise_id == models.Exercise.exercise_id
+            ).filter(models.PrescribedExercise.appointment_id == appt.appointment_id).all()
+            for prescribed, exercise in prescribed_rows:
+                ex_data = {
+                    "exercise_id": exercise.exercise_id,
+                    "name": exercise.name,
+                    "assigned_sets": prescribed.assigned_sets,
+                    "assigned_duration": prescribed.assigned_duration,
+                    "assigned_reps": prescribed.assigned_reps,
+                    "assigned_days": prescribed.assigned_days,
+                    "assigned_tracking_mode": prescribed.assigned_tracking_mode,
+                    "evaluation": prescribed.evaluation
+                }
+                chain_exercises[exercise.exercise_id] = ex_data
+                exercise_assignments[exercise.exercise_id] = ex_data
+                
+        appt_exercises = list(chain_exercises.values())
+        appt_assigned_exercise_ids = set(chain_exercises.keys())
             
-        chat_session = db.query(models.LiveChatSession).filter(
-            models.LiveChatSession.consultation_appointment_id == appt.appointment_id
-        ).first()
-        triage_data = chat_session.triage_data if chat_session else None
+        triage_data = None
+        subject = None
+        for appt in chain:
+            chat_session = db.query(models.LiveChatSession).filter(
+                models.LiveChatSession.consultation_appointment_id == appt.appointment_id
+            ).first()
+            if chat_session:
+                if chat_session.triage_data and not triage_data:
+                    triage_data = chat_session.triage_data
+                if chat_session.subject and not subject:
+                    subject = chat_session.subject
 
-        # Determine time window for this appointment (adjusting local naive times to UTC for comparison with completion_date)
-        start_time = appt.schedule_time - timedelta(hours=8) if appt.schedule_time else None
-        end_time = (appointments[i-1].schedule_time - timedelta(hours=8)) if (i > 0 and appointments[i-1].schedule_time) else None
+        prescriptions = [a.prescription for a in chain if a.prescription]
+        combined_prescription = "\n\n".join(prescriptions) if prescriptions else None
+
+        # Determine time window for this treatment chain
+        start_time = first_appt.schedule_time - timedelta(hours=8) if first_appt.schedule_time else None
+        end_time = None
+        if idx > 0:
+            next_newer_chain = chains[idx-1]
+            end_time = next_newer_chain[0].schedule_time - timedelta(hours=8)
 
         appt_sessions = []
         for s in sessions:
@@ -1725,12 +1768,14 @@ def get_physio_patient_progress(
             })
 
         appointments_data.append({
-            "appointment_id": appt.appointment_id,
-            "date": appt.schedule_time.isoformat() if appt.schedule_time else None,
-            "status": appt.status,
-            "prescription": appt.prescription,
+            "appointment_id": first_appt.appointment_id,
+            "date": first_appt.schedule_time.isoformat() if first_appt.schedule_time else None,
+            "latest_date": latest_appt.schedule_time.isoformat() if latest_appt.schedule_time else None,
+            "status": latest_appt.status,
+            "prescription": combined_prescription,
             "assigned_exercises": appt_exercises,
             "triage_data": triage_data,
+            "subject": subject,
             "summary": appt_summary,
             "weekly_activity": appt_weekly,
             "recent_sessions": appt_recent
@@ -2574,6 +2619,21 @@ def get_student_progress(
         models.Appointment.student_id == student_id
     ).order_by(models.Appointment.schedule_time.desc()).all()
 
+    # Walk appointments and group by root parent
+    groups = {}
+    for appt in appointments:
+        root_appt = get_root_appointment(db, appt)
+        root_id = root_appt.appointment_id
+        groups.setdefault(root_id, []).append(appt)
+
+    # Build list of chains, sorted by start date descending
+    chains = []
+    for root_id, appt_list in groups.items():
+        chain = sorted(appt_list, key=lambda x: x.schedule_time)
+        chains.append(chain)
+    
+    chains.sort(key=lambda c: c[0].schedule_time, reverse=True)
+
     appointments_data = []
     exercise_assignments = {} # For all exercises
     
@@ -2592,36 +2652,53 @@ def get_student_progress(
     
     from datetime import datetime, timedelta
 
-    for i, appt in enumerate(appointments):
-        prescribed_rows = db.query(models.PrescribedExercise, models.Exercise).join(
-            models.Exercise, models.PrescribedExercise.exercise_id == models.Exercise.exercise_id
-        ).filter(models.PrescribedExercise.appointment_id == appt.appointment_id).all()
+    for idx, chain in enumerate(chains):
+        first_appt = chain[0]
+        latest_appt = chain[-1]
         
-        appt_exercises = []
-        appt_assigned_exercise_ids = set()
-        for prescribed, exercise in prescribed_rows:
-            ex_data = {
-                "exercise_id": exercise.exercise_id,
-                "name": exercise.name,
-                "assigned_sets": prescribed.assigned_sets,
-                "assigned_duration": prescribed.assigned_duration,
-                "assigned_reps": prescribed.assigned_reps,
-                "assigned_days": prescribed.assigned_days,
-                "assigned_tracking_mode": prescribed.assigned_tracking_mode,
-                "evaluation": prescribed.evaluation
-            }
-            appt_exercises.append(ex_data)
-            appt_assigned_exercise_ids.add(exercise.exercise_id)
-            exercise_assignments[exercise.exercise_id] = ex_data
+        chain_exercises = {}
+        for appt in chain:
+            prescribed_rows = db.query(models.PrescribedExercise, models.Exercise).join(
+                models.Exercise, models.PrescribedExercise.exercise_id == models.Exercise.exercise_id
+            ).filter(models.PrescribedExercise.appointment_id == appt.appointment_id).all()
+            for prescribed, exercise in prescribed_rows:
+                ex_data = {
+                    "exercise_id": exercise.exercise_id,
+                    "name": exercise.name,
+                    "assigned_sets": prescribed.assigned_sets,
+                    "assigned_duration": prescribed.assigned_duration,
+                    "assigned_reps": prescribed.assigned_reps,
+                    "assigned_days": prescribed.assigned_days,
+                    "assigned_tracking_mode": prescribed.assigned_tracking_mode,
+                    "evaluation": prescribed.evaluation
+                }
+                chain_exercises[exercise.exercise_id] = ex_data
+                exercise_assignments[exercise.exercise_id] = ex_data
+                
+        appt_exercises = list(chain_exercises.values())
+        appt_assigned_exercise_ids = set(chain_exercises.keys())
             
-        chat_session = db.query(models.LiveChatSession).filter(
-            models.LiveChatSession.consultation_appointment_id == appt.appointment_id
-        ).first()
-        triage_data = chat_session.triage_data if chat_session else None
+        triage_data = None
+        subject = None
+        for appt in chain:
+            chat_session = db.query(models.LiveChatSession).filter(
+                models.LiveChatSession.consultation_appointment_id == appt.appointment_id
+            ).first()
+            if chat_session:
+                if chat_session.triage_data and not triage_data:
+                    triage_data = chat_session.triage_data
+                if chat_session.subject and not subject:
+                    subject = chat_session.subject
 
-        # Determine time window for this appointment (adjusting local naive times to UTC for comparison with completion_date)
-        start_time = appt.schedule_time - timedelta(hours=8) if appt.schedule_time else None
-        end_time = (appointments[i-1].schedule_time - timedelta(hours=8)) if (i > 0 and appointments[i-1].schedule_time) else None
+        prescriptions = [a.prescription for a in chain if a.prescription]
+        combined_prescription = "\n\n".join(prescriptions) if prescriptions else None
+
+        # Determine time window for this treatment chain
+        start_time = first_appt.schedule_time - timedelta(hours=8) if first_appt.schedule_time else None
+        end_time = None
+        if idx > 0:
+            next_newer_chain = chains[idx-1]
+            end_time = next_newer_chain[0].schedule_time - timedelta(hours=8)
 
         appt_sessions = []
         for s in sessions:
@@ -2684,12 +2761,14 @@ def get_student_progress(
             })
 
         appointments_data.append({
-            "appointment_id": appt.appointment_id,
-            "date": appt.schedule_time.isoformat() if appt.schedule_time else None,
-            "status": appt.status,
-            "prescription": appt.prescription,
+            "appointment_id": first_appt.appointment_id,
+            "date": first_appt.schedule_time.isoformat() if first_appt.schedule_time else None,
+            "latest_date": latest_appt.schedule_time.isoformat() if latest_appt.schedule_time else None,
+            "status": latest_appt.status,
+            "prescription": combined_prescription,
             "assigned_exercises": appt_exercises,
             "triage_data": triage_data,
+            "subject": subject,
             "summary": appt_summary,
             "weekly_activity": appt_weekly,
             "recent_sessions": appt_recent
