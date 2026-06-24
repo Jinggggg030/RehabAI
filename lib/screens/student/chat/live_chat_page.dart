@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:rehab_ai/services/teleconference_service.dart';
 import 'dart:async';
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/screens/student/appointments/my_appointments_page.dart';
 
 class ChatMessage {
   final String text;
@@ -581,8 +582,8 @@ class _LiveChatPageState extends State<LiveChatPage> {
                               child: Row(
                                 children: [
                                   _buildQuickReply('Need assistance'),
-                                  const SizedBox(width: 8),
-                                  _buildQuickReply('Book session'),
+                                   const SizedBox(width: 8),
+                                   _buildQuickReply('Book Appointment'),
                                 ],
                               ),
                             ),
@@ -757,8 +758,20 @@ class _LiveChatPageState extends State<LiveChatPage> {
   Widget _buildQuickReply(String text) {
     return InkWell(
       onTap: () {
-        _messageController.text = text;
-        _sendMessage();
+        if (text == 'Book Appointment') {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const MyAppointmentsPage(
+                openBookingOnStart: true,
+                closeAfterBooking: true,
+              ),
+            ),
+          );
+        } else {
+          _messageController.text = text;
+          _sendMessage();
+        }
       },
       borderRadius: BorderRadius.circular(16),
       child: Container(
