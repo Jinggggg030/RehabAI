@@ -89,7 +89,8 @@ Return ONLY valid JSON:
             "hip pain", "knee pain", "shoulder pain", "joint pain", "joint stiffness",
             "back pain", "lower back pain", "spine", "sciatica", "disc herniation",
             "slip disc", "slipped disc", "osteoporosis", "skeletal", "knee replacement",
-            "hip replacement", "ortho", "orthopaedic", "rheumatoid", "cartilage"
+            "hip replacement", "ortho", "orthopaedic", "rheumatoid", "cartilage",
+            "knee", "shoulder", "hip", "elbow", "wrist", "back"
         ]
 
         if any(word in combined for word in neurological_keywords):
