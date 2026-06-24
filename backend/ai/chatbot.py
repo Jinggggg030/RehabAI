@@ -84,6 +84,14 @@ Return ONLY valid JSON:
             "desk sitting", "poor posture", "ergonomics", "text neck", "sitting long"
         ]
 
+        orthopaedic_keywords = [
+            "bone", "joint", "fracture", "arthritis", "osteoarthritis", 
+            "hip pain", "knee pain", "shoulder pain", "joint pain", "joint stiffness",
+            "back pain", "lower back pain", "spine", "sciatica", "disc herniation",
+            "slip disc", "slipped disc", "osteoporosis", "skeletal", "knee replacement",
+            "hip replacement", "ortho", "orthopaedic", "rheumatoid", "cartilage"
+        ]
+
         if any(word in combined for word in neurological_keywords):
             return "Neurological"
 
@@ -95,6 +103,9 @@ Return ONLY valid JSON:
 
         if any(word in combined for word in ergonomic_keywords):
             return "Ergonomic"
+
+        if any(word in combined for word in orthopaedic_keywords):
+            return "Orthopaedic"
 
         return "Orthopaedic"
 
