@@ -461,15 +461,30 @@ class _RentalStatusPageState extends State<RentalStatusPage>
           ),
           const SizedBox(width: 13),
           Expanded(
-            child: Text(
-              rental['equipment_name'] ?? 'Equipment',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: GoogleFonts.readexPro(
-                fontSize: 14,
-                fontWeight: FontWeight.w700,
-                color: RehabColors.ink,
-              ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  rental['equipment_name'] ?? 'Equipment',
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: GoogleFonts.readexPro(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: RehabColors.ink,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  rental['status'] == 'Returned' ? 'Completed' : (rental['status'] ?? 'Completed'),
+                  style: GoogleFonts.readexPro(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: rental['status'] == 'Lost' ? RehabColors.danger : RehabColors.green,
+                  ),
+                ),
+              ],
             ),
           ),
           const SizedBox(width: 10),

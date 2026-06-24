@@ -847,6 +847,12 @@ def update_rental_status(rental_record_id: int, update_data: RentalStatusUpdate,
             raise HTTPException(status_code=400, detail="Return condition is required")
         if not update_data.proof_of_status:
             raise HTTPException(status_code=400, detail="Return photo is required")
+        
+        # Increment stock by 1 when returned (unless lost)
+        equipment = db.query(models.Equipment).filter(models.Equipment.equipment_id == record.equipment_id).first()
+        if equipment and update_data.return_status != "Lost":
+            equipment.stock += 1
+            
         record.return_date = datetime.utcnow()
     else:
         raise HTTPException(
@@ -2267,6 +2273,7 @@ def approve_rental(rental_id: int, physio_id: int, db: Session = Depends(get_db)
         raise HTTPException(status_code=400, detail="Equipment out of stock")
     
     rental.status = "Approved"
+    equipment.stock -= 1
     db.commit()
     return {"status": "success", "message": "Rental approved"}
 

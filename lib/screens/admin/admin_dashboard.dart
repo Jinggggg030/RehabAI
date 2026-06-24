@@ -406,7 +406,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Widget _buildActiveRentals() {
     final allActive = _rentals
-        .where((r) => r['status'] == 'Approved' || r['status'] == 'Active')
+        .where((r) => r['status'] == 'Approved' || r['status'] == 'Active' || r['status'] == 'Returned')
         .toList();
     final query = (_rentalSearch ?? '').trim().toLowerCase();
     final active = query.isEmpty
@@ -478,7 +478,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                            Container(
+                             Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
                                 vertical: 4,
@@ -486,16 +486,16 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               decoration: BoxDecoration(
                                 color: r['status'] == 'Approved'
                                     ? Colors.orange.shade100
-                                    : Colors.green.shade100,
+                                    : (r['status'] == 'Returned' ? Colors.blue.shade100 : Colors.green.shade100),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                r['status'],
+                                r['status'] == 'Returned' ? 'Completed' : r['status'],
                                 style: GoogleFonts.readexPro(
                                   fontSize: 12,
                                   color: r['status'] == 'Approved'
                                       ? Colors.orange.shade800
-                                      : Colors.green.shade800,
+                                      : (r['status'] == 'Returned' ? Colors.blue.shade800 : Colors.green.shade800),
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
