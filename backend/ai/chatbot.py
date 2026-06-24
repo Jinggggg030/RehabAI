@@ -47,39 +47,56 @@ Return ONLY valid JSON:
 
     def classify_discipline(self, state):
         area = (state.get("pain_area") or "").lower()
+        point = (state.get("pain_point") or "").lower()
+        combined = f"{area} {point}"
 
         sports_keywords = [
-            "ankle",
-            "acl",
-            "hamstring",
-            "runner",
-            "football",
-            "basketball",
-            "sport"
+            "ankle", "acl", "hamstring", "runner", "football", "basketball", 
+            "sport", "sprain", "strain", "ligament", "meniscus", "knee sprain",
+            "tennis elbow", "golfers elbow", "acl tear", "runner's knee", "tendinitis",
+            "shin splints", "injury", "soccer", "tennis", "badminton", "gym",
+            "workout", "muscle pull", "cramp", "achilles", "calf", "groin",
+            "dislocation", "runner knee", "athletic", "exercise injury"
         ]
 
         neurological_keywords = [
-            "numbness",
-            "tingling",
-            "stroke",
-            "nerve"
+            "numbness", "tingling", "stroke", "nerve", "sciatica", 
+            "paralysis", "parkinson", "tremor", "hemiparesis", "burning",
+            "numb", "tingle", "pins and needles", "pins & needles", "neuropathy",
+            "stroke rehab", "paralyzed", "balance issue", "dizziness", "coordination",
+            "weakness", "brain", "spine injury", "bell's palsy", "bells palsy",
+            "carpal tunnel syndrome", "pinched nerve", "radiculopathy"
         ]
 
-        pelvic_keywords = [
-            "pelvic",
-            "incontinence"
+        cardiorespiratory_keywords = [
+            "breathing", "breath", "lung", "chest tightness", "asthma", 
+            "pneumonia", "copd", "post-covid", "cardiac", "heart", "pulse",
+            "shortness of breath", "sob", "cough", "respiratory", "ventilator",
+            "oxygen", "cardiac rehab", "heart rate", "fatigue", "exhaustion",
+            "aerobic", "inhalation", "exhalation", "deep breathing", "dyspnea"
         ]
 
-        if any(word in area for word in pelvic_keywords):
-            return "Pelvic Floor"
+        ergonomic_keywords = [
+            "posture", "ergonomic", "cervical", "stiffness", "sit long", 
+            "neck pain", "neck stiffness", "shoulder stiffness", "carpal tunnel",
+            "repetitive strain", "rsi", "back stiffness", "desk job", "computer",
+            "mouse elbow", "hunchback", "thoracic", "lower back stiffness",
+            "desk sitting", "poor posture", "ergonomics", "text neck", "sitting long"
+        ]
 
-        if any(word in area for word in neurological_keywords):
+        if any(word in combined for word in neurological_keywords):
             return "Neurological"
 
-        if any(word in area for word in sports_keywords):
+        if any(word in combined for word in sports_keywords):
             return "Sports"
 
-        return "Musculoskeletal"
+        if any(word in combined for word in cardiorespiratory_keywords):
+            return "Cardiorespiratory"
+
+        if any(word in combined for word in ergonomic_keywords):
+            return "Ergonomic"
+
+        return "Orthopaedic"
 
     def process_message(self, user_message: str, current_state: dict):
         if not GEMINI_API_KEY:

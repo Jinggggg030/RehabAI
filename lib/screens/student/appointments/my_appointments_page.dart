@@ -938,6 +938,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
   }
 
   Future<void> _showBookAppointmentBottomSheet(BuildContext context) async {
+    final pageContext = context;
     await _fetchAvailablePhysios();
     int? selectedPhysioId = _availablePhysios.isNotEmpty
         ? _availablePhysios.first['therapist_id']
@@ -956,6 +957,18 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final bool isWeekend = _selectedDay != null &&
+                (_selectedDay!.weekday == DateTime.saturday ||
+                    _selectedDay!.weekday == DateTime.sunday);
+
+            final validationError = isWeekend
+                ? "Appointments can only be booked on weekdays (Monday to Friday)."
+                : (selectedTime.hour < 9 || selectedTime.hour >= 18)
+                    ? "Appointments can only be booked during office hours (9:00 AM to 6:00 PM)."
+                    : (selectedTime.hour == 14)
+                        ? "Appointments cannot be booked during the lunch break (2:00 PM to 3:00 PM)."
+                        : null;
+
             return Padding(
               padding: EdgeInsets.only(
                 bottom: MediaQuery.of(context).viewInsets.bottom,
@@ -1073,6 +1086,10 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                           return isSameDay(_selectedDay, day);
                         },
                         enabledDayPredicate: (day) {
+                          if (day.weekday == DateTime.saturday ||
+                              day.weekday == DateTime.sunday) {
+                            return false;
+                          }
                           if (selectedPhysioId == null) return true;
                           final p = _availablePhysios.firstWhere(
                             (element) =>
@@ -1174,12 +1191,35 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                         ),
                       ),
                     ),
+                    if (validationError != null) ...[
+                      const SizedBox(height: 12),
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          const Icon(Icons.warning_amber_rounded,
+                              color: Colors.redAccent, size: 20),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              validationError,
+                              style: GoogleFonts.readexPro(
+                                color: Colors.redAccent,
+                                fontSize: 13,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     const SizedBox(height: 32),
 
                     SizedBox(
                       width: double.infinity,
                       child: ElevatedButton(
-                        onPressed: () async {
+                        onPressed: validationError != null
+                            ? null
+                            : () async {
                           if (selectedPhysioId == null || _selectedDay == null)
                             return;
                           final dt = DateTime(
@@ -1204,9 +1244,39 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                                 "schedule_time": dt.toIso8601String(),
                               }),
                             );
+                            if (!mounted || !pageContext.mounted) return;
                             if (res.statusCode == 200) {
                               Navigator.pop(context);
                               _fetchAppointments();
+                            } else {
+                              Navigator.pop(context); // Close bottom sheet first so SnackBar is visible on main page
+                              try {
+                                final data = jsonDecode(res.body);
+                                final errorMsg = data['detail'] ?? 'Failed to book appointment.';
+                                ScaffoldMessenger.of(pageContext).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      errorMsg,
+                                      style: GoogleFonts.readexPro(fontWeight: FontWeight.w600),
+                                    ),
+                                    backgroundColor: Colors.redAccent,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                );
+                              } catch (_) {
+                                ScaffoldMessenger.of(pageContext).showSnackBar(
+                                  SnackBar(
+                                    content: Text(
+                                      'An error occurred: Status ${res.statusCode}',
+                                      style: GoogleFonts.readexPro(fontWeight: FontWeight.w600),
+                                    ),
+                                    backgroundColor: Colors.redAccent,
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  ),
+                                );
+                              }
                             }
                           } catch (e) {
                             debugPrint("Error booking: $e");

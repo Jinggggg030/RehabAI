@@ -24,6 +24,9 @@ with engine.begin() as connection:
         'DROP TABLE IF EXISTS "Ai_Feedback" CASCADE'
     ))
     connection.execute(text(
+        'DROP TABLE IF EXISTS "Notification" CASCADE'
+    ))
+    connection.execute(text(
         'ALTER TABLE "Session_Log" '
         'ADD COLUMN IF NOT EXISTS session_origin VARCHAR(20)'
     ))
@@ -77,6 +80,10 @@ with engine.begin() as connection:
         'ADD COLUMN IF NOT EXISTS profile_picture VARCHAR(255)'
     ))
     connection.execute(text(
+        'ALTER TABLE "Physiotherapist" '
+        'ADD COLUMN IF NOT EXISTS profile_picture VARCHAR(255)'
+    ))
+    connection.execute(text(
         'ALTER TABLE "Live_Chat_Session" '
         'ADD COLUMN IF NOT EXISTS teleconference_status VARCHAR(20)'
     ))
@@ -89,6 +96,15 @@ with engine.begin() as connection:
         'ADD COLUMN IF NOT EXISTS consultation_appointment_id INTEGER '
         'REFERENCES "Appointment"(appointment_id)'
     ))
+    connection.execute(text(
+        'ALTER TABLE "Rental_Record" '
+        'DROP CONSTRAINT IF EXISTS check_rental_status'
+    ))
+    connection.execute(text(
+        'ALTER TABLE "Rental_Record" '
+        'ADD CONSTRAINT check_rental_status CHECK (status IN (\'Pending\', \'Approved\', \'Active\', \'Returned\', \'Lost\', \'Rejected\'))'
+    ))
+
 
 app = FastAPI(title="Rehab AI Backend")
 
@@ -224,6 +240,10 @@ def update_user_profile(supabase_id: str, profile: UserProfileUpdate, db: Sessio
                 student.matric_no = profile.matric_no
             if profile.profile_picture is not None:
                 student.profile_picture = profile.profile_picture
+    elif user.role == 'P' and profile.profile_picture is not None:
+        therapist = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == user.user_id).first()
+        if therapist:
+            therapist.profile_picture = profile.profile_picture
     db.commit()
 
     return {"message": "Profile updated successfully"}
@@ -249,7 +269,7 @@ def check_user_profile(supabase_id: str, db: Session = Depends(get_db)):
                 "contact_number": user.contact_number,
                 "address": user.address,
                 "accommodation_type": user.accommodation_type,
-                "profile_picture": None,
+                "profile_picture": therapist.profile_picture if therapist else None,
                 "matric_no": None,
                 "specialization": therapist.specialization if therapist else ""
             }
@@ -572,7 +592,7 @@ def get_physio_notifications(physio_id: int, db: Session = Depends(get_db)):
         ).filter(
             models.Appointment.therapist_id == physio_id,
             models.Appointment.status == "Scheduled",
-            models.Appointment.schedule_time >= datetime.utcnow()
+            models.Appointment.schedule_time >= datetime.now()
         ).order_by(models.Appointment.schedule_time).all()
         for appointment, student_name in upcoming_appointments:
             notifications.append({
@@ -1157,11 +1177,55 @@ class StartChatReq(BaseModel):
     user_id: int
     message: str
 
+def validate_appointment_time(db: Session, therapist_id: int, schedule_time_dt: datetime, exclude_appt_id: int = None):
+    # 1. Check weekend (Saturday = 5, Sunday = 6)
+    if schedule_time_dt.weekday() in [5, 6]:
+        raise HTTPException(
+            status_code=400,
+            detail="Appointments can only be booked on weekdays (Monday to Friday)."
+        )
+        
+    # 2. Check office hours (9:00 AM to 6:00 PM)
+    if schedule_time_dt.hour < 9 or schedule_time_dt.hour >= 18:
+        raise HTTPException(
+            status_code=400,
+            detail="Appointments can only be booked during office hours (9:00 AM to 6:00 PM)."
+        )
+        
+    # 3. Check lunch break (2:00 PM to 3:00 PM)
+    if schedule_time_dt.hour == 14:
+        raise HTTPException(
+            status_code=400,
+            detail="Appointments cannot be booked during the lunch break (2:00 PM to 3:00 PM)."
+        )
+        
+    # 4. Check overlapping appointments
+    query = db.query(models.Appointment).filter(
+        models.Appointment.therapist_id == therapist_id,
+        models.Appointment.schedule_time == schedule_time_dt,
+        models.Appointment.status == "Scheduled"
+    )
+    if exclude_appt_id:
+        query = query.filter(models.Appointment.appointment_id != exclude_appt_id)
+        
+    existing_appt = query.first()
+    if existing_appt:
+        raise HTTPException(
+            status_code=400,
+            detail="The physiotherapist already has a scheduled appointment at this time."
+        )
+
 def assign_physio(db: Session, session_id: int, discipline: str):
-    # Retrieve all physiotherapists with matching specialization
-    matching_physios = db.query(models.Physiotherapist).filter(
-        models.Physiotherapist.specialization.ilike(f"%{discipline}%")
-    ).all()
+    # Retrieve all physiotherapists with matching specialization (treat Orthopaedic and Musculoskeletal as synonyms)
+    if discipline and discipline.lower() in ["orthopaedic", "musculoskeletal"]:
+        matching_physios = db.query(models.Physiotherapist).filter(
+            (models.Physiotherapist.specialization.ilike("%Orthopaedic%")) |
+            (models.Physiotherapist.specialization.ilike("%Musculoskeletal%"))
+        ).all()
+    else:
+        matching_physios = db.query(models.Physiotherapist).filter(
+            models.Physiotherapist.specialization.ilike(f"%{discipline}%")
+        ).all()
     
     # If no matching physiotherapists are found, search among all physiotherapists
     if not matching_physios:
@@ -1596,9 +1660,9 @@ def get_physio_patient_progress(
         ).first()
         triage_data = chat_session.triage_data if chat_session else None
 
-        # Determine time window for this appointment
-        start_time = appt.schedule_time
-        end_time = appointments[i-1].schedule_time if i > 0 else None
+        # Determine time window for this appointment (adjusting local naive times to UTC for comparison with completion_date)
+        start_time = appt.schedule_time - timedelta(hours=8) if appt.schedule_time else None
+        end_time = (appointments[i-1].schedule_time - timedelta(hours=8)) if (i > 0 and appointments[i-1].schedule_time) else None
 
         appt_sessions = []
         for s in sessions:
@@ -1881,7 +1945,7 @@ def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
             assessment_chat = db.query(models.LiveChatSession).filter(
                 models.LiveChatSession.student_id == appt.student_id,
                 models.LiveChatSession.therapist_id == physio_id,
-                models.LiveChatSession.created_at <= appt.schedule_time
+                models.LiveChatSession.created_at <= (appt.schedule_time - timedelta(hours=8))
             ).order_by(models.LiveChatSession.created_at.desc()).first()
         result.append({
             "appointment_id": appt.appointment_id,
@@ -1963,6 +2027,8 @@ def record_session(appointment_id: int, req: RecordSessionReq, db: Session = Dep
             next_time = datetime.fromisoformat(time_str).replace(tzinfo=None)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid next appointment time format: {e}")
+        
+        validate_appointment_time(db, appointment.therapist_id, next_time)
         
         next_appt = models.Appointment(
             student_id=appointment.student_id,
@@ -2054,6 +2120,8 @@ def record_teleconsultation(
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid next appointment time format: {e}")
         
+        validate_appointment_time(db, appointment.therapist_id, next_time)
+        
         next_appt = models.Appointment(
             student_id=appointment.student_id,
             therapist_id=appointment.therapist_id,
@@ -2078,14 +2146,6 @@ def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
     if not physio:
         raise HTTPException(status_code=403, detail="Physiotherapist access required")
 
-    patient_ids = {
-        student_id for (student_id,) in db.query(models.Appointment.student_id).filter(
-            models.Appointment.therapist_id == physio_id
-        ).distinct().all()
-    }
-    if not patient_ids:
-        return {"rentals": []}
-
     rentals = db.query(
         models.RentalRecord,
         models.User.username,
@@ -2100,8 +2160,6 @@ def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
         models.Equipment, models.RentalRecord.equipment_id == models.Equipment.equipment_id
     ).outerjoin(
         models.RentalReason, models.RentalRecord.rental_reason_id == models.RentalReason.rental_reason_id
-    ).filter(
-        models.RentalRecord.student_id.in_(patient_ids)
     ).order_by(models.RentalRecord.collection_date.desc()).all()
     
     result = []
@@ -2138,12 +2196,6 @@ def approve_rental(rental_id: int, physio_id: int, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="Rental not found")
     if rental.status != "Pending":
         raise HTTPException(status_code=400, detail="Only pending rentals can be approved")
-    relationship = db.query(models.Appointment).filter(
-        models.Appointment.therapist_id == physio_id,
-        models.Appointment.student_id == rental.student_id
-    ).first()
-    if not relationship:
-        raise HTTPException(status_code=403, detail="This patient is not assigned to you")
     
     # Check equipment stock
     equipment = db.query(models.Equipment).filter(models.Equipment.equipment_id == rental.equipment_id).first()
@@ -2166,12 +2218,6 @@ def reject_rental(rental_id: int, physio_id: int, db: Session = Depends(get_db))
         raise HTTPException(status_code=404, detail="Rental not found")
     if rental.status != "Pending":
         raise HTTPException(status_code=400, detail="Only pending rentals can be rejected")
-    relationship = db.query(models.Appointment).filter(
-        models.Appointment.therapist_id == physio_id,
-        models.Appointment.student_id == rental.student_id
-    ).first()
-    if not relationship:
-        raise HTTPException(status_code=403, detail="This patient is not assigned to you")
     
     rental.status = "Rejected"
     db.commit()
@@ -2310,10 +2356,13 @@ class RentalRequest(BaseModel):
 
 @app.post("/appointments/book")
 def book_appointment(req: BookAppointmentReq, db: Session = Depends(get_db)):
+    schedule_time_dt = datetime.fromisoformat(req.schedule_time).replace(tzinfo=None)
+    validate_appointment_time(db, req.therapist_id, schedule_time_dt)
+    
     appt = models.Appointment(
         student_id=req.student_id,
         therapist_id=req.therapist_id,
-        schedule_time=datetime.fromisoformat(req.schedule_time),
+        schedule_time=schedule_time_dt,
         status="Scheduled",
         meeting_room=f"rehab-ai-{secrets.token_hex(16)}"
     )
@@ -2570,9 +2619,9 @@ def get_student_progress(
         ).first()
         triage_data = chat_session.triage_data if chat_session else None
 
-        # Determine time window for this appointment
-        start_time = appt.schedule_time
-        end_time = appointments[i-1].schedule_time if i > 0 else None
+        # Determine time window for this appointment (adjusting local naive times to UTC for comparison with completion_date)
+        start_time = appt.schedule_time - timedelta(hours=8) if appt.schedule_time else None
+        end_time = (appointments[i-1].schedule_time - timedelta(hours=8)) if (i > 0 and appointments[i-1].schedule_time) else None
 
         appt_sessions = []
         for s in sessions:

@@ -13,6 +13,7 @@ import 'package:rehab_ai/services/teleconference_service.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
 import 'package:rehab_ai/widgets/portal_backdrop.dart';
 import 'package:intl/intl.dart';
+import 'package:image_picker/image_picker.dart';
 
 class PhysioDashboard extends StatefulWidget {
   const PhysioDashboard({super.key});
@@ -25,6 +26,8 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
   final _supabase = Supabase.instance.client;
   int? _myUserId;
   int _selectedIndex = 0;
+  String? _myUsername;
+  String? _myProfilePicUrl;
 
   List<int> _assignedSessionIds = [];
   Set<String> _unreadChats = {};
@@ -58,7 +61,9 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
       if (userData['exists'] == true) {
         setState(() {
           _myUserId = userData['user_id'];
+          _myUsername = userData['username'];
         });
+        await _resolveProfilePicture(userData['profile_picture']?.toString());
         _fetchAssignedSessions();
         _setupGlobalNotifications();
         _fetchPhysioNotifications();
@@ -67,6 +72,25 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
           (_) => _fetchPhysioNotifications(),
         );
       }
+    }
+  }
+
+  Future<void> _resolveProfilePicture(String? storedValue) async {
+    final value = storedValue?.trim() ?? '';
+    if (value.isEmpty) {
+      if (mounted) setState(() => _myProfilePicUrl = null);
+      return;
+    }
+    try {
+      final url = value.startsWith('http://') || value.startsWith('https://')
+          ? value
+          : await _supabase.storage
+                .from('profile_picture')
+                .createSignedUrl(value, 60 * 60);
+      if (mounted) setState(() => _myProfilePicUrl = url);
+    } catch (error) {
+      debugPrint('Unable to load profile picture: $error');
+      if (mounted) setState(() => _myProfilePicUrl = null);
     }
   }
 
@@ -363,6 +387,12 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                           compact: compactNavigation,
                           showBadge: _hasNotification('rental'),
                         ),
+                        _portalNavItem(
+                          4,
+                          Icons.account_circle_outlined,
+                          'My Profile',
+                          compact: compactNavigation,
+                        ),
                       ],
                     ),
                   ),
@@ -440,6 +470,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                                   'Patient Progress',
                                   'Appointments',
                                   'Equipment Rentals',
+                                  'My Profile',
                                 ][_selectedIndex],
                                 style: const TextStyle(
                                   fontSize: 16,
@@ -502,23 +533,29 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                               borderRadius: BorderRadius.circular(13),
                               border: Border.all(color: RehabColors.border),
                             ),
-                            child: const Row(
+                            child: Row(
                               children: [
                                 CircleAvatar(
                                   radius: 12,
                                   backgroundColor: RehabColors.physio,
-                                  child: Icon(
-                                    Icons.person,
-                                    size: 14,
-                                    color: Colors.white,
-                                  ),
+                                  backgroundImage: _myProfilePicUrl != null
+                                      ? NetworkImage(_myProfilePicUrl!)
+                                      : null,
+                                  child: _myProfilePicUrl == null
+                                      ? const Icon(
+                                          Icons.person,
+                                          size: 14,
+                                          color: Colors.white,
+                                        )
+                                      : null,
                                 ),
-                                SizedBox(width: 8),
+                                const SizedBox(width: 8),
                                 Text(
-                                  'Physiotherapist',
-                                  style: TextStyle(
+                                  _myUsername ?? 'Physiotherapist',
+                                  style: const TextStyle(
                                     fontSize: 12,
-                                    fontWeight: FontWeight.w700,
+                                    fontWeight: FontWeight.bold,
+                                    color: Color(0xFF166534),
                                   ),
                                 ),
                               ],
@@ -712,6 +749,14 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
         return PhysioRentalsTab(
           key: ValueKey('rentals-$_pageRefreshVersion'),
           myUserId: _myUserId!,
+        );
+      case 4:
+        return PhysioProfileTab(
+          key: ValueKey('profile-$_pageRefreshVersion'),
+          myUserId: _myUserId!,
+          onProfileUpdated: () {
+            _initDashboard();
+          },
         );
       default:
         return const Center(child: Text('Unknown Tab'));
@@ -2834,6 +2879,357 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
           ),
         );
       },
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// TAB 5: MY PROFILE
+// ---------------------------------------------------------------------------
+class PhysioProfileTab extends StatefulWidget {
+  final int myUserId;
+  final VoidCallback onProfileUpdated;
+
+  const PhysioProfileTab({
+    super.key,
+    required this.myUserId,
+    required this.onProfileUpdated,
+  });
+
+  @override
+  State<PhysioProfileTab> createState() => _PhysioProfileTabState();
+}
+
+class _PhysioProfileTabState extends State<PhysioProfileTab> {
+  static const _profilePictureBucket = 'profile_picture';
+  bool _isLoading = true;
+  bool _isUploadingPicture = false;
+  Map<String, dynamic>? _profileData;
+  String? _resolvedProfilePictureUrl;
+  final ImagePicker _imagePicker = ImagePicker();
+
+  String get _apiUrl => kIsWeb
+      ? 'http://127.0.0.1:8000'
+      : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchProfile();
+  }
+
+  Future<void> _fetchProfile() async {
+    try {
+      final user = Supabase.instance.client.auth.currentUser;
+      if (user == null) {
+        setState(() => _isLoading = false);
+        return;
+      }
+
+      final response = await http.get(
+        Uri.parse('$_apiUrl/users/profile/${user.id}'),
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['exists'] == true) {
+          setState(() {
+            _profileData = data;
+          });
+          await _resolveProfilePicture(data['profile_picture']?.toString());
+        }
+      }
+    } catch (e) {
+      debugPrint("Error fetching profile: $e");
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
+  Future<void> _resolveProfilePicture(String? storedValue) async {
+    final value = storedValue?.trim() ?? '';
+    if (value.isEmpty) {
+      if (mounted) setState(() => _resolvedProfilePictureUrl = null);
+      return;
+    }
+    try {
+      final url = value.startsWith('http://') || value.startsWith('https://')
+          ? value
+          : await Supabase.instance.client.storage
+                .from(_profilePictureBucket)
+                .createSignedUrl(value, 60 * 60);
+      if (mounted) setState(() => _resolvedProfilePictureUrl = url);
+    } catch (error) {
+      debugPrint('Unable to load profile picture: $error');
+      if (mounted) setState(() => _resolvedProfilePictureUrl = null);
+    }
+  }
+
+  Future<void> _uploadProfilePicture() async {
+    if (_isUploadingPicture) return;
+    final user = Supabase.instance.client.auth.currentUser;
+    if (user == null) return;
+
+    final image = await _imagePicker.pickImage(
+      source: ImageSource.gallery,
+      imageQuality: 75,
+      maxWidth: 1024,
+      maxHeight: 1024,
+    );
+    if (image == null || !mounted) return;
+
+    setState(() => _isUploadingPicture = true);
+    try {
+      final bytes = await image.readAsBytes();
+      if (bytes.length > 5 * 1024 * 1024) {
+        throw Exception('Please choose an image smaller than 5 MB.');
+      }
+      var extension = image.name.contains('.')
+          ? image.name.split('.').last.toLowerCase()
+          : 'jpg';
+      if (extension == 'jpeg') extension = 'jpg';
+      if (!{'jpg', 'png', 'webp'}.contains(extension)) {
+        throw Exception('Please choose a JPG, PNG, or WebP image.');
+      }
+      final contentType = extension == 'jpg'
+          ? 'image/jpeg'
+          : 'image/$extension';
+      final storagePath =
+          '${user.id}/profile_${DateTime.now().millisecondsSinceEpoch}.$extension';
+      final storage = Supabase.instance.client.storage.from(
+        _profilePictureBucket,
+      );
+      await storage.uploadBinary(
+        storagePath,
+        bytes,
+        fileOptions: FileOptions(
+          cacheControl: '3600',
+          contentType: contentType,
+          upsert: false,
+        ),
+      );
+
+      final response = await http.put(
+        Uri.parse('$_apiUrl/users/profile/${user.id}'),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'profile_picture': storagePath}),
+      );
+      if (response.statusCode != 200) {
+        await storage.remove([storagePath]);
+        throw Exception('Unable to save the profile picture.');
+      }
+      final oldPath = _profileData?['profile_picture']?.toString() ?? '';
+      final signedUrl = await storage.createSignedUrl(storagePath, 60 * 60);
+      if (!mounted) return;
+      setState(() {
+        _profileData = {...?_profileData, 'profile_picture': storagePath};
+        _resolvedProfilePictureUrl = signedUrl;
+      });
+      if (oldPath.isNotEmpty &&
+          !oldPath.startsWith('http://') &&
+          !oldPath.startsWith('https://') &&
+          oldPath != storagePath) {
+        try {
+          await storage.remove([oldPath]);
+        } catch (error) {
+          debugPrint('Unable to remove previous profile picture: $error');
+        }
+      }
+      widget.onProfileUpdated();
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Profile picture updated successfully.'),
+          backgroundColor: Color(0xFF1565C0),
+        ),
+      );
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(error.toString().replaceFirst('Exception: ', '')),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isUploadingPicture = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_isLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final name = _profileData?['username'] ?? 'Not set';
+    final spec = _profileData?['specialization'] ?? 'Physiotherapist';
+    final email = _profileData?['email'] ?? 'Not set';
+    final gender = _profileData?['gender'] ?? 'Not set';
+    final phone = _profileData?['contact_number'] ?? 'Not set';
+    final address = _profileData?['address'] ?? 'Not set';
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Profile Hero Card
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: RehabColors.patientGradient,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [
+                BoxShadow(
+                  color: RehabColors.primary.withValues(alpha: 0.16),
+                  blurRadius: 22,
+                  offset: const Offset(0, 10),
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                // Avatar Upload Container
+                Stack(
+                  children: [
+                    CircleAvatar(
+                      radius: 46,
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
+                      backgroundImage: _resolvedProfilePictureUrl != null
+                          ? NetworkImage(_resolvedProfilePictureUrl!)
+                          : null,
+                      child: _resolvedProfilePictureUrl == null
+                          ? const Icon(
+                              Icons.person_rounded,
+                              size: 48,
+                              color: Colors.white,
+                            )
+                          : null,
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: InkWell(
+                        onTap: _uploadProfilePicture,
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          width: 32,
+                          height: 32,
+                          decoration: const BoxDecoration(
+                            color: Colors.white,
+                            shape: BoxShape.circle,
+                          ),
+                          child: _isUploadingPicture
+                              ? const Padding(
+                                  padding: EdgeInsets.all(8),
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                    color: RehabColors.primary,
+                                  ),
+                                )
+                              : const Icon(
+                                  Icons.camera_alt_outlined,
+                                  size: 16,
+                                  color: RehabColors.primary,
+                                ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 24),
+                // Title and role
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        name,
+                        style: GoogleFonts.readexPro(
+                          fontSize: 24,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.white,
+                        ),
+                      ),
+                      const SizedBox(height: 6),
+                      Text(
+                        spec,
+                        style: GoogleFonts.readexPro(
+                          fontSize: 14,
+                          color: Colors.white.withValues(alpha: 0.9),
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+
+          Text(
+            "Account Details",
+            style: GoogleFonts.readexPro(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // Detail list Card
+          Card(
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  _buildDetailRow("Specialization", spec),
+                  const Divider(height: 24),
+                  _buildDetailRow("Email", email),
+                  const Divider(height: 24),
+                  _buildDetailRow("Gender", gender),
+                  const Divider(height: 24),
+                  _buildDetailRow("Contact Number", phone),
+                  const Divider(height: 24),
+                  _buildDetailRow("Address", address),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: GoogleFonts.readexPro(
+            fontSize: 12,
+            color: Colors.grey.shade600,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: GoogleFonts.readexPro(
+            fontSize: 15,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
     );
   }
 }

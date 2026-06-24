@@ -410,7 +410,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
         .toList();
     final query = (_rentalSearch ?? '').trim().toLowerCase();
     final active = query.isEmpty
-        ? <dynamic>[]
+        ? allActive
         : allActive.where((r) {
             final matric = r['matric_no']?.toString().toLowerCase() ?? '';
             return matric.contains(query);
@@ -444,15 +444,15 @@ class _AdminDashboardState extends State<AdminDashboard> {
         ),
         if (_isLoading)
           const Expanded(child: Center(child: CircularProgressIndicator()))
-        else if (query.isEmpty)
-          const Expanded(
-            child: Center(
-              child: Text('Enter a matric number to find student rentals.'),
-            ),
-          )
         else if (active.isEmpty)
-          const Expanded(
-            child: Center(child: Text('No matching active rentals found.')),
+          Expanded(
+            child: Center(
+              child: Text(
+                query.isEmpty
+                    ? 'No active or approved rentals found.'
+                    : 'No matching active rentals found.',
+              ),
+            ),
           )
         else
           Expanded(

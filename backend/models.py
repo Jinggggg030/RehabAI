@@ -37,6 +37,7 @@ class Physiotherapist(Base):
     specialization = Column(String(30), nullable=False)
     leave_start_date = Column(DateTime, nullable=True)
     leave_end_date = Column(DateTime, nullable=True)
+    profile_picture = Column(String(255), nullable=True)
 
 class Admin(Base):
     __tablename__ = "Admin"
