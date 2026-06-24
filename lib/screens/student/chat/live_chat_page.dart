@@ -757,9 +757,9 @@ class _LiveChatPageState extends State<LiveChatPage> {
 
   Widget _buildQuickReply(String text) {
     return InkWell(
-      onTap: () {
+      onTap: () async {
         if (text == 'Book Appointment') {
-          Navigator.push(
+          final booked = await Navigator.push<bool>(
             context,
             MaterialPageRoute(
               builder: (_) => const MyAppointmentsPage(
@@ -768,6 +768,15 @@ class _LiveChatPageState extends State<LiveChatPage> {
               ),
             ),
           );
+          if (booked == true && mounted) {
+            setState(() {
+              _messages.add(ChatMessage(
+                text: "System: Appointment booked successfully!",
+                isUser: false,
+              ));
+            });
+            _scrollToBottom();
+          }
         } else {
           _messageController.text = text;
           _sendMessage();

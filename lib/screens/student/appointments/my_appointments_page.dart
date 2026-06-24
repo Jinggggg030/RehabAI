@@ -35,6 +35,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
   List<dynamic> _cancelled = [];
   List<dynamic> _cancellationReasons = [];
   List<dynamic> _availablePhysios = [];
+  bool _didBook = false;
 
   @override
   void initState() {
@@ -47,7 +48,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
         final launcherRoute = ModalRoute.of(context);
         await _showBookAppointmentBottomSheet(context);
         if (mounted && widget.closeAfterBooking && launcherRoute != null) {
-          Navigator.of(context).removeRoute(launcherRoute);
+          Navigator.of(context).pop(_didBook);
         }
       });
     });
@@ -1246,6 +1247,9 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                             );
                             if (!mounted || !pageContext.mounted) return;
                             if (res.statusCode == 200) {
+                              setState(() {
+                                _didBook = true;
+                              });
                               Navigator.pop(context);
                               _fetchAppointments();
                             } else {

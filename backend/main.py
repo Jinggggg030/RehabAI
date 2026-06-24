@@ -964,11 +964,15 @@ def get_prescribed_exercises(student_id: int, db: Session = Depends(get_db)):
     ).all()
     
     result = []
-    today = datetime.now().date()
+    today = (datetime.utcnow() + timedelta(hours=8)).date()
     for pe in prescribed:
         assigned_days = max(pe.assigned_days or 1, 1)
-        assigned_at = pe.assigned_at or active_appointment.schedule_time
-        plan_start = assigned_at.date() if assigned_at else today
+        assigned_at_utc = pe.assigned_at
+        if assigned_at_utc is None:
+            assigned_at_local = active_appointment.schedule_time
+        else:
+            assigned_at_local = assigned_at_utc + timedelta(hours=8)
+        plan_start = assigned_at_local.date() if assigned_at_local else today
         plan_end = plan_start + timedelta(days=assigned_days - 1)
         # A prescription is part of the student's daily routine from its
         # start date through the final assigned day, inclusive.
@@ -1004,7 +1008,7 @@ def get_prescribed_exercises(student_id: int, db: Session = Depends(get_db)):
                 "assigned_reps": pe.assigned_reps,
                 "assigned_days": assigned_days,
                 "assigned_tracking_mode": pe.assigned_tracking_mode,
-                "assigned_date": assigned_at.isoformat() if assigned_at else None,
+                "assigned_date": assigned_at_local.isoformat() if assigned_at_local else None,
                 "plan_day": plan_day,
                 "days_remaining": days_remaining,
                 "plan_progress": min(plan_day / assigned_days, 1.0),
@@ -1620,10 +1624,11 @@ def get_physio_patient_progress(
     if not student:
         raise HTTPException(status_code=404, detail="Patient not found")
 
-    # Fetch all appointments for this student and physio
+    # Fetch all appointments for this student and physio (excluding cancelled)
     appointments = db.query(models.Appointment).filter(
         models.Appointment.therapist_id == physio_id,
-        models.Appointment.student_id == student_id
+        models.Appointment.student_id == student_id,
+        models.Appointment.status != "Cancelled"
     ).order_by(models.Appointment.schedule_time.desc()).all()
 
     # Walk appointments and group by root parent
@@ -1633,12 +1638,25 @@ def get_physio_patient_progress(
         root_id = root_appt.appointment_id
         groups.setdefault(root_id, []).append(appt)
 
-    # Build list of chains, sorted by start date descending
-    chains = []
+    # Build list of chains, keeping only those with prescribed exercises, sorted by start date descending
+    all_chains = []
     for root_id, appt_list in groups.items():
         chain = sorted(appt_list, key=lambda x: x.schedule_time)
-        chains.append(chain)
-    
+        all_chains.append(chain)
+        
+    chains = []
+    for chain in all_chains:
+        has_prescription = False
+        for appt in chain:
+            count = db.query(models.PrescribedExercise).filter(
+                models.PrescribedExercise.appointment_id == appt.appointment_id
+            ).count()
+            if count > 0:
+                has_prescription = True
+                break
+        if has_prescription:
+            chains.append(chain)
+
     chains.sort(key=lambda c: c[0].schedule_time, reverse=True)
 
     appointments_data = []
@@ -1719,7 +1737,7 @@ def get_physio_patient_progress(
         accuracy_values = [s.accuracy_score for s in appt_sessions if s.accuracy_score is not None]
         pain_changes = [s.pain_before - s.pain_after for s in appt_sessions if s.pain_before is not None and s.pain_after is not None]
         
-        session_days = sorted({s.completion_date.date() for s in appt_sessions}, reverse=True)
+        session_days = sorted({(s.completion_date + timedelta(hours=8)).date() for s in appt_sessions if s.completion_date}, reverse=True)
         streak = 0
         if session_days:
             streak = 1
@@ -1739,11 +1757,12 @@ def get_physio_patient_progress(
             "activity_streak": streak
         }
 
-        reference_date = end_time.date() if end_time else datetime.utcnow().date()
+        local_end = (end_time + timedelta(hours=8)) if end_time else None
+        reference_date = local_end.date() if local_end else (datetime.utcnow() + timedelta(hours=8)).date()
         appt_weekly = []
         for days_ago in range(6, -1, -1):
             day = reference_date - timedelta(days=days_ago)
-            day_sessions = [s for s in appt_sessions if s.completion_date.date() == day]
+            day_sessions = [s for s in appt_sessions if s.completion_date and (s.completion_date + timedelta(hours=8)).date() == day]
             appt_weekly.append({
                 "date": day.isoformat(),
                 "session_count": len(day_sessions),
@@ -1819,7 +1838,7 @@ def get_physio_patient_progress(
     ]
 
     session_days = sorted({
-        session.completion_date.date() for session in sessions
+        (session.completion_date + timedelta(hours=8)).date() for session in sessions
         if session.completion_date is not None
     }, reverse=True)
     streak = 0
@@ -1895,14 +1914,14 @@ def get_physio_patient_progress(
             )
         })
 
-    today = datetime.utcnow().date()
+    today = (datetime.utcnow() + timedelta(hours=8)).date()
     from datetime import timedelta
     weekly_activity = []
     for days_ago in range(6, -1, -1):
         day = today - timedelta(days=days_ago)
         day_sessions = [
             session for session in sessions
-            if session.completion_date and session.completion_date.date() == day
+            if session.completion_date and (session.completion_date + timedelta(hours=8)).date() == day
         ]
         weekly_activity.append({
             "date": day.isoformat(),
@@ -2614,9 +2633,10 @@ def get_student_progress(
     if not student:
         raise HTTPException(status_code=404, detail="Student not found")
 
-    # Fetch all appointments for this student
+    # Fetch all appointments for this student (excluding cancelled)
     appointments = db.query(models.Appointment).filter(
-        models.Appointment.student_id == student_id
+        models.Appointment.student_id == student_id,
+        models.Appointment.status != "Cancelled"
     ).order_by(models.Appointment.schedule_time.desc()).all()
 
     # Walk appointments and group by root parent
@@ -2626,12 +2646,25 @@ def get_student_progress(
         root_id = root_appt.appointment_id
         groups.setdefault(root_id, []).append(appt)
 
-    # Build list of chains, sorted by start date descending
-    chains = []
+    # Build list of chains, keeping only those with prescribed exercises, sorted by start date descending
+    all_chains = []
     for root_id, appt_list in groups.items():
         chain = sorted(appt_list, key=lambda x: x.schedule_time)
-        chains.append(chain)
-    
+        all_chains.append(chain)
+        
+    chains = []
+    for chain in all_chains:
+        has_prescription = False
+        for appt in chain:
+            count = db.query(models.PrescribedExercise).filter(
+                models.PrescribedExercise.appointment_id == appt.appointment_id
+            ).count()
+            if count > 0:
+                has_prescription = True
+                break
+        if has_prescription:
+            chains.append(chain)
+
     chains.sort(key=lambda c: c[0].schedule_time, reverse=True)
 
     appointments_data = []
@@ -2712,7 +2745,7 @@ def get_student_progress(
         accuracy_values = [s.accuracy_score for s in appt_sessions if s.accuracy_score is not None]
         pain_changes = [s.pain_before - s.pain_after for s in appt_sessions if s.pain_before is not None and s.pain_after is not None]
         
-        session_days = sorted({s.completion_date.date() for s in appt_sessions}, reverse=True)
+        session_days = sorted({(s.completion_date + timedelta(hours=8)).date() for s in appt_sessions if s.completion_date}, reverse=True)
         streak = 0
         if session_days:
             streak = 1
@@ -2732,11 +2765,12 @@ def get_student_progress(
             "activity_streak": streak
         }
 
-        reference_date = end_time.date() if end_time else datetime.utcnow().date()
+        local_end = (end_time + timedelta(hours=8)) if end_time else None
+        reference_date = local_end.date() if local_end else (datetime.utcnow() + timedelta(hours=8)).date()
         appt_weekly = []
         for days_ago in range(6, -1, -1):
             day = reference_date - timedelta(days=days_ago)
-            day_sessions = [s for s in appt_sessions if s.completion_date.date() == day]
+            day_sessions = [s for s in appt_sessions if s.completion_date and (s.completion_date + timedelta(hours=8)).date() == day]
             appt_weekly.append({
                 "date": day.isoformat(),
                 "session_count": len(day_sessions),
@@ -2808,7 +2842,7 @@ def get_student_progress(
     ]
 
     session_days = sorted({
-        session.completion_date.date() for session in sessions
+        (session.completion_date + timedelta(hours=8)).date() for session in sessions
         if session.completion_date is not None
     }, reverse=True)
     streak = 0
@@ -2884,13 +2918,13 @@ def get_student_progress(
             )
         })
 
-    today = datetime.utcnow().date()
+    today = (datetime.utcnow() + timedelta(hours=8)).date()
     weekly_activity = []
     for days_ago in range(6, -1, -1):
         day = today - timedelta(days=days_ago)
         day_sessions = [
             session for session in sessions
-            if session.completion_date and session.completion_date.date() == day
+            if session.completion_date and (session.completion_date + timedelta(hours=8)).date() == day
         ]
         weekly_activity.append({
             "date": day.isoformat(),

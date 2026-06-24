@@ -431,35 +431,55 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                                 Row(
                                   children: [
                                     Expanded(
-                                      child: DropdownButtonFormField<int>(
-                                        key: ValueKey('exercise-$index'),
-                                        decoration: const InputDecoration(
-                                          labelText: 'Select Exercise',
-                                          isDense: true,
-                                        ),
-                                        initialValue: ex['exercise_id'],
-                                        items: _availableExercises
-                                            .map<DropdownMenuItem<int>>((a) {
+                                      child: Column(
+                                        children: [
+                                          TextFormField(
+                                            decoration: const InputDecoration(
+                                              labelText: 'Search Exercise...',
+                                              isDense: true,
+                                              prefixIcon: Icon(Icons.search, size: 18),
+                                            ),
+                                            onChanged: (val) {
+                                              setState(() {
+                                                _selectedExercises[index]['search_query'] = val;
+                                              });
+                                            },
+                                          ),
+                                          const SizedBox(height: 8),
+                                          DropdownButtonFormField<int>(
+                                            key: ValueKey('exercise-$index'),
+                                            decoration: const InputDecoration(
+                                              labelText: 'Select Exercise',
+                                              isDense: true,
+                                            ),
+                                            initialValue: ex['exercise_id'],
+                                            items: _availableExercises.where((a) {
+                                              final query = (ex['search_query']?.toString() ?? '').toLowerCase();
+                                              final isSelected = a['exercise_id'] == ex['exercise_id'];
+                                              final name = (a['name'] ?? '').toString().toLowerCase();
+                                              return isSelected || name.contains(query);
+                                            }).map<DropdownMenuItem<int>>((a) {
                                               return DropdownMenuItem<int>(
                                                 value: a['exercise_id'],
                                                 child: Text(
                                                   a['name'] ?? 'Unknown',
                                                 ),
                                               );
-                                            })
-                                            .toList(),
-                                        onChanged: (val) {
-                                          setState(() {
-                                            _selectedExercises[index]['exercise_id'] =
-                                                val!;
-                                            if (!_supportsTrackingChoice(
-                                              _exerciseDetails(val),
-                                            )) {
-                                              _selectedExercises[index]['assigned_tracking_mode'] =
-                                                  'duration';
-                                            }
-                                          });
-                                        },
+                                            }).toList(),
+                                            onChanged: (val) {
+                                              setState(() {
+                                                _selectedExercises[index]['exercise_id'] =
+                                                    val!;
+                                                if (!_supportsTrackingChoice(
+                                                  _exerciseDetails(val),
+                                                )) {
+                                                  _selectedExercises[index]['assigned_tracking_mode'] =
+                                                      'duration';
+                                                }
+                                              });
+                                            },
+                                          ),
+                                        ],
                                       ),
                                     ),
                                     IconButton(
