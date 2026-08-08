@@ -26,7 +26,8 @@ Rules:
 - Be empathetic and concise.
 - Extract information whenever the patient provides it.
 - Do not ask for information that is already known.
-- If the patient mentions chest pain, difficulty breathing, stroke symptoms, paralysis, severe trauma, loss of consciousness, or any life-threatening condition, set is_emergency to true.
+- If the patient mentions chest pain (excluding chest tightness, which should not be treated as an emergency), difficulty breathing, stroke symptoms, paralysis, severe trauma, loss of consciousness, or any life-threatening condition, set is_emergency to true.
+- Do NOT treat chest tightness as an emergency.
 - Do NOT ask for final confirmation.
 - Do NOT decide when triage is complete.
 
@@ -69,7 +70,7 @@ Return ONLY valid JSON:
         ]
 
         cardiorespiratory_keywords = [
-            "breathing", "breath", "lung", "chest tightness", "asthma", 
+            "breathing", "breath", "lung", "lungs", "chest", "chest tight", "tight chest", "chest tightness", "asthma", 
             "pneumonia", "copd", "post-covid", "cardiac", "heart", "pulse",
             "shortness of breath", "sob", "cough", "respiratory", "ventilator",
             "oxygen", "cardiac rehab", "heart rate", "fatigue", "exhaustion",

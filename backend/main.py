@@ -1227,9 +1227,10 @@ def validate_appointment_time(db: Session, therapist_id: int, schedule_time_dt: 
 
 def assign_physio(db: Session, session_id: int, discipline: str):
     # Retrieve all physiotherapists with matching specialization (treat Orthopaedic and Musculoskeletal as synonyms)
-    if discipline and discipline.lower() in ["orthopaedic", "musculoskeletal"]:
+    if discipline and discipline.lower() in ["orthopaedic", "orthopedic", "musculoskeletal"]:
         matching_physios = db.query(models.Physiotherapist).filter(
             (models.Physiotherapist.specialization.ilike("%Orthopaedic%")) |
+            (models.Physiotherapist.specialization.ilike("%Orthopedic%")) |
             (models.Physiotherapist.specialization.ilike("%Musculoskeletal%"))
         ).all()
     else:
@@ -1354,40 +1355,47 @@ class CancelAppointmentReq(BaseModel):
 
 @app.post("/chat/send")
 def send_message(req: SendMessageReq, db: Session = Depends(get_db)):
-    user_log = models.ChatLog(
-        session_id=req.session_id,
-        sender_id=req.user_id,
-        content=req.message
-    )
-    db.add(user_log)
-    db.commit()
-    
-    # Phase 1 & 2: Stateful Multi-turn triage
-    session = db.query(models.LiveChatSession).filter(models.LiveChatSession.session_id == req.session_id).first()
-    if session and session.session_status == "Triage":
-        updated_state, auto_reply, new_status = chatbot_instance.process_message(req.message, session.triage_data)
-        
-        if new_status == "Active":
-            auto_reply = check_posture_integration(db, req.user_id, auto_reply)
-
-        session.triage_data = updated_state
-        flag_modified(session, "triage_data")
-        session.session_status = new_status
-        session.discipline = updated_state.get("discipline")
-        
-        system_log = models.ChatLog(
+    try:
+        user_log = models.ChatLog(
             session_id=req.session_id,
-            sender_id=None,
-            content=auto_reply
+            sender_id=req.user_id,
+            content=req.message
         )
-        db.add(system_log)
+        db.add(user_log)
         db.commit()
         
-        # Phase 4: Assign physio
-        if new_status == "Active" and session.discipline:
-            assign_physio(db, session.session_id, session.discipline)
+        # Phase 1 & 2: Stateful Multi-turn triage
+        session = db.query(models.LiveChatSession).filter(models.LiveChatSession.session_id == req.session_id).first()
+        if session and session.session_status == "Triage":
+            import copy
+            triage_data_copy = copy.deepcopy(session.triage_data) if session.triage_data else None
+            updated_state, auto_reply, new_status = chatbot_instance.process_message(req.message, triage_data_copy)
             
-    return {"status": "success"}
+            if new_status == "Active":
+                auto_reply = check_posture_integration(db, req.user_id, auto_reply)
+
+            session.triage_data = updated_state
+            session.session_status = new_status
+            session.discipline = updated_state.get("discipline")
+            
+            system_log = models.ChatLog(
+                session_id=req.session_id,
+                sender_id=None,
+                content=auto_reply
+            )
+            db.add(system_log)
+            db.commit()
+            
+            # Phase 4: Assign physio
+            if new_status == "Active" and session.discipline:
+                assign_physio(db, session.session_id, session.discipline)
+                
+        return {"status": "success"}
+    except Exception as e:
+        import traceback
+        tb = traceback.format_exc()
+        print("ERROR IN CHAT SEND:\n", tb)
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 @app.get("/physio/chats/{physio_id}")
 def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
