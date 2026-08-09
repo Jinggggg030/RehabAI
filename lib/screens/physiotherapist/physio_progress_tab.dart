@@ -371,11 +371,8 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
                     } catch (_) {}
                   }
 
-                  String details = '';
-                  final subject = appt['subject']?.toString().trim() ?? '';
-                  if (subject.isNotEmpty) {
-                    details = subject;
-                  }
+                  String details =
+                      appt['plan_label']?.toString().trim() ?? '';
 
                   if (details.isEmpty) {
                     final exercises = appt['assigned_exercises'] as List<dynamic>? ?? [];
@@ -387,18 +384,6 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
                           .toList();
                       if (names.isNotEmpty) {
                         details = names.join(', ');
-                      }
-                    }
-                  }
-
-                  final triage = appt['triage_data'] as Map?;
-                  if (triage != null && triage['pain_area'] != null) {
-                    final area = triage['pain_area'].toString().trim();
-                    if (area.isNotEmpty) {
-                      if (details.isNotEmpty) {
-                        details = '$details ($area)';
-                      } else {
-                        details = '$area Rehab';
                       }
                     }
                   }

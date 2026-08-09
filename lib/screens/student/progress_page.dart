@@ -125,6 +125,8 @@ class _ProgressPageState extends State<ProgressPage> {
     return [
       _buildTimelineSelector(progress),
       const SizedBox(height: 22),
+      _buildRecoveryTrends(selectedAppt),
+      const SizedBox(height: 22),
       _buildSummaryCards(selectedAppt),
       const SizedBox(height: 22),
       _buildPainInsight(selectedAppt),
@@ -170,7 +172,7 @@ class _ProgressPageState extends State<ProgressPage> {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Progress Intelligence',
+                          'Progress',
                           style: TextStyle(
                             color: Colors.white,
                             fontSize: 23,
@@ -316,11 +318,8 @@ class _ProgressPageState extends State<ProgressPage> {
                     } catch (_) {}
                   }
 
-                  String details = '';
-                  final subject = appt['subject']?.toString().trim() ?? '';
-                  if (subject.isNotEmpty) {
-                    details = subject;
-                  }
+                  String details =
+                      appt['plan_label']?.toString().trim() ?? '';
 
                   if (details.isEmpty) {
                     final exercises = appt['assigned_exercises'] as List<dynamic>? ?? [];
@@ -332,18 +331,6 @@ class _ProgressPageState extends State<ProgressPage> {
                           .toList();
                       if (names.isNotEmpty) {
                         details = names.join(', ');
-                      }
-                    }
-                  }
-
-                  final triage = appt['triage_data'] as Map?;
-                  if (triage != null && triage['pain_area'] != null) {
-                    final area = triage['pain_area'].toString().trim();
-                    if (area.isNotEmpty) {
-                      if (details.isNotEmpty) {
-                        details = '$details ($area)';
-                      } else {
-                        details = '$area Rehab';
                       }
                     }
                   }
@@ -603,6 +590,42 @@ class _ProgressPageState extends State<ProgressPage> {
             ),
     );
   }
+
+  Widget _buildRecoveryTrends(Map<String, dynamic>? selectedAppt) {
+    final trends = (selectedAppt?['recovery_trends'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+
+    return _SectionCard(
+      title: 'My Recovery Progress',
+      subtitle: 'Compare your first and latest attempt for each exercise',
+      child: trends.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(
+                child: Text('Complete an exercise to create your baseline.'),
+              ),
+            )
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final cardWidth = constraints.maxWidth < 650
+                    ? constraints.maxWidth
+                    : (constraints.maxWidth - 12) / 2;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: trends
+                      .map((trend) => SizedBox(
+                            width: cardWidth,
+                            child: _RecoveryTrendCard(trend: trend),
+                          ))
+                      .toList(),
+                );
+              },
+            ),
+    );
+  }
   
   Widget _buildRecentSessions(Map<String, dynamic>? selectedAppt) {
     if (selectedAppt == null || selectedAppt['recent_sessions'] == null) return const SizedBox.shrink();
@@ -714,6 +737,208 @@ class _AnalysisCard extends StatelessWidget {
               ),
             ],
           ),
+        ],
+      ),
+    );
+  }
+}
+
+class _RecoveryTrendCard extends StatelessWidget {
+  const _RecoveryTrendCard({required this.trend});
+
+  final Map<String, dynamic> trend;
+
+  String _seconds(dynamic value) {
+    final seconds = (value as num?)?.toInt();
+    if (seconds == null) return '—';
+    final minutes = seconds ~/ 60;
+    final remainder = seconds % 60;
+    return minutes == 0 ? '${remainder}s' : '${minutes}m ${remainder}s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final first = Map<String, dynamic>.from(
+      trend['first_attempt'] as Map? ?? const {},
+    );
+    final latest = Map<String, dynamic>.from(
+      trend['latest_attempt'] as Map? ?? const {},
+    );
+    final accuracyChange = (trend['accuracy_change'] as num?)?.toDouble();
+    final timeSaved = (trend['time_saved_seconds'] as num?)?.toInt();
+    final attempts = (trend['attempt_count'] as num?)?.toInt() ?? 0;
+    final status = trend['trend_status']?.toString() ?? 'baseline';
+    final improving = status == 'improving';
+    final color = improving
+        ? Colors.green
+        : status == 'needs_attention'
+            ? Colors.orange
+            : Colors.blue;
+    final statusText = status == 'improving'
+        ? 'Improving'
+        : status == 'needs_attention'
+            ? 'Keep practising'
+            : status == 'steady'
+                ? 'Steady'
+                : 'Baseline recorded';
+
+    String accuracy(dynamic value) {
+      final score = (value as num?)?.toDouble();
+      return score == null ? '—' : '${score.toStringAsFixed(0)}%';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  trend['exercise_name']?.toString() ?? 'Exercise',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  statusText,
+                  style: TextStyle(
+                    color: color.shade700,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 5),
+          Text('$attempts ${attempts == 1 ? 'attempt' : 'attempts'}',
+              style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _AttemptColumn(
+                  label: 'FIRST',
+                  accuracy: accuracy(first['accuracy_score']),
+                  duration: _seconds(first['duration_seconds']),
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: Icon(Icons.arrow_forward, color: Colors.black38),
+              ),
+              Expanded(
+                child: _AttemptColumn(
+                  label: 'LATEST',
+                  accuracy: accuracy(latest['accuracy_score']),
+                  duration: _seconds(latest['duration_seconds']),
+                ),
+              ),
+            ],
+          ),
+          if (attempts > 1) ...[
+            const SizedBox(height: 14),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (accuracyChange != null)
+                  _TrendChip(
+                    icon: accuracyChange >= 0
+                        ? Icons.trending_up
+                        : Icons.trending_down,
+                    label:
+                        '${accuracyChange >= 0 ? '+' : ''}${accuracyChange.toStringAsFixed(0)}% accuracy',
+                    positive: accuracyChange > 0,
+                  ),
+                if (timeSaved != null)
+                  _TrendChip(
+                    icon: Icons.timer_outlined,
+                    label: timeSaved >= 0
+                        ? '${_seconds(timeSaved)} faster'
+                        : '${_seconds(timeSaved.abs())} slower',
+                    positive: timeSaved > 0,
+                  ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AttemptColumn extends StatelessWidget {
+  const _AttemptColumn({
+    required this.label,
+    required this.accuracy,
+    required this.duration,
+  });
+
+  final String label;
+  final String accuracy;
+  final String duration;
+
+  @override
+  Widget build(BuildContext context) => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 10,
+                  color: Colors.black45,
+                  fontWeight: FontWeight.bold)),
+          const SizedBox(height: 5),
+          Text(accuracy,
+              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+          Text(duration,
+              style: const TextStyle(fontSize: 12, color: Colors.black54)),
+        ],
+      );
+}
+
+class _TrendChip extends StatelessWidget {
+  const _TrendChip({
+    required this.icon,
+    required this.label,
+    required this.positive,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool positive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = positive ? Colors.green : Colors.orange;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color.shade700),
+          const SizedBox(width: 4),
+          Text(label,
+              style: TextStyle(
+                  color: color.shade700,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600)),
         ],
       ),
     );

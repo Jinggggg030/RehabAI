@@ -14,6 +14,55 @@ from backend.ai.angle_calculator import calculate_angle
 from backend.ai.chatbot import chatbot_instance
 from datetime import datetime, timedelta
 import secrets
+import re
+
+
+def build_treatment_plan_label(triage_data=None, subject=None):
+    """Create a patient-friendly plan name from AI-extracted chat details."""
+    triage = triage_data if isinstance(triage_data, dict) else {}
+    area = str(triage.get("pain_area") or "").strip()
+    point = str(triage.get("pain_point") or "").strip().lower()
+
+    if area:
+        area = re.sub(r"^(my|the)\s+", "", area, flags=re.IGNORECASE)
+        area = re.sub(r"\s+", " ", area).strip(" .,-")
+        condition = area
+        area_lower = area.lower()
+
+        if "stiff" in area_lower:
+            condition = re.sub(
+                r"\b(?:very\s+)?stiff(?:ness)?\b",
+                "stiffness",
+                condition,
+                flags=re.IGNORECASE,
+            )
+        elif not any(
+            symptom in area_lower
+            for symptom in (
+                "pain", "ache", "stiffness", "swelling", "numbness",
+                "weakness", "sprain", "strain", "injury",
+            )
+        ):
+            if "stiff" in point:
+                symptom = "stiffness"
+            elif "swell" in point:
+                symptom = "swelling"
+            elif "numb" in point or "tingl" in point:
+                symptom = "numbness"
+            elif "weak" in point:
+                symptom = "weakness"
+            else:
+                symptom = "pain"
+            condition = f"{condition} {symptom}"
+
+        return f"{condition.title()} Rehabilitation"
+
+    clean_subject = str(subject or "").strip()
+    if clean_subject and clean_subject.lower() not in {
+        "initial triage", "general consultation", "follow-up rehab"
+    }:
+        return clean_subject
+    return "General Rehabilitation"
 
 models.Base.metadata.create_all(bind=engine)
 
@@ -1302,7 +1351,7 @@ def start_chat(req: StartChatReq, db: Session = Depends(get_db)):
     # 2. Create the session
     new_session = models.LiveChatSession(
         student_id=req.user_id,
-        subject="Initial Triage",
+        subject=build_treatment_plan_label(updated_state),
         discipline=updated_state.get("discipline"),
         triage_data=updated_state,
         session_status=session_status
@@ -1377,6 +1426,10 @@ def send_message(req: SendMessageReq, db: Session = Depends(get_db)):
             session.triage_data = updated_state
             session.session_status = new_status
             session.discipline = updated_state.get("discipline")
+            session.subject = build_treatment_plan_label(
+                updated_state,
+                session.subject,
+            )
             
             system_log = models.ChatLog(
                 session_id=req.session_id,
@@ -1809,6 +1862,7 @@ def get_physio_patient_progress(
             "assigned_exercises": appt_exercises,
             "triage_data": triage_data,
             "subject": subject,
+            "plan_label": build_treatment_plan_label(triage_data, subject),
             "summary": appt_summary,
             "weekly_activity": appt_weekly,
             "recent_sessions": appt_recent
@@ -2809,6 +2863,66 @@ def get_student_progress(
                 "pain_after": s.pain_after
             })
 
+        # Compare repeated attempts of the same exercise in chronological order.
+        # Keeping this scoped to the treatment-plan window prevents an old plan
+        # from being presented as the patient's current recovery baseline.
+        recovery_trends = []
+        for exercise in appt_exercises:
+            exercise_sessions = sorted(
+                (
+                    s for s in appt_sessions
+                    if s.exercise_id == exercise["exercise_id"]
+                    and s.completion_date is not None
+                ),
+                key=lambda s: s.completion_date,
+            )
+            attempts = [
+                {
+                    "session_id": s.schedule_id,
+                    "completion_date": s.completion_date.isoformat(),
+                    "accuracy_score": s.accuracy_score,
+                    "duration_seconds": s.duration_seconds,
+                }
+                for s in exercise_sessions
+            ]
+            if not attempts:
+                continue
+
+            first = attempts[0]
+            latest = attempts[-1]
+            accuracy_change = None
+            if first["accuracy_score"] is not None and latest["accuracy_score"] is not None:
+                accuracy_change = latest["accuracy_score"] - first["accuracy_score"]
+            time_change = None
+            if first["duration_seconds"] is not None and latest["duration_seconds"] is not None:
+                # Positive means the latest attempt was completed faster.
+                time_change = first["duration_seconds"] - latest["duration_seconds"]
+
+            comparable_changes = [
+                change for change in (accuracy_change, time_change)
+                if change is not None
+            ]
+            if len(attempts) < 2 or not comparable_changes:
+                trend_status = "baseline"
+            elif any(change > 0 for change in comparable_changes):
+                trend_status = "improving"
+            elif all(change == 0 for change in comparable_changes):
+                trend_status = "steady"
+            else:
+                trend_status = "needs_attention"
+
+            recovery_trends.append({
+                "exercise_id": exercise["exercise_id"],
+                "exercise_name": exercise["name"],
+                "attempt_count": len(attempts),
+                "first_attempt": first,
+                "latest_attempt": latest,
+                "accuracy_change": accuracy_change,
+                "time_saved_seconds": time_change,
+                "trend_status": trend_status,
+                "attempts": attempts,
+            })
+
         appointments_data.append({
             "appointment_id": first_appt.appointment_id,
             "date": first_appt.schedule_time.isoformat() if first_appt.schedule_time else None,
@@ -2818,9 +2932,11 @@ def get_student_progress(
             "assigned_exercises": appt_exercises,
             "triage_data": triage_data,
             "subject": subject,
+            "plan_label": build_treatment_plan_label(triage_data, subject),
             "summary": appt_summary,
             "weekly_activity": appt_weekly,
-            "recent_sessions": appt_recent
+            "recent_sessions": appt_recent,
+            "recovery_trends": recovery_trends,
         })
 
     exercise_ids = set(exercise_assignments.keys())
