@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import 'package:rehab_ai/widgets/notification_bell.dart';
 import 'package:rehab_ai/utils/current_user_id.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/widgets/recovery_trend_chart.dart';
 
 class ProgressPage extends StatefulWidget {
   const ProgressPage({super.key});
@@ -50,7 +51,7 @@ class _ProgressPageState extends State<ProgressPage> {
       }
 
       final decoded = jsonDecode(response.body) as Map<String, dynamic>;
-      
+
       if (!mounted) return;
       setState(() {
         _progress = decoded;
@@ -68,7 +69,8 @@ class _ProgressPageState extends State<ProgressPage> {
       if (!mounted) return;
       setState(() {
         _isLoading = false;
-        _errorMessage = 'Unable to load progress. Check the backend connection.';
+        _errorMessage =
+            'Unable to load progress. Check the backend connection.';
       });
       debugPrint('Progress loading error: $error');
     }
@@ -102,8 +104,9 @@ class _ProgressPageState extends State<ProgressPage> {
                     else if (_errorMessage != null)
                       _buildErrorState()
                     else if (_progress == null)
-                       const Center(child: Text('No progress data.'))
-                    else ..._buildContent(),
+                      const Center(child: Text('No progress data.'))
+                    else
+                      ..._buildContent(),
                   ]),
                 ),
               ),
@@ -117,10 +120,13 @@ class _ProgressPageState extends State<ProgressPage> {
   List<Widget> _buildContent() {
     final progress = _progress!;
     final appointments = progress['appointments'] as List<dynamic>? ?? [];
-    final selectedAppt = appointments.firstWhere(
-      (dynamic appt) => appt['appointment_id'] == _selectedAppointmentId,
-      orElse: () => appointments.isNotEmpty ? appointments.first : null,
-    ) as Map<String, dynamic>?;
+    final selectedAppt =
+        appointments.firstWhere(
+              (dynamic appt) =>
+                  appt['appointment_id'] == _selectedAppointmentId,
+              orElse: () => appointments.isNotEmpty ? appointments.first : null,
+            )
+            as Map<String, dynamic>?;
 
     return [
       _buildTimelineSelector(progress),
@@ -311,18 +317,19 @@ class _ProgressPageState extends State<ProgressPage> {
                       final dt = DateTime.parse(dateStr);
                       if (latestDateStr != null && latestDateStr != dateStr) {
                         final ldt = DateTime.parse(latestDateStr);
-                        dateLabel = '${DateFormat('MMM d, yyyy').format(dt)} to ${DateFormat('MMM d, yyyy').format(ldt)}';
+                        dateLabel =
+                            '${DateFormat('MMM d, yyyy').format(dt)} to ${DateFormat('MMM d, yyyy').format(ldt)}';
                       } else {
                         dateLabel = DateFormat('MMM d, yyyy').format(dt);
                       }
                     } catch (_) {}
                   }
 
-                  String details =
-                      appt['plan_label']?.toString().trim() ?? '';
+                  String details = appt['plan_label']?.toString().trim() ?? '';
 
                   if (details.isEmpty) {
-                    final exercises = appt['assigned_exercises'] as List<dynamic>? ?? [];
+                    final exercises =
+                        appt['assigned_exercises'] as List<dynamic>? ?? [];
                     if (exercises.isNotEmpty) {
                       final names = exercises
                           .map((dynamic ex) => ex['name']?.toString() ?? '')
@@ -336,12 +343,16 @@ class _ProgressPageState extends State<ProgressPage> {
                   }
 
                   if (details.isEmpty) {
-                    details = appt['status'] == 'Completed' ? 'Follow-up Rehab' : 'General Consultation';
+                    details = appt['status'] == 'Completed'
+                        ? 'Follow-up Rehab'
+                        : 'General Consultation';
                   }
 
                   String label = '$details — $dateLabel';
                   final activeAppt = appointments.firstWhere(
-                    (a) => (a['status'] ?? '').toString().toLowerCase() == 'completed',
+                    (a) =>
+                        (a['status'] ?? '').toString().toLowerCase() ==
+                        'completed',
                     orElse: () => null,
                   );
                   if (appt == activeAppt) label += ' (Active)';
@@ -357,9 +368,11 @@ class _ProgressPageState extends State<ProgressPage> {
       ],
     );
   }
-  
+
   Widget _buildSummaryCards(Map<String, dynamic>? selectedAppt) {
-    if (selectedAppt == null || selectedAppt['summary'] == null) return const SizedBox.shrink();
+    if (selectedAppt == null || selectedAppt['summary'] == null) {
+      return const SizedBox.shrink();
+    }
     final summary = Map<String, dynamic>.from(selectedAppt['summary'] as Map);
     final accuracy = (summary['average_accuracy'] as num?)?.toDouble();
     final pain = (summary['average_pain_change'] as num?)?.toDouble();
@@ -404,9 +417,11 @@ class _ProgressPageState extends State<ProgressPage> {
       ),
     );
   }
-  
+
   Widget _buildPainInsight(Map<String, dynamic>? selectedAppt) {
-    if (selectedAppt == null || selectedAppt['summary'] == null) return const SizedBox.shrink();
+    if (selectedAppt == null || selectedAppt['summary'] == null) {
+      return const SizedBox.shrink();
+    }
     final summary = Map<String, dynamic>.from(selectedAppt['summary'] as Map);
     final pain = (summary['average_pain_change'] as num?)?.toDouble();
     final streak = (summary['activity_streak'] as num?)?.toInt() ?? 0;
@@ -445,9 +460,11 @@ class _ProgressPageState extends State<ProgressPage> {
       ),
     );
   }
-  
+
   Widget _buildWeeklyActivity(Map<String, dynamic>? selectedAppt) {
-    if (selectedAppt == null || selectedAppt['weekly_activity'] == null) return const SizedBox.shrink();
+    if (selectedAppt == null || selectedAppt['weekly_activity'] == null) {
+      return const SizedBox.shrink();
+    }
     final activity = (selectedAppt['weekly_activity'] as List<dynamic>? ?? [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
@@ -510,18 +527,19 @@ class _ProgressPageState extends State<ProgressPage> {
       ),
     );
   }
-  
+
   Widget _buildExercisePerformance(Map<String, dynamic> progress) {
     final appointments = progress['appointments'] as List<dynamic>? ?? [];
     final selectedAppt = appointments.firstWhere(
       (appt) => appt['appointment_id'] == _selectedAppointmentId,
       orElse: () => appointments.isNotEmpty ? appointments.first : null,
     );
-    final exercises = (selectedAppt?['assigned_exercises'] as List<dynamic>? ?? [])
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
-    
+    final exercises =
+        (selectedAppt?['assigned_exercises'] as List<dynamic>? ?? [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+
     // Get global exercises list from backend to fetch global sessions count and accuracy for the assigned exercises
     final globalExercises = (progress['exercises'] as List<dynamic>? ?? [])
         .whereType<Map>()
@@ -534,7 +552,9 @@ class _ProgressPageState extends State<ProgressPage> {
       child: exercises.isEmpty
           ? const Padding(
               padding: EdgeInsets.all(20),
-              child: Center(child: Text('No exercises assigned for this plan.')),
+              child: Center(
+                child: Text('No exercises assigned for this plan.'),
+              ),
             )
           : SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -552,35 +572,48 @@ class _ProgressPageState extends State<ProgressPage> {
                 rows: exercises.map((exercise) {
                   // Find the corresponding global exercise stats for this specific exercise_id
                   final globalEx = globalExercises.firstWhere(
-                    (g) => g['exercise_id'] == exercise['exercise_id'] && g['source'] == 'Assigned',
+                    (g) =>
+                        g['exercise_id'] == exercise['exercise_id'] &&
+                        g['source'] == 'Assigned',
                     orElse: () => <String, dynamic>{},
                   );
-                  
-                  final seconds = (globalEx['total_duration_seconds'] as num?)?.toInt() ?? 0;
-                  final accuracy = (globalEx['average_accuracy'] as num?)?.toDouble();
-                  final last = DateTime.tryParse(globalEx['last_completed']?.toString() ?? '');
+
+                  final seconds =
+                      (globalEx['total_duration_seconds'] as num?)?.toInt() ??
+                      0;
+                  final accuracy = (globalEx['average_accuracy'] as num?)
+                      ?.toDouble();
+                  final last = DateTime.tryParse(
+                    globalEx['last_completed']?.toString() ?? '',
+                  );
 
                   return DataRow(
                     cells: [
-                      DataCell(Text(exercise['name']?.toString() ?? 'Exercise')),
+                      DataCell(
+                        Text(exercise['name']?.toString() ?? 'Exercise'),
+                      ),
                       DataCell(_SourceChip('Assigned')),
                       DataCell(
                         Text(
                           exercise['assigned_tracking_mode'] == 'reps'
                               ? '${exercise['assigned_sets'] ?? 0} × ${exercise['assigned_reps'] ?? 0} reps for ${exercise['assigned_days'] ?? 1} days'
-                              : '${exercise['assigned_sets'] ?? 0} × ${exercise['assigned_duration'] ?? 0}s for ${exercise['assigned_days'] ?? 1} days'
+                              : '${exercise['assigned_sets'] ?? 0} × ${exercise['assigned_duration'] ?? 0}s for ${exercise['assigned_days'] ?? 1} days',
                         ),
                       ),
                       DataCell(Text('${globalEx['session_count'] ?? 0}')),
                       DataCell(Text((seconds / 60).toStringAsFixed(1))),
                       DataCell(
                         Text(
-                          accuracy == null ? '—' : '${accuracy.toStringAsFixed(0)}%',
+                          accuracy == null
+                              ? '—'
+                              : '${accuracy.toStringAsFixed(0)}%',
                         ),
                       ),
                       DataCell(
                         Text(
-                          last == null ? 'Not completed' : DateFormat('MMM dd').format(last),
+                          last == null
+                              ? 'Not completed'
+                              : DateFormat('MMM dd').format(last),
                         ),
                       ),
                     ],
@@ -599,7 +632,7 @@ class _ProgressPageState extends State<ProgressPage> {
 
     return _SectionCard(
       title: 'My Recovery Progress',
-      subtitle: 'Compare your first and latest attempt for each exercise',
+      subtitle: 'Helps you to track whether your progress is improving or not.',
       child: trends.isEmpty
           ? const Padding(
               padding: EdgeInsets.all(20),
@@ -616,19 +649,23 @@ class _ProgressPageState extends State<ProgressPage> {
                   spacing: 12,
                   runSpacing: 12,
                   children: trends
-                      .map((trend) => SizedBox(
-                            width: cardWidth,
-                            child: _RecoveryTrendCard(trend: trend),
-                          ))
+                      .map(
+                        (trend) => SizedBox(
+                          width: cardWidth,
+                          child: _RecoveryTrendCard(trend: trend),
+                        ),
+                      )
                       .toList(),
                 );
               },
             ),
     );
   }
-  
+
   Widget _buildRecentSessions(Map<String, dynamic>? selectedAppt) {
-    if (selectedAppt == null || selectedAppt['recent_sessions'] == null) return const SizedBox.shrink();
+    if (selectedAppt == null || selectedAppt['recent_sessions'] == null) {
+      return const SizedBox.shrink();
+    }
     final sessions = (selectedAppt['recent_sessions'] as List<dynamic>? ?? [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
@@ -691,7 +728,6 @@ class _ProgressPageState extends State<ProgressPage> {
             ),
     );
   }
-
 }
 
 class _AnalysisCard extends StatelessWidget {
@@ -767,6 +803,10 @@ class _RecoveryTrendCard extends StatelessWidget {
     final accuracyChange = (trend['accuracy_change'] as num?)?.toDouble();
     final timeSaved = (trend['time_saved_seconds'] as num?)?.toInt();
     final attempts = (trend['attempt_count'] as num?)?.toInt() ?? 0;
+    final attemptHistory = (trend['attempts'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
     final status = trend['trend_status']?.toString() ?? 'baseline';
     final tracksRepetitions = trend['tracking_mode'] == 'reps';
     final improving = status == 'improving';
@@ -774,15 +814,15 @@ class _RecoveryTrendCard extends StatelessWidget {
     final color = improving
         ? Colors.green
         : status == 'needs_attention'
-            ? Colors.orange
-            : Colors.blue;
+        ? Colors.orange
+        : Colors.blue;
     final statusText = status == 'improving'
         ? 'Improving'
         : status == 'needs_attention'
-            ? 'Needs attention'
-            : status == 'steady'
-                ? 'Steady'
-                : 'Baseline recorded';
+        ? 'Needs attention'
+        : status == 'steady'
+        ? 'Steady'
+        : 'Baseline recorded';
     final declineMessage = tracksRepetitions
         ? 'You are taking longer to complete the repetitions. Slow down and focus on safe technique. If this continues, or you feel pain or difficulty, contact your physiotherapist for help.'
         : 'Your accuracy has dropped. Slow down and focus on correct technique. If this continues, or you feel pain or difficulty, contact your physiotherapist for help.';
@@ -828,8 +868,16 @@ class _RecoveryTrendCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 5),
-          Text('$attempts ${attempts == 1 ? 'attempt' : 'attempts'}',
-              style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          Text(
+            '$attempts ${attempts == 1 ? 'attempt' : 'attempts'}',
+            style: const TextStyle(fontSize: 11, color: Colors.black54),
+          ),
+          const SizedBox(height: 14),
+          RecoveryTrendChart(
+            attempts: attemptHistory,
+            tracksRepetitions: tracksRepetitions,
+            color: color,
+          ),
           const SizedBox(height: 14),
           Row(
             children: [
@@ -894,7 +942,11 @@ class _RecoveryTrendCard extends StatelessWidget {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  const Icon(Icons.support_agent, size: 18, color: Colors.deepOrange),
+                  const Icon(
+                    Icons.support_agent,
+                    size: 18,
+                    color: Colors.deepOrange,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
@@ -925,20 +977,24 @@ class _AttemptColumn extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(label,
-              style: const TextStyle(
-                  fontSize: 10,
-                  color: Colors.black45,
-                  fontWeight: FontWeight.bold)),
-          const SizedBox(height: 5),
-          Text(value,
-              style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          Text(metric,
-              style: const TextStyle(fontSize: 12, color: Colors.black54)),
-        ],
-      );
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(
+        label,
+        style: const TextStyle(
+          fontSize: 10,
+          color: Colors.black45,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
+      const SizedBox(height: 5),
+      Text(
+        value,
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      ),
+      Text(metric, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+    ],
+  );
 }
 
 class _TrendChip extends StatelessWidget {
@@ -966,11 +1022,14 @@ class _TrendChip extends StatelessWidget {
         children: [
           Icon(icon, size: 14, color: color.shade700),
           const SizedBox(width: 4),
-          Text(label,
-              style: TextStyle(
-                  color: color.shade700,
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600)),
+          Text(
+            label,
+            style: TextStyle(
+              color: color.shade700,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -1022,8 +1081,6 @@ class _SectionCard extends StatelessWidget {
     );
   }
 }
-
-
 
 class _SourceChip extends StatelessWidget {
   final String source;

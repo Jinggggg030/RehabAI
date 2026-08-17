@@ -8,6 +8,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:rehab_ai/screens/physiotherapist/student_profile_dialog.dart';
+import 'package:rehab_ai/widgets/recovery_trend_chart.dart';
 
 class PhysioProgressTab extends StatefulWidget {
   final int physioId;
@@ -290,10 +291,13 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
     }
 
     final appointments = progress['appointments'] as List<dynamic>? ?? [];
-    final selectedAppt = appointments.firstWhere(
-      (dynamic appt) => appt['appointment_id'] == _selectedAppointmentId,
-      orElse: () => appointments.isNotEmpty ? appointments.first : null,
-    ) as Map<String, dynamic>?;
+    final selectedAppt =
+        appointments.firstWhere(
+              (dynamic appt) =>
+                  appt['appointment_id'] == _selectedAppointmentId,
+              orElse: () => appointments.isNotEmpty ? appointments.first : null,
+            )
+            as Map<String, dynamic>?;
 
     return RefreshIndicator(
       onRefresh: () => _selectPatient(_selectedPatient!),
@@ -366,18 +370,19 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
                       final dt = DateTime.parse(dateStr);
                       if (latestDateStr != null && latestDateStr != dateStr) {
                         final ldt = DateTime.parse(latestDateStr);
-                        dateLabel = '${DateFormat('MMM d, yyyy').format(dt)} to ${DateFormat('MMM d, yyyy').format(ldt)}';
+                        dateLabel =
+                            '${DateFormat('MMM d, yyyy').format(dt)} to ${DateFormat('MMM d, yyyy').format(ldt)}';
                       } else {
                         dateLabel = DateFormat('MMM d, yyyy').format(dt);
                       }
                     } catch (_) {}
                   }
 
-                  String details =
-                      appt['plan_label']?.toString().trim() ?? '';
+                  String details = appt['plan_label']?.toString().trim() ?? '';
 
                   if (details.isEmpty) {
-                    final exercises = appt['assigned_exercises'] as List<dynamic>? ?? [];
+                    final exercises =
+                        appt['assigned_exercises'] as List<dynamic>? ?? [];
                     if (exercises.isNotEmpty) {
                       final names = exercises
                           .map((dynamic ex) => ex['name']?.toString() ?? '')
@@ -391,7 +396,9 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
                   }
 
                   if (details.isEmpty) {
-                    details = appt['status'] == 'Completed' ? 'Follow-up Rehab' : 'General Consultation';
+                    details = appt['status'] == 'Completed'
+                        ? 'Follow-up Rehab'
+                        : 'General Consultation';
                   }
 
                   String label = '$details — $dateLabel';
@@ -429,8 +436,8 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
                   profilePic.startsWith('http')
                       ? profilePic
                       : Supabase.instance.client.storage
-                          .from('profile_picture')
-                          .getPublicUrl(profilePic),
+                            .from('profile_picture')
+                            .getPublicUrl(profilePic),
                 )
               : null,
           child: profilePic == null || profilePic.isEmpty
@@ -492,7 +499,8 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
       ),
     );
 
-    final hasPrescription = prescription != null && prescription.toString().trim().isNotEmpty;
+    final hasPrescription =
+        prescription != null && prescription.toString().trim().isNotEmpty;
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -525,7 +533,9 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
   }
 
   Widget _buildSummaryCards(Map<String, dynamic>? selectedAppt) {
-    if (selectedAppt == null || selectedAppt['summary'] == null) return const SizedBox.shrink();
+    if (selectedAppt == null || selectedAppt['summary'] == null) {
+      return const SizedBox.shrink();
+    }
     final summary = Map<String, dynamic>.from(selectedAppt['summary'] as Map);
     final accuracy = (summary['average_accuracy'] as num?)?.toDouble();
     final pain = (summary['average_pain_change'] as num?)?.toDouble();
@@ -572,7 +582,9 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
   }
 
   Widget _buildPainInsight(Map<String, dynamic>? selectedAppt) {
-    if (selectedAppt == null || selectedAppt['summary'] == null) return const SizedBox.shrink();
+    if (selectedAppt == null || selectedAppt['summary'] == null) {
+      return const SizedBox.shrink();
+    }
     final summary = Map<String, dynamic>.from(selectedAppt['summary'] as Map);
     final pain = (summary['average_pain_change'] as num?)?.toDouble();
     final streak = (summary['activity_streak'] as num?)?.toInt() ?? 0;
@@ -613,7 +625,9 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
   }
 
   Widget _buildWeeklyActivity(Map<String, dynamic>? selectedAppt) {
-    if (selectedAppt == null || selectedAppt['weekly_activity'] == null) return const SizedBox.shrink();
+    if (selectedAppt == null || selectedAppt['weekly_activity'] == null) {
+      return const SizedBox.shrink();
+    }
     final activity = (selectedAppt['weekly_activity'] as List<dynamic>? ?? [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
@@ -683,11 +697,12 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
       (appt) => appt['appointment_id'] == _selectedAppointmentId,
       orElse: () => appointments.isNotEmpty ? appointments.first : null,
     );
-    final exercises = (selectedAppt?['assigned_exercises'] as List<dynamic>? ?? [])
-        .whereType<Map>()
-        .map((item) => Map<String, dynamic>.from(item))
-        .toList();
-    
+    final exercises =
+        (selectedAppt?['assigned_exercises'] as List<dynamic>? ?? [])
+            .whereType<Map>()
+            .map((item) => Map<String, dynamic>.from(item))
+            .toList();
+
     // Get global exercises list from backend to fetch global sessions count and accuracy for the assigned exercises
     final globalExercises = (progress['exercises'] as List<dynamic>? ?? [])
         .whereType<Map>()
@@ -700,7 +715,9 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
       child: exercises.isEmpty
           ? const Padding(
               padding: EdgeInsets.all(20),
-              child: Center(child: Text('No exercises assigned for this plan.')),
+              child: Center(
+                child: Text('No exercises assigned for this plan.'),
+              ),
             )
           : SingleChildScrollView(
               scrollDirection: Axis.horizontal,
@@ -718,35 +735,48 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
                 rows: exercises.map((exercise) {
                   // Find the corresponding global exercise stats for this specific exercise_id
                   final globalEx = globalExercises.firstWhere(
-                    (g) => g['exercise_id'] == exercise['exercise_id'] && g['source'] == 'Assigned',
+                    (g) =>
+                        g['exercise_id'] == exercise['exercise_id'] &&
+                        g['source'] == 'Assigned',
                     orElse: () => <String, dynamic>{},
                   );
-                  
-                  final seconds = (globalEx['total_duration_seconds'] as num?)?.toInt() ?? 0;
-                  final accuracy = (globalEx['average_accuracy'] as num?)?.toDouble();
-                  final last = DateTime.tryParse(globalEx['last_completed']?.toString() ?? '');
+
+                  final seconds =
+                      (globalEx['total_duration_seconds'] as num?)?.toInt() ??
+                      0;
+                  final accuracy = (globalEx['average_accuracy'] as num?)
+                      ?.toDouble();
+                  final last = DateTime.tryParse(
+                    globalEx['last_completed']?.toString() ?? '',
+                  );
 
                   return DataRow(
                     cells: [
-                      DataCell(Text(exercise['name']?.toString() ?? 'Exercise')),
+                      DataCell(
+                        Text(exercise['name']?.toString() ?? 'Exercise'),
+                      ),
                       DataCell(_SourceChip('Assigned')),
                       DataCell(
                         Text(
                           exercise['assigned_tracking_mode'] == 'reps'
                               ? '${exercise['assigned_sets'] ?? 0} × ${exercise['assigned_reps'] ?? 0} reps for ${exercise['assigned_days'] ?? 1} days'
-                              : '${exercise['assigned_sets'] ?? 0} × ${exercise['assigned_duration'] ?? 0}s for ${exercise['assigned_days'] ?? 1} days'
+                              : '${exercise['assigned_sets'] ?? 0} × ${exercise['assigned_duration'] ?? 0}s for ${exercise['assigned_days'] ?? 1} days',
                         ),
                       ),
                       DataCell(Text('${globalEx['session_count'] ?? 0}')),
                       DataCell(Text((seconds / 60).toStringAsFixed(1))),
                       DataCell(
                         Text(
-                          accuracy == null ? '—' : '${accuracy.toStringAsFixed(0)}%',
+                          accuracy == null
+                              ? '—'
+                              : '${accuracy.toStringAsFixed(0)}%',
                         ),
                       ),
                       DataCell(
                         Text(
-                          last == null ? 'Not completed' : DateFormat('MMM dd').format(last),
+                          last == null
+                              ? 'Not completed'
+                              : DateFormat('MMM dd').format(last),
                         ),
                       ),
                     ],
@@ -770,7 +800,9 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
           ? const Padding(
               padding: EdgeInsets.all(20),
               child: Center(
-                child: Text('The patient needs to complete an exercise to create a baseline.'),
+                child: Text(
+                  'The patient needs to complete an exercise to create a baseline.',
+                ),
               ),
             )
           : LayoutBuilder(
@@ -781,10 +813,14 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
                 return Wrap(
                   spacing: 12,
                   runSpacing: 12,
-                  children: trends.map((trend) => SizedBox(
-                    width: cardWidth,
-                    child: _RecoveryTrendCard(trend: trend),
-                  )).toList(),
+                  children: trends
+                      .map(
+                        (trend) => SizedBox(
+                          width: cardWidth,
+                          child: _RecoveryTrendCard(trend: trend),
+                        ),
+                      )
+                      .toList(),
                 );
               },
             ),
@@ -792,7 +828,9 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
   }
 
   Widget _buildRecentSessions(Map<String, dynamic>? selectedAppt) {
-    if (selectedAppt == null || selectedAppt['recent_sessions'] == null) return const SizedBox.shrink();
+    if (selectedAppt == null || selectedAppt['recent_sessions'] == null) {
+      return const SizedBox.shrink();
+    }
     final sessions = (selectedAppt['recent_sessions'] as List<dynamic>? ?? [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
@@ -899,21 +937,35 @@ class _RecoveryTrendCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final first = Map<String, dynamic>.from(trend['first_attempt'] as Map? ?? const {});
-    final latest = Map<String, dynamic>.from(trend['latest_attempt'] as Map? ?? const {});
+    final first = Map<String, dynamic>.from(
+      trend['first_attempt'] as Map? ?? const {},
+    );
+    final latest = Map<String, dynamic>.from(
+      trend['latest_attempt'] as Map? ?? const {},
+    );
     final accuracyChange = (trend['accuracy_change'] as num?)?.toDouble();
     final timeSaved = (trend['time_saved_seconds'] as num?)?.toInt();
     final attempts = (trend['attempt_count'] as num?)?.toInt() ?? 0;
+    final attemptHistory = (trend['attempts'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
     final status = trend['trend_status']?.toString() ?? 'baseline';
     final tracksRepetitions = trend['tracking_mode'] == 'reps';
     final needsAttention = status == 'needs_attention';
     final improving = status == 'improving';
-    final color = improving ? Colors.green : needsAttention ? Colors.orange : Colors.blue;
+    final color = improving
+        ? Colors.green
+        : needsAttention
+        ? Colors.orange
+        : Colors.blue;
     final statusText = improving
         ? 'Improving'
         : needsAttention
-            ? 'Needs attention'
-            : status == 'steady' ? 'Steady' : 'Baseline recorded';
+        ? 'Needs attention'
+        : status == 'steady'
+        ? 'Steady'
+        : 'Baseline recorded';
     final declineMessage = tracksRepetitions
         ? 'Completion time has increased. Check in with the patient, review their repetition technique and pain level, and advise them to seek help if the decline continues.'
         : 'Accuracy has dropped. Check in with the patient, review their technique and pain level, and advise them to seek help if the decline continues.';
@@ -933,64 +985,120 @@ class _RecoveryTrendCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(children: [
-            Expanded(child: Text(trend['exercise_name']?.toString() ?? 'Exercise',
-              style: const TextStyle(fontWeight: FontWeight.bold))),
-            Container(
-              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-              child: Text(statusText, style: TextStyle(color: color.shade700, fontSize: 11, fontWeight: FontWeight.bold)),
-            ),
-          ]),
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  trend['exercise_name']?.toString() ?? 'Exercise',
+                  style: const TextStyle(fontWeight: FontWeight.bold),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  statusText,
+                  style: TextStyle(
+                    color: color.shade700,
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 5),
-          Text('$attempts ${attempts == 1 ? 'attempt' : 'attempts'}',
-            style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          Text(
+            '$attempts ${attempts == 1 ? 'attempt' : 'attempts'}',
+            style: const TextStyle(fontSize: 11, color: Colors.black54),
+          ),
           const SizedBox(height: 14),
-          Row(children: [
-            Expanded(child: _AttemptColumn(
-              label: 'FIRST',
-              value: tracksRepetitions
-                  ? _seconds(first['duration_seconds'])
-                  : accuracy(first['accuracy_score']),
-              metric: tracksRepetitions ? 'completion time' : 'accuracy',
-            )),
-            const Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Icon(Icons.arrow_forward, color: Colors.black38)),
-            Expanded(child: _AttemptColumn(
-              label: 'LATEST',
-              value: tracksRepetitions
-                  ? _seconds(latest['duration_seconds'])
-                  : accuracy(latest['accuracy_score']),
-              metric: tracksRepetitions ? 'completion time' : 'accuracy',
-            )),
-          ]),
+          RecoveryTrendChart(
+            attempts: attemptHistory,
+            tracksRepetitions: tracksRepetitions,
+            color: color,
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _AttemptColumn(
+                  label: 'FIRST',
+                  value: tracksRepetitions
+                      ? _seconds(first['duration_seconds'])
+                      : accuracy(first['accuracy_score']),
+                  metric: tracksRepetitions ? 'completion time' : 'accuracy',
+                ),
+              ),
+              const Padding(
+                padding: EdgeInsets.symmetric(horizontal: 10),
+                child: Icon(Icons.arrow_forward, color: Colors.black38),
+              ),
+              Expanded(
+                child: _AttemptColumn(
+                  label: 'LATEST',
+                  value: tracksRepetitions
+                      ? _seconds(latest['duration_seconds'])
+                      : accuracy(latest['accuracy_score']),
+                  metric: tracksRepetitions ? 'completion time' : 'accuracy',
+                ),
+              ),
+            ],
+          ),
           if (attempts > 1) ...[
             const SizedBox(height: 14),
-            Wrap(spacing: 8, runSpacing: 6, children: [
-              if (accuracyChange != null) _TrendChip(
-                icon: accuracyChange >= 0 ? Icons.trending_up : Icons.trending_down,
-                label: '${accuracyChange >= 0 ? '+' : ''}${accuracyChange.toStringAsFixed(0)}% accuracy',
-                positive: accuracyChange > 0,
-              ),
-              if (timeSaved != null) _TrendChip(
-                icon: Icons.timer_outlined,
-                label: timeSaved >= 0 ? '${_seconds(timeSaved)} faster' : '${_seconds(timeSaved.abs())} slower',
-                positive: timeSaved > 0,
-              ),
-            ]),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                if (accuracyChange != null)
+                  _TrendChip(
+                    icon: accuracyChange >= 0
+                        ? Icons.trending_up
+                        : Icons.trending_down,
+                    label:
+                        '${accuracyChange >= 0 ? '+' : ''}${accuracyChange.toStringAsFixed(0)}% accuracy',
+                    positive: accuracyChange > 0,
+                  ),
+                if (timeSaved != null)
+                  _TrendChip(
+                    icon: Icons.timer_outlined,
+                    label: timeSaved >= 0
+                        ? '${_seconds(timeSaved)} faster'
+                        : '${_seconds(timeSaved.abs())} slower',
+                    positive: timeSaved > 0,
+                  ),
+              ],
+            ),
           ],
           if (needsAttention) ...[
             const SizedBox(height: 14),
             Container(
               padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
-              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                const Icon(Icons.notification_important_outlined, size: 18, color: Colors.deepOrange),
-                const SizedBox(width: 8),
-                Expanded(child: Text(
-                  declineMessage,
-                  style: const TextStyle(fontSize: 12),
-                )),
-              ]),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.notification_important_outlined,
+                    size: 18,
+                    color: Colors.deepOrange,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      declineMessage,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
             ),
           ],
         ],
@@ -1000,7 +1108,11 @@ class _RecoveryTrendCard extends StatelessWidget {
 }
 
 class _AttemptColumn extends StatelessWidget {
-  const _AttemptColumn({required this.label, required this.value, required this.metric});
+  const _AttemptColumn({
+    required this.label,
+    required this.value,
+    required this.metric,
+  });
   final String label;
   final String value;
   final String metric;
@@ -1009,16 +1121,30 @@ class _AttemptColumn extends StatelessWidget {
   Widget build(BuildContext context) => Column(
     crossAxisAlignment: CrossAxisAlignment.start,
     children: [
-      Text(label, style: const TextStyle(fontSize: 10, color: Colors.black45, fontWeight: FontWeight.bold)),
+      Text(
+        label,
+        style: const TextStyle(
+          fontSize: 10,
+          color: Colors.black45,
+          fontWeight: FontWeight.bold,
+        ),
+      ),
       const SizedBox(height: 5),
-      Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+      Text(
+        value,
+        style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+      ),
       Text(metric, style: const TextStyle(fontSize: 12, color: Colors.black54)),
     ],
   );
 }
 
 class _TrendChip extends StatelessWidget {
-  const _TrendChip({required this.icon, required this.label, required this.positive});
+  const _TrendChip({
+    required this.icon,
+    required this.label,
+    required this.positive,
+  });
   final IconData icon;
   final String label;
   final bool positive;
@@ -1028,12 +1154,25 @@ class _TrendChip extends StatelessWidget {
     final color = positive ? Colors.green : Colors.orange;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
-      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, size: 14, color: color.shade700),
-        const SizedBox(width: 4),
-        Text(label, style: TextStyle(color: color.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
-      ]),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color.shade700),
+          const SizedBox(width: 4),
+          Text(
+            label,
+            style: TextStyle(
+              color: color.shade700,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
