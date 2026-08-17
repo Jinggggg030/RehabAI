@@ -291,16 +291,19 @@ class _ProgressPageState extends State<ProgressPage> {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12),
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.rehabSurface,
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(color: context.rehabBorder),
             ),
             child: DropdownButtonHideUnderline(
               child: DropdownButton<int>(
                 isExpanded: true,
                 value: _selectedAppointmentId,
                 icon: const Icon(Icons.arrow_drop_down, color: Colors.blue),
-                style: const TextStyle(color: Colors.black87, fontSize: 14),
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurface,
+                  fontSize: 14,
+                ),
                 onChanged: (int? newValue) {
                   if (newValue != null) {
                     setState(() {
@@ -492,10 +495,7 @@ class _ProgressPageState extends State<ProgressPage> {
                   children: [
                     Text(
                       seconds == 0 ? '' : (seconds / 60).toStringAsFixed(0),
-                      style: const TextStyle(
-                        fontSize: 10,
-                        color: Colors.black54,
-                      ),
+                      style: TextStyle(fontSize: 10, color: context.rehabMuted),
                     ),
                     const SizedBox(height: 3),
                     Container(
@@ -503,7 +503,7 @@ class _ProgressPageState extends State<ProgressPage> {
                       height: maxSeconds == 0 ? 4 : 92 * ratio + 4,
                       decoration: BoxDecoration(
                         color: seconds == 0
-                            ? Colors.grey[200]
+                            ? context.rehabInput
                             : Colors.blue[700],
                         borderRadius: BorderRadius.circular(6),
                       ),
@@ -513,10 +513,7 @@ class _ProgressPageState extends State<ProgressPage> {
                       date == null
                           ? '—'
                           : DateFormat('E').format(date).substring(0, 1),
-                      style: const TextStyle(
-                        fontSize: 11,
-                        color: Colors.black54,
-                      ),
+                      style: TextStyle(fontSize: 11, color: context.rehabMuted),
                     ),
                   ],
                 ),
@@ -559,7 +556,9 @@ class _ProgressPageState extends State<ProgressPage> {
           : SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: DataTable(
-                headingRowColor: WidgetStatePropertyAll(Colors.grey.shade100),
+                headingRowColor: WidgetStatePropertyAll(
+                  context.rehabSurfaceElevated,
+                ),
                 columns: const [
                   DataColumn(label: Text('Exercise')),
                   DataColumn(label: Text('Source')),
@@ -748,7 +747,7 @@ class _AnalysisCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(15),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.rehabSurface,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: color.withValues(alpha: 0.18)),
       ),
@@ -769,7 +768,7 @@ class _AnalysisCard extends StatelessWidget {
               ),
               Text(
                 label,
-                style: const TextStyle(fontSize: 11, color: Colors.black54),
+                style: TextStyle(fontSize: 11, color: context.rehabMuted),
               ),
             ],
           ),
@@ -870,7 +869,7 @@ class _RecoveryTrendCard extends StatelessWidget {
           const SizedBox(height: 5),
           Text(
             '$attempts ${attempts == 1 ? 'attempt' : 'attempts'}',
-            style: const TextStyle(fontSize: 11, color: Colors.black54),
+            style: TextStyle(fontSize: 11, color: context.rehabMuted),
           ),
           const SizedBox(height: 14),
           RecoveryTrendChart(
@@ -890,9 +889,9 @@ class _RecoveryTrendCard extends StatelessWidget {
                   metric: tracksRepetitions ? 'completion time' : 'accuracy',
                 ),
               ),
-              const Padding(
+              Padding(
                 padding: EdgeInsets.symmetric(horizontal: 10),
-                child: Icon(Icons.arrow_forward, color: Colors.black38),
+                child: Icon(Icons.arrow_forward, color: context.rehabMuted),
               ),
               Expanded(
                 child: _AttemptColumn(
@@ -981,9 +980,9 @@ class _AttemptColumn extends StatelessWidget {
     children: [
       Text(
         label,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 10,
-          color: Colors.black45,
+          color: context.rehabMuted,
           fontWeight: FontWeight.bold,
         ),
       ),
@@ -992,7 +991,7 @@ class _AttemptColumn extends StatelessWidget {
         value,
         style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
       ),
-      Text(metric, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+      Text(metric, style: TextStyle(fontSize: 12, color: context.rehabMuted)),
     ],
   );
 }
@@ -1052,11 +1051,13 @@ class _SectionCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: context.rehabSurface,
         borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.04),
+            color: Colors.black.withValues(
+              alpha: context.isDarkMode ? 0.24 : 0.04,
+            ),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -1072,7 +1073,7 @@ class _SectionCard extends StatelessWidget {
           const SizedBox(height: 3),
           Text(
             subtitle,
-            style: const TextStyle(fontSize: 12, color: Colors.black54),
+            style: TextStyle(fontSize: 12, color: context.rehabMuted),
           ),
           const SizedBox(height: 16),
           child,

@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:rehab_ai/theme/rehab_theme.dart';
 
 class RecoveryTrendChart extends StatelessWidget {
   const RecoveryTrendChart({
@@ -27,9 +28,6 @@ class RecoveryTrendChart extends StatelessWidget {
     if (values.isEmpty) return const SizedBox.shrink();
 
     final metric = tracksRepetitions ? 'Completion time' : 'Accuracy';
-    final direction = tracksRepetitions
-        ? 'Lower is better'
-        : 'Higher is better';
     final semantics = values
         .asMap()
         .entries
@@ -42,36 +40,20 @@ class RecoveryTrendChart extends StatelessWidget {
         .join(', ');
 
     return Semantics(
-      label: '$metric trend. $direction. $semantics',
+      label: '$metric trend. $semantics',
       child: Container(
         padding: const EdgeInsets.fromLTRB(12, 10, 12, 8),
         decoration: BoxDecoration(
-          color: Colors.white.withValues(alpha: 0.72),
+          color: context.rehabSurfaceElevated,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: color.withValues(alpha: 0.14)),
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Row(
-              children: [
-                Text(
-                  '$metric trend',
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const Spacer(),
-                Text(
-                  direction,
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-              ],
+            Text(
+              '$metric trend',
+              style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             SizedBox(
@@ -82,6 +64,9 @@ class RecoveryTrendChart extends StatelessWidget {
                   values: values,
                   color: color,
                   suffix: tracksRepetitions ? 's' : '%',
+                  gridColor: context.rehabBorder,
+                  pointBackgroundColor: context.rehabSurfaceElevated,
+                  labelColor: context.rehabMuted,
                 ),
               ),
             ),
@@ -97,11 +82,17 @@ class _RecoveryTrendPainter extends CustomPainter {
     required this.values,
     required this.color,
     required this.suffix,
+    required this.gridColor,
+    required this.pointBackgroundColor,
+    required this.labelColor,
   });
 
   final List<double> values;
   final Color color;
   final String suffix;
+  final Color gridColor;
+  final Color pointBackgroundColor;
+  final Color labelColor;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -121,7 +112,7 @@ class _RecoveryTrendPainter extends CustomPainter {
     final maxY = maximum + padding;
 
     final gridPaint = Paint()
-      ..color = Colors.black.withValues(alpha: 0.07)
+      ..color = gridColor
       ..strokeWidth = 1;
     for (var row = 0; row < 3; row++) {
       final y = top + chartHeight * row / 2;
@@ -179,7 +170,7 @@ class _RecoveryTrendPainter extends CustomPainter {
 
     for (var index = 0; index < points.length; index++) {
       final point = points[index];
-      canvas.drawCircle(point, 4, Paint()..color = Colors.white);
+      canvas.drawCircle(point, 4, Paint()..color = pointBackgroundColor);
       canvas.drawCircle(
         point,
         3,
@@ -199,13 +190,19 @@ class _RecoveryTrendPainter extends CustomPainter {
       }
     }
 
-    _drawLabel(canvas, 'First', Offset(left, size.height - 13));
+    _drawLabel(
+      canvas,
+      'First',
+      Offset(left, size.height - 13),
+      color: labelColor,
+    );
     if (values.length > 1) {
       _drawLabel(
         canvas,
         'Latest',
         Offset(size.width - right, size.height - 13),
         alignRight: true,
+        color: labelColor,
       );
     }
   }
@@ -216,7 +213,7 @@ class _RecoveryTrendPainter extends CustomPainter {
     Offset position, {
     bool center = false,
     bool alignRight = false,
-    Color color = Colors.black54,
+    required Color color,
     bool bold = false,
   }) {
     final painter = TextPainter(
