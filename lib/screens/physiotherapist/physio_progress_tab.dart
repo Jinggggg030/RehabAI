@@ -305,6 +305,8 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
           const SizedBox(height: 16),
           _buildTimelineSelector(progress),
           const SizedBox(height: 22),
+          _buildRecoveryTrends(selectedAppt),
+          const SizedBox(height: 22),
           _buildSummaryCards(selectedAppt),
           const SizedBox(height: 22),
           _buildPainInsight(selectedAppt),
@@ -755,6 +757,40 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
     );
   }
 
+  Widget _buildRecoveryTrends(Map<String, dynamic>? selectedAppt) {
+    final trends = (selectedAppt?['recovery_trends'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+
+    return _SectionCard(
+      title: 'Patient Recovery Progress',
+      subtitle: 'Compare the first and latest attempt for each exercise',
+      child: trends.isEmpty
+          ? const Padding(
+              padding: EdgeInsets.all(20),
+              child: Center(
+                child: Text('The patient needs to complete an exercise to create a baseline.'),
+              ),
+            )
+          : LayoutBuilder(
+              builder: (context, constraints) {
+                final cardWidth = constraints.maxWidth < 650
+                    ? constraints.maxWidth
+                    : (constraints.maxWidth - 12) / 2;
+                return Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: trends.map((trend) => SizedBox(
+                    width: cardWidth,
+                    child: _RecoveryTrendCard(trend: trend),
+                  )).toList(),
+                );
+              },
+            ),
+    );
+  }
+
   Widget _buildRecentSessions(Map<String, dynamic>? selectedAppt) {
     if (selectedAppt == null || selectedAppt['recent_sessions'] == null) return const SizedBox.shrink();
     final sessions = (selectedAppt['recent_sessions'] as List<dynamic>? ?? [])
@@ -844,6 +880,160 @@ class _SourceChip extends StatelessWidget {
           fontWeight: FontWeight.w600,
         ),
       ),
+    );
+  }
+}
+
+class _RecoveryTrendCard extends StatelessWidget {
+  const _RecoveryTrendCard({required this.trend});
+
+  final Map<String, dynamic> trend;
+
+  String _seconds(dynamic value) {
+    final seconds = (value as num?)?.toInt();
+    if (seconds == null) return '—';
+    final minutes = seconds ~/ 60;
+    final remainder = seconds % 60;
+    return minutes == 0 ? '${remainder}s' : '${minutes}m ${remainder}s';
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final first = Map<String, dynamic>.from(trend['first_attempt'] as Map? ?? const {});
+    final latest = Map<String, dynamic>.from(trend['latest_attempt'] as Map? ?? const {});
+    final accuracyChange = (trend['accuracy_change'] as num?)?.toDouble();
+    final timeSaved = (trend['time_saved_seconds'] as num?)?.toInt();
+    final attempts = (trend['attempt_count'] as num?)?.toInt() ?? 0;
+    final status = trend['trend_status']?.toString() ?? 'baseline';
+    final tracksRepetitions = trend['tracking_mode'] == 'reps';
+    final needsAttention = status == 'needs_attention';
+    final improving = status == 'improving';
+    final color = improving ? Colors.green : needsAttention ? Colors.orange : Colors.blue;
+    final statusText = improving
+        ? 'Improving'
+        : needsAttention
+            ? 'Needs attention'
+            : status == 'steady' ? 'Steady' : 'Baseline recorded';
+    final declineMessage = tracksRepetitions
+        ? 'Completion time has increased. Check in with the patient, review their repetition technique and pain level, and advise them to seek help if the decline continues.'
+        : 'Accuracy has dropped. Check in with the patient, review their technique and pain level, and advise them to seek help if the decline continues.';
+
+    String accuracy(dynamic value) {
+      final score = (value as num?)?.toDouble();
+      return score == null ? '—' : '${score.toStringAsFixed(0)}%';
+    }
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: color.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Expanded(child: Text(trend['exercise_name']?.toString() ?? 'Exercise',
+              style: const TextStyle(fontWeight: FontWeight.bold))),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+              decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+              child: Text(statusText, style: TextStyle(color: color.shade700, fontSize: 11, fontWeight: FontWeight.bold)),
+            ),
+          ]),
+          const SizedBox(height: 5),
+          Text('$attempts ${attempts == 1 ? 'attempt' : 'attempts'}',
+            style: const TextStyle(fontSize: 11, color: Colors.black54)),
+          const SizedBox(height: 14),
+          Row(children: [
+            Expanded(child: _AttemptColumn(
+              label: 'FIRST',
+              value: tracksRepetitions
+                  ? _seconds(first['duration_seconds'])
+                  : accuracy(first['accuracy_score']),
+              metric: tracksRepetitions ? 'completion time' : 'accuracy',
+            )),
+            const Padding(padding: EdgeInsets.symmetric(horizontal: 10), child: Icon(Icons.arrow_forward, color: Colors.black38)),
+            Expanded(child: _AttemptColumn(
+              label: 'LATEST',
+              value: tracksRepetitions
+                  ? _seconds(latest['duration_seconds'])
+                  : accuracy(latest['accuracy_score']),
+              metric: tracksRepetitions ? 'completion time' : 'accuracy',
+            )),
+          ]),
+          if (attempts > 1) ...[
+            const SizedBox(height: 14),
+            Wrap(spacing: 8, runSpacing: 6, children: [
+              if (accuracyChange != null) _TrendChip(
+                icon: accuracyChange >= 0 ? Icons.trending_up : Icons.trending_down,
+                label: '${accuracyChange >= 0 ? '+' : ''}${accuracyChange.toStringAsFixed(0)}% accuracy',
+                positive: accuracyChange > 0,
+              ),
+              if (timeSaved != null) _TrendChip(
+                icon: Icons.timer_outlined,
+                label: timeSaved >= 0 ? '${_seconds(timeSaved)} faster' : '${_seconds(timeSaved.abs())} slower',
+                positive: timeSaved > 0,
+              ),
+            ]),
+          ],
+          if (needsAttention) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(color: Colors.orange.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(8)),
+              child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                const Icon(Icons.notification_important_outlined, size: 18, color: Colors.deepOrange),
+                const SizedBox(width: 8),
+                Expanded(child: Text(
+                  declineMessage,
+                  style: const TextStyle(fontSize: 12),
+                )),
+              ]),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _AttemptColumn extends StatelessWidget {
+  const _AttemptColumn({required this.label, required this.value, required this.metric});
+  final String label;
+  final String value;
+  final String metric;
+
+  @override
+  Widget build(BuildContext context) => Column(
+    crossAxisAlignment: CrossAxisAlignment.start,
+    children: [
+      Text(label, style: const TextStyle(fontSize: 10, color: Colors.black45, fontWeight: FontWeight.bold)),
+      const SizedBox(height: 5),
+      Text(value, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
+      Text(metric, style: const TextStyle(fontSize: 12, color: Colors.black54)),
+    ],
+  );
+}
+
+class _TrendChip extends StatelessWidget {
+  const _TrendChip({required this.icon, required this.label, required this.positive});
+  final IconData icon;
+  final String label;
+  final bool positive;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = positive ? Colors.green : Colors.orange;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(color: color.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(20)),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, size: 14, color: color.shade700),
+        const SizedBox(width: 4),
+        Text(label, style: TextStyle(color: color.shade700, fontSize: 11, fontWeight: FontWeight.w600)),
+      ]),
     );
   }
 }

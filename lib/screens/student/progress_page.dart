@@ -768,7 +768,9 @@ class _RecoveryTrendCard extends StatelessWidget {
     final timeSaved = (trend['time_saved_seconds'] as num?)?.toInt();
     final attempts = (trend['attempt_count'] as num?)?.toInt() ?? 0;
     final status = trend['trend_status']?.toString() ?? 'baseline';
+    final tracksRepetitions = trend['tracking_mode'] == 'reps';
     final improving = status == 'improving';
+    final needsAttention = status == 'needs_attention';
     final color = improving
         ? Colors.green
         : status == 'needs_attention'
@@ -777,10 +779,13 @@ class _RecoveryTrendCard extends StatelessWidget {
     final statusText = status == 'improving'
         ? 'Improving'
         : status == 'needs_attention'
-            ? 'Keep practising'
+            ? 'Needs attention'
             : status == 'steady'
                 ? 'Steady'
                 : 'Baseline recorded';
+    final declineMessage = tracksRepetitions
+        ? 'You are taking longer to complete the repetitions. Slow down and focus on safe technique. If this continues, or you feel pain or difficulty, contact your physiotherapist for help.'
+        : 'Your accuracy has dropped. Slow down and focus on correct technique. If this continues, or you feel pain or difficulty, contact your physiotherapist for help.';
 
     String accuracy(dynamic value) {
       final score = (value as num?)?.toDouble();
@@ -831,8 +836,10 @@ class _RecoveryTrendCard extends StatelessWidget {
               Expanded(
                 child: _AttemptColumn(
                   label: 'FIRST',
-                  accuracy: accuracy(first['accuracy_score']),
-                  duration: _seconds(first['duration_seconds']),
+                  value: tracksRepetitions
+                      ? _seconds(first['duration_seconds'])
+                      : accuracy(first['accuracy_score']),
+                  metric: tracksRepetitions ? 'completion time' : 'accuracy',
                 ),
               ),
               const Padding(
@@ -842,8 +849,10 @@ class _RecoveryTrendCard extends StatelessWidget {
               Expanded(
                 child: _AttemptColumn(
                   label: 'LATEST',
-                  accuracy: accuracy(latest['accuracy_score']),
-                  duration: _seconds(latest['duration_seconds']),
+                  value: tracksRepetitions
+                      ? _seconds(latest['duration_seconds'])
+                      : accuracy(latest['accuracy_score']),
+                  metric: tracksRepetitions ? 'completion time' : 'accuracy',
                 ),
               ),
             ],
@@ -874,6 +883,29 @@ class _RecoveryTrendCard extends StatelessWidget {
               ],
             ),
           ],
+          if (needsAttention) ...[
+            const SizedBox(height: 14),
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: Colors.orange.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(Icons.support_agent, size: 18, color: Colors.deepOrange),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      declineMessage,
+                      style: const TextStyle(fontSize: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
         ],
       ),
     );
@@ -883,13 +915,13 @@ class _RecoveryTrendCard extends StatelessWidget {
 class _AttemptColumn extends StatelessWidget {
   const _AttemptColumn({
     required this.label,
-    required this.accuracy,
-    required this.duration,
+    required this.value,
+    required this.metric,
   });
 
   final String label;
-  final String accuracy;
-  final String duration;
+  final String value;
+  final String metric;
 
   @override
   Widget build(BuildContext context) => Column(
@@ -901,9 +933,9 @@ class _AttemptColumn extends StatelessWidget {
                   color: Colors.black45,
                   fontWeight: FontWeight.bold)),
           const SizedBox(height: 5),
-          Text(accuracy,
+          Text(value,
               style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold)),
-          Text(duration,
+          Text(metric,
               style: const TextStyle(fontSize: 12, color: Colors.black54)),
         ],
       );

@@ -1674,6 +1674,69 @@ def get_root_appointment(db: Session, appointment: models.Appointment) -> models
         visited.add(curr.appointment_id)
     return curr
 
+
+def build_recovery_trends(appt_sessions, appt_exercises):
+    """Compare the first and latest completed attempt for each assigned exercise."""
+    recovery_trends = []
+    for exercise in appt_exercises:
+        exercise_sessions = sorted(
+            (session for session in appt_sessions
+             if session.exercise_id == exercise["exercise_id"]
+             and session.completion_date is not None),
+            key=lambda session: session.completion_date,
+        )
+        attempts = [{
+            "session_id": session.schedule_id,
+            "completion_date": session.completion_date.isoformat(),
+            "accuracy_score": session.accuracy_score,
+            "duration_seconds": session.duration_seconds,
+        } for session in exercise_sessions]
+        if not attempts:
+            continue
+
+        first = attempts[0]
+        latest = attempts[-1]
+        tracking_mode = (exercise.get("assigned_tracking_mode") or "duration").lower()
+        tracks_repetitions = tracking_mode == "reps"
+        accuracy_change = None if tracks_repetitions else (
+            latest["accuracy_score"] - first["accuracy_score"]
+            if first["accuracy_score"] is not None
+            and latest["accuracy_score"] is not None else None
+        )
+        # Rep-based exercises are compared by the time needed to finish them.
+        # Positive means the latest attempt was completed faster.
+        time_change = None if not tracks_repetitions else (
+            first["duration_seconds"] - latest["duration_seconds"]
+            if first["duration_seconds"] is not None
+            and latest["duration_seconds"] is not None else None
+        )
+        comparable_changes = [
+            change for change in (accuracy_change, time_change)
+            if change is not None
+        ]
+        if len(attempts) < 2 or not comparable_changes:
+            trend_status = "baseline"
+        elif any(change < 0 for change in comparable_changes):
+            trend_status = "needs_attention"
+        elif any(change > 0 for change in comparable_changes):
+            trend_status = "improving"
+        else:
+            trend_status = "steady"
+
+        recovery_trends.append({
+            "exercise_id": exercise["exercise_id"],
+            "exercise_name": exercise["name"],
+            "tracking_mode": tracking_mode,
+            "attempt_count": len(attempts),
+            "first_attempt": first,
+            "latest_attempt": latest,
+            "accuracy_change": accuracy_change,
+            "time_saved_seconds": time_change,
+            "trend_status": trend_status,
+            "attempts": attempts,
+        })
+    return recovery_trends
+
 @app.get("/physio/{physio_id}/patients/{student_id}/progress")
 def get_physio_patient_progress(
     physio_id: int,
@@ -1853,6 +1916,8 @@ def get_physio_patient_progress(
                 "pain_after": s.pain_after
             })
 
+        recovery_trends = build_recovery_trends(appt_sessions, appt_exercises)
+
         appointments_data.append({
             "appointment_id": first_appt.appointment_id,
             "date": first_appt.schedule_time.isoformat() if first_appt.schedule_time else None,
@@ -1865,7 +1930,8 @@ def get_physio_patient_progress(
             "plan_label": build_treatment_plan_label(triage_data, subject),
             "summary": appt_summary,
             "weekly_activity": appt_weekly,
-            "recent_sessions": appt_recent
+            "recent_sessions": appt_recent,
+            "recovery_trends": recovery_trends,
         })
 
     exercise_ids = set(exercise_assignments.keys())
@@ -2866,62 +2932,7 @@ def get_student_progress(
         # Compare repeated attempts of the same exercise in chronological order.
         # Keeping this scoped to the treatment-plan window prevents an old plan
         # from being presented as the patient's current recovery baseline.
-        recovery_trends = []
-        for exercise in appt_exercises:
-            exercise_sessions = sorted(
-                (
-                    s for s in appt_sessions
-                    if s.exercise_id == exercise["exercise_id"]
-                    and s.completion_date is not None
-                ),
-                key=lambda s: s.completion_date,
-            )
-            attempts = [
-                {
-                    "session_id": s.schedule_id,
-                    "completion_date": s.completion_date.isoformat(),
-                    "accuracy_score": s.accuracy_score,
-                    "duration_seconds": s.duration_seconds,
-                }
-                for s in exercise_sessions
-            ]
-            if not attempts:
-                continue
-
-            first = attempts[0]
-            latest = attempts[-1]
-            accuracy_change = None
-            if first["accuracy_score"] is not None and latest["accuracy_score"] is not None:
-                accuracy_change = latest["accuracy_score"] - first["accuracy_score"]
-            time_change = None
-            if first["duration_seconds"] is not None and latest["duration_seconds"] is not None:
-                # Positive means the latest attempt was completed faster.
-                time_change = first["duration_seconds"] - latest["duration_seconds"]
-
-            comparable_changes = [
-                change for change in (accuracy_change, time_change)
-                if change is not None
-            ]
-            if len(attempts) < 2 or not comparable_changes:
-                trend_status = "baseline"
-            elif any(change > 0 for change in comparable_changes):
-                trend_status = "improving"
-            elif all(change == 0 for change in comparable_changes):
-                trend_status = "steady"
-            else:
-                trend_status = "needs_attention"
-
-            recovery_trends.append({
-                "exercise_id": exercise["exercise_id"],
-                "exercise_name": exercise["name"],
-                "attempt_count": len(attempts),
-                "first_attempt": first,
-                "latest_attempt": latest,
-                "accuracy_change": accuracy_change,
-                "time_saved_seconds": time_change,
-                "trend_status": trend_status,
-                "attempts": attempts,
-            })
+        recovery_trends = build_recovery_trends(appt_sessions, appt_exercises)
 
         appointments_data.append({
             "appointment_id": first_appt.appointment_id,
