@@ -217,7 +217,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                         ),
                         const Spacer(),
                         Text(
-                          'Care Schedule',
+                          'Book Appointment',
                           style: GoogleFonts.readexPro(
                             color: Colors.white,
                             fontSize: 23,
