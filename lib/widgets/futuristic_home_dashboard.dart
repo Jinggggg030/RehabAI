@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
 import 'package:rehab_ai/widgets/notification_bell.dart';
 
@@ -8,36 +9,52 @@ class FuturisticHomeDashboard extends StatelessWidget {
     required this.userName,
     required this.todayDate,
     required this.todaysRoutine,
+    required this.scheduledExercises,
     required this.quickAccess,
+    required this.exploreLoadFailed,
     required this.hasActiveChat,
     required this.adviceController,
     required this.onSubmitAdvice,
     required this.onOpenExercises,
+    required this.onRetryExplore,
     required this.onOpenRentals,
     required this.onOpenAppointments,
     required this.onBookAppointment,
     required this.onOpenChat,
-    required this.onOpenRoutineExercise,
+    required this.onOpenScheduledExercise,
     required this.onOpenExercise,
   });
 
   final String userName;
   final String todayDate;
   final List<dynamic> todaysRoutine;
+  final List<dynamic> scheduledExercises;
   final List<dynamic> quickAccess;
+  final bool exploreLoadFailed;
   final bool hasActiveChat;
   final TextEditingController adviceController;
   final VoidCallback onSubmitAdvice;
   final VoidCallback onOpenExercises;
+  final VoidCallback onRetryExplore;
   final VoidCallback onOpenRentals;
   final VoidCallback onOpenAppointments;
   final VoidCallback onBookAppointment;
   final VoidCallback onOpenChat;
-  final ValueChanged<Map<String, dynamic>> onOpenRoutineExercise;
+  final ValueChanged<Map<String, dynamic>> onOpenScheduledExercise;
   final ValueChanged<Map<String, dynamic>> onOpenExercise;
 
   @override
   Widget build(BuildContext context) {
+    final today = DateTime.now();
+    final todayScheduled = scheduledExercises.where((item) {
+      final date = DateTime.tryParse(item['scheduled_date']?.toString() ?? '');
+      return date != null && _isSameDay(date, today);
+    }).toList();
+    final otherScheduled = scheduledExercises.where((item) {
+      final date = DateTime.tryParse(item['scheduled_date']?.toString() ?? '');
+      return date == null || !_isSameDay(date, today);
+    }).toList();
+
     return Scaffold(
       backgroundColor: context.rehabBackground,
       body: CustomScrollView(
@@ -56,7 +73,7 @@ class FuturisticHomeDashboard extends StatelessWidget {
                     right: 20,
                     child: _HealthSummary(
                       date: todayDate,
-                      exerciseCount: todaysRoutine.length,
+                      exerciseCount: todayScheduled.length,
                     ),
                   ),
                 ],
@@ -109,24 +126,36 @@ class FuturisticHomeDashboard extends StatelessWidget {
                 ),
                 const SizedBox(height: 22),
                 _SectionTitle(
-                  title: "Today's Exercises",
+                  title: 'Scheduled Exercises',
                   action: 'See all',
                   onAction: onOpenExercises,
                 ),
                 const SizedBox(height: 12),
-                if (todaysRoutine.isEmpty)
-                  const _EmptyRoutine()
+                const _ScheduleGroupLabel(title: 'Today'),
+                const SizedBox(height: 8),
+                if (todayScheduled.isEmpty)
+                  const _EmptyRoutine(message: 'Nothing scheduled for today')
                 else
-                  ...todaysRoutine
+                  ...todayScheduled
                       .take(3)
-                      .toList()
-                      .asMap()
-                      .entries
                       .map(
-                        (entry) => _RoutineTile(
-                          index: entry.key,
-                          exercise: Map<String, dynamic>.from(entry.value),
-                          onTap: onOpenRoutineExercise,
+                        (item) => _ScheduledExerciseTile(
+                          exercise: Map<String, dynamic>.from(item),
+                          onTap: onOpenScheduledExercise,
+                        ),
+                      ),
+                const SizedBox(height: 14),
+                const _ScheduleGroupLabel(title: 'Other Days'),
+                const SizedBox(height: 8),
+                if (otherScheduled.isEmpty)
+                  const _EmptyRoutine(message: 'No other scheduled exercises')
+                else
+                  ...otherScheduled
+                      .take(3)
+                      .map(
+                        (item) => _ScheduledExerciseTile(
+                          exercise: Map<String, dynamic>.from(item),
+                          onTap: onOpenScheduledExercise,
                         ),
                       ),
                 const SizedBox(height: 22),
@@ -139,7 +168,13 @@ class FuturisticHomeDashboard extends StatelessWidget {
                 SizedBox(
                   height: 148,
                   child: quickAccess.isEmpty
-                      ? const _EmptyRoutine()
+                      ? _EmptyRoutine(
+                          message: exploreLoadFailed
+                              ? 'Unable to load exercises'
+                              : 'No exercises are available',
+                          action: exploreLoadFailed ? 'Try again' : null,
+                          onAction: exploreLoadFailed ? onRetryExplore : null,
+                        )
                       : ListView.separated(
                           scrollDirection: Axis.horizontal,
                           physics: const BouncingScrollPhysics(),
@@ -178,6 +213,11 @@ class FuturisticHomeDashboard extends StatelessWidget {
       ),
     );
   }
+
+  static bool _isSameDay(DateTime first, DateTime second) =>
+      first.year == second.year &&
+      first.month == second.month &&
+      first.day == second.day;
 }
 
 class _Header extends StatelessWidget {
@@ -509,6 +549,8 @@ class _SectionTitle extends StatelessWidget {
   }
 }
 
+// Kept for the assigned-routine design used elsewhere in the dashboard flow.
+// ignore: unused_element
 class _RoutineTile extends StatelessWidget {
   const _RoutineTile({
     required this.index,
@@ -645,6 +687,99 @@ class _RoutineTile extends StatelessWidget {
                       RehabColors.primary,
                     ),
                   ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ScheduleGroupLabel extends StatelessWidget {
+  const _ScheduleGroupLabel({required this.title});
+  final String title;
+
+  @override
+  Widget build(BuildContext context) => Text(
+    title,
+    style: const TextStyle(
+      color: RehabColors.subtle,
+      fontSize: 12,
+      fontWeight: FontWeight.w800,
+    ),
+  );
+}
+
+class _ScheduledExerciseTile extends StatelessWidget {
+  const _ScheduledExerciseTile({required this.exercise, required this.onTap});
+  final Map<String, dynamic> exercise;
+  final ValueChanged<Map<String, dynamic>> onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final scheduledDate = DateTime.tryParse(
+      exercise['scheduled_date']?.toString() ?? '',
+    );
+    final dateLabel = scheduledDate == null
+        ? 'Date unavailable'
+        : DateFormat('EEE, MMM d • h:mm a').format(scheduledDate);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Material(
+        color: context.rehabSurface,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(18),
+          side: BorderSide(color: context.rehabBorder),
+        ),
+        child: InkWell(
+          onTap: () => onTap(exercise),
+          borderRadius: BorderRadius.circular(18),
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(
+              children: [
+                Container(
+                  width: 42,
+                  height: 42,
+                  decoration: BoxDecoration(
+                    color: RehabColors.primaryLight,
+                    borderRadius: BorderRadius.circular(13),
+                  ),
+                  child: const Icon(
+                    Icons.event_available_rounded,
+                    color: RehabColors.primary,
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        exercise['name']?.toString() ?? 'Exercise',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        dateLabel,
+                        style: const TextStyle(
+                          fontSize: 11,
+                          color: RehabColors.subtle,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const Icon(
+                  Icons.chevron_right_rounded,
+                  color: RehabColors.subtle,
                 ),
               ],
             ),
@@ -821,7 +956,7 @@ class _AppointmentCard extends StatelessWidget {
                   borderRadius: BorderRadius.circular(16),
                 ),
                 child: const Icon(
-                  Icons.video_call_rounded,
+                  Icons.calendar_month_rounded,
                   color: RehabColors.cyan,
                 ),
               ),
@@ -831,12 +966,12 @@ class _AppointmentCard extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      'Need a consultation?',
+                      'Make an Appointment',
                       style: TextStyle(fontWeight: FontWeight.w800),
                     ),
                     SizedBox(height: 3),
                     Text(
-                      'Book an appointment with a physiotherapist.',
+                      'View availability and book with a physiotherapist.',
                       style: TextStyle(fontSize: 11, color: RehabColors.muted),
                     ),
                   ],
@@ -855,7 +990,15 @@ class _AppointmentCard extends StatelessWidget {
 }
 
 class _EmptyRoutine extends StatelessWidget {
-  const _EmptyRoutine();
+  const _EmptyRoutine({
+    this.message = 'Nothing scheduled yet',
+    this.action,
+    this.onAction,
+  });
+
+  final String message;
+  final String? action;
+  final VoidCallback? onAction;
 
   @override
   Widget build(BuildContext context) {
@@ -867,9 +1010,15 @@ class _EmptyRoutine extends StatelessWidget {
         border: Border.all(color: context.rehabBorder),
       ),
       alignment: Alignment.center,
-      child: const Text(
-        'Nothing scheduled yet',
-        style: TextStyle(color: RehabColors.muted),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(message, style: const TextStyle(color: RehabColors.muted)),
+          if (action != null) ...[
+            const SizedBox(height: 6),
+            TextButton(onPressed: onAction, child: Text(action!)),
+          ],
+        ],
       ),
     );
   }

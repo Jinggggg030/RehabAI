@@ -13,7 +13,6 @@ import 'dart:convert';
 import 'package:intl/intl.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:rehab_ai/widgets/futuristic_home_dashboard.dart';
-import 'package:rehab_ai/screens/student/progress_page.dart';
 import 'package:rehab_ai/screens/student/rentals/rental_status_page.dart';
 import 'package:rehab_ai/services/local_notification_service.dart'; //testing
 
@@ -34,7 +33,9 @@ class _HomePageState extends State<HomePage> {
   bool isLoading = true;
   bool hasActiveChat = false;
   List<dynamic> todaysRoutine = [];
+  List<dynamic> scheduledExercises = [];
   List<dynamic> quickAccess = [];
+  bool exploreLoadFailed = false;
 
   @override
   void initState() {
@@ -43,6 +44,12 @@ class _HomePageState extends State<HomePage> {
   }
 
   Future<void> _fetchData() async {
+    if (mounted) {
+      setState(() {
+        isLoading = true;
+        exploreLoadFailed = false;
+      });
+    }
     try {
       final supabase = Supabase.instance.client;
       final user = supabase.auth.currentUser;
@@ -51,6 +58,10 @@ class _HomePageState extends State<HomePage> {
       final apiUrl = kIsWeb
           ? 'http://127.0.0.1:8000'
           : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+
+      // The catalogue is independent from profile, chat, and schedule data.
+      // Load it first so an unrelated request cannot leave Explore blank.
+      await _fetchExerciseCatalogue(apiUrl);
 
       // Fetch User Name
       final userRes = await http.get(
@@ -69,41 +80,46 @@ class _HomePageState extends State<HomePage> {
 
       if (myUserId != null) {
         // Check for active Live Chat Session
-        final sessionRes = await supabase
-            .from('Live_Chat_Session')
-            .select('session_id')
-            .eq('student_id', myUserId)
-            .eq('session_status', 'Active')
-            .maybeSingle();
-
-        if (mounted) {
-          setState(() {
-            hasActiveChat = sessionRes != null;
-          });
+        try {
+          final sessionRes = await supabase
+              .from('Live_Chat_Session')
+              .select('session_id')
+              .eq('student_id', myUserId)
+              .eq('session_status', 'Active')
+              .maybeSingle();
+          if (mounted) setState(() => hasActiveChat = sessionRes != null);
+        } catch (error) {
+          debugPrint('Error checking active chat: $error');
         }
 
         // Fetch Today's Routine
-        final routineRes = await http.get(
-          Uri.parse('$apiUrl/students/$myUserId/prescribed_exercises'),
-        );
-        if (routineRes.statusCode == 200) {
-          final routineData = jsonDecode(routineRes.body)['exercises'] ?? [];
-          if (mounted) {
-            setState(() {
-              todaysRoutine = routineData;
-            });
+        try {
+          final routineRes = await http.get(
+            Uri.parse('$apiUrl/students/$myUserId/prescribed_exercises'),
+          );
+          if (routineRes.statusCode == 200) {
+            final routineData = jsonDecode(routineRes.body)['exercises'] ?? [];
+            if (mounted) setState(() => todaysRoutine = routineData);
           }
+        } catch (error) {
+          debugPrint('Error loading assigned exercises: $error');
         }
-      }
 
-      // Fetch Quick Access (All exercises)
-      final exercisesRes = await http.get(Uri.parse('$apiUrl/exercises'));
-      if (exercisesRes.statusCode == 200) {
-        final exercisesData = jsonDecode(exercisesRes.body)['exercises'] ?? [];
-        if (mounted) {
-          setState(() {
-            quickAccess = exercisesData;
-          });
+        try {
+          final scheduledRes = await http.get(
+            Uri.parse('$apiUrl/students/$myUserId/scheduled_exercises'),
+          );
+          if (scheduledRes.statusCode == 200) {
+            final scheduledData =
+                jsonDecode(scheduledRes.body)['scheduled_exercises'] ?? [];
+            if (mounted) setState(() => scheduledExercises = scheduledData);
+          } else {
+            debugPrint(
+              'Scheduled exercises returned ${scheduledRes.statusCode}: ${scheduledRes.body}',
+            );
+          }
+        } catch (error) {
+          debugPrint('Error loading scheduled exercises: $error');
         }
       }
     } catch (e) {
@@ -114,6 +130,27 @@ class _HomePageState extends State<HomePage> {
           isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _fetchExerciseCatalogue(String apiUrl) async {
+    try {
+      final response = await http.get(Uri.parse('$apiUrl/exercises'));
+      if (response.statusCode != 200) {
+        throw Exception(
+          'Server returned ${response.statusCode}: ${response.body}',
+        );
+      }
+      final exercises = jsonDecode(response.body)['exercises'] ?? [];
+      if (mounted) {
+        setState(() {
+          quickAccess = exercises;
+          exploreLoadFailed = false;
+        });
+      }
+    } catch (error) {
+      debugPrint('Error loading exercise catalogue: $error');
+      if (mounted) setState(() => exploreLoadFailed = true);
     }
   }
 
@@ -164,7 +201,6 @@ class _HomePageState extends State<HomePage> {
     }
   }
 
-
   @override
   Widget build(BuildContext context) {
     if (isLoading) {
@@ -174,14 +210,22 @@ class _HomePageState extends State<HomePage> {
       userName: userName,
       todayDate: DateFormat('EEEE, MMMM d').format(DateTime.now()),
       todaysRoutine: todaysRoutine,
+      scheduledExercises: scheduledExercises,
       quickAccess: quickAccess,
+      exploreLoadFailed: exploreLoadFailed,
       hasActiveChat: hasActiveChat,
       adviceController: _aiAdviceController,
       onSubmitAdvice: _submitAiAdvice,
-      onOpenExercises: () => Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const RehabilitationExercisesPage()),
-      ),
+      onOpenExercises: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const RehabilitationExercisesPage(),
+          ),
+        );
+        await _fetchData();
+      },
+      onRetryExplore: _fetchData,
       onOpenRentals: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const RentalStatusPage()),
@@ -192,27 +236,22 @@ class _HomePageState extends State<HomePage> {
       ),
       onBookAppointment: () => Navigator.push(
         context,
-        PageRouteBuilder<void>(
-          opaque: false,
-          transitionDuration: Duration.zero,
-          reverseTransitionDuration: Duration.zero,
-          pageBuilder: (_, _, _) => const MyAppointmentsPage(
-            openBookingOnStart: true,
-            closeAfterBooking: true,
-          ),
-        ),
+        MaterialPageRoute(builder: (_) => const MyAppointmentsPage()),
       ),
       onOpenChat: () => Navigator.push(
         context,
         MaterialPageRoute(builder: (_) => const LiveChatPage()),
       ),
-      onOpenRoutineExercise: (exercise) => Navigator.push(
+      onOpenScheduledExercise: (exercise) => Navigator.push(
         context,
         MaterialPageRoute(
-          builder: (_) =>
-              ExerciseDetailsPage(isAssigned: true, exercise: exercise),
+          builder: (_) => ExerciseDetailsPage(
+            isAssigned: false,
+            exercise: exercise,
+            scheduleId: (exercise['schedule_id'] as num?)?.toInt(),
+          ),
         ),
-      ),
+      ).then((_) => _fetchData()),
       onOpenExercise: (exercise) => Navigator.push(
         context,
         MaterialPageRoute(
@@ -222,7 +261,6 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
-  
 
   // Kept temporarily as a visual fallback while preserving the original
   // data flow and callbacks during the design-system migration.
