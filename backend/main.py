@@ -1236,7 +1236,13 @@ class StartChatReq(BaseModel):
     user_id: int
     message: str
 
-def validate_appointment_time(db: Session, therapist_id: int, schedule_time_dt: datetime, exclude_appt_id: int = None):
+def validate_appointment_time(
+    db: Session,
+    therapist_id: int,
+    schedule_time_dt: datetime,
+    student_id: int | None = None,
+    exclude_appt_id: int | None = None,
+):
     # 1. Check weekend (Saturday = 5, Sunday = 6)
     if schedule_time_dt.weekday() in [5, 6]:
         raise HTTPException(
@@ -1273,6 +1279,27 @@ def validate_appointment_time(db: Session, therapist_id: int, schedule_time_dt: 
             status_code=400,
             detail="The physiotherapist already has a scheduled appointment at this time."
         )
+
+    # A patient cannot attend two appointments at the same time, even when
+    # those appointments are with different physiotherapists.
+    if student_id is not None:
+        student_query = db.query(models.Appointment).filter(
+            models.Appointment.student_id == student_id,
+            models.Appointment.schedule_time == schedule_time_dt,
+            models.Appointment.status == "Scheduled",
+        )
+        if exclude_appt_id:
+            student_query = student_query.filter(
+                models.Appointment.appointment_id != exclude_appt_id
+            )
+        if student_query.first():
+            raise HTTPException(
+                status_code=409,
+                detail=(
+                    "You already have a scheduled appointment at this date and time. "
+                    "Please choose a different time."
+                ),
+            )
 
 def assign_physio(db: Session, session_id: int, discipline: str):
     # Retrieve all physiotherapists with matching specialization (treat Orthopaedic and Musculoskeletal as synonyms)
@@ -2226,7 +2253,12 @@ def record_session(appointment_id: int, req: RecordSessionReq, db: Session = Dep
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid next appointment time format: {e}")
         
-        validate_appointment_time(db, appointment.therapist_id, next_time)
+        validate_appointment_time(
+            db,
+            appointment.therapist_id,
+            next_time,
+            student_id=appointment.student_id,
+        )
         
         next_appt = models.Appointment(
             student_id=appointment.student_id,
@@ -2318,7 +2350,12 @@ def record_teleconsultation(
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid next appointment time format: {e}")
         
-        validate_appointment_time(db, appointment.therapist_id, next_time)
+        validate_appointment_time(
+            db,
+            appointment.therapist_id,
+            next_time,
+            student_id=appointment.student_id,
+        )
         
         next_appt = models.Appointment(
             student_id=appointment.student_id,
@@ -2556,7 +2593,12 @@ class RentalRequest(BaseModel):
 @app.post("/appointments/book")
 def book_appointment(req: BookAppointmentReq, db: Session = Depends(get_db)):
     schedule_time_dt = datetime.fromisoformat(req.schedule_time).replace(tzinfo=None)
-    validate_appointment_time(db, req.therapist_id, schedule_time_dt)
+    validate_appointment_time(
+        db,
+        req.therapist_id,
+        schedule_time_dt,
+        student_id=req.student_id,
+    )
     
     appt = models.Appointment(
         student_id=req.student_id,
