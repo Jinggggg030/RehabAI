@@ -2452,6 +2452,7 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                           'EEE, MMM d • hh:mm a',
                         ).format(parsedDate.toLocal());
                   final isScheduled = a['status'] == 'Scheduled';
+                  final isMissed = a['status'] == 'Missed';
                   final triage = a['triage_data'] is Map
                       ? Map<String, dynamic>.from(a['triage_data'] as Map)
                       : <String, dynamic>{};
@@ -2560,12 +2561,16 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                                     style: TextStyle(
                                       color: isScheduled
                                           ? Colors.blue.shade900
+                                          : isMissed
+                                          ? Colors.deepOrange.shade900
                                           : Colors.grey.shade700,
                                       fontWeight: FontWeight.bold,
                                     ),
                                   ),
                                   backgroundColor: isScheduled
                                       ? Colors.blue.shade50
+                                      : isMissed
+                                      ? Colors.deepOrange.shade50
                                       : Colors.grey.shade200,
                                   side: BorderSide.none,
                                 ),

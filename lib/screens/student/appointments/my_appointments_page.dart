@@ -114,6 +114,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
           final status = (a['status'] ?? '').toString().trim().toLowerCase();
           final time = DateTime.tryParse(a['schedule_time'] ?? '');
           return status == 'completed' ||
+              status == 'missed' ||
               (status == 'scheduled' && time != null && time.isBefore(now));
         }).toList();
       });
@@ -353,6 +354,8 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
     bool isPast = false,
     bool isCancelled = false,
   }) {
+    final status = (appointment['status'] ?? '').toString().toLowerCase();
+    final isMissed = status == 'missed';
     return GestureDetector(
       onTap: isUpcoming
           ? () => _showAppointmentDialog(context, appointment)
@@ -381,7 +384,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                   Container(
                     width: 5,
                     decoration: BoxDecoration(
-                      gradient: isCancelled
+                      gradient: isCancelled || isMissed
                           ? const LinearGradient(
                               colors: [Color(0xFFEF4444), Color(0xFFF97316)],
                               begin: Alignment.topCenter,
@@ -498,7 +501,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                 ],
               ),
             ),
-            if (isPast && !isCancelled) ...[
+            if (isPast && !isCancelled && !isMissed) ...[
               const SizedBox(height: 16),
               RichText(
                 text: TextSpan(
@@ -535,6 +538,20 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                     ),
                     TextSpan(text: appointment['evaluation'] ?? 'N/A'),
                   ],
+                ),
+              ),
+            ],
+            if (isMissed) ...[
+              const SizedBox(height: 16),
+              Align(
+                alignment: Alignment.centerRight,
+                child: Text(
+                  'Missed',
+                  style: GoogleFonts.readexPro(
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.deepOrange,
+                  ),
                 ),
               ),
             ],

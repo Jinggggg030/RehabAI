@@ -179,7 +179,10 @@ class Appointment(Base):
     meeting_room = Column(String(100), nullable=True, unique=True)
 
     __table_args__ = (
-        CheckConstraint("status IN ('Scheduled', 'Cancelled', 'Completed')", name="check_appointment_status"),
+        CheckConstraint(
+            "status IN ('Scheduled', 'Cancelled', 'Completed', 'Missed')",
+            name="check_appointment_status",
+        ),
     )
 
 

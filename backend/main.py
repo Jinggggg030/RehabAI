@@ -13,6 +13,7 @@ from backend.ai.pose_detector import PoseDetector
 from backend.ai.angle_calculator import calculate_angle
 from backend.ai.chatbot import chatbot_instance
 from datetime import date, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 import secrets
 import re
 
@@ -100,6 +101,15 @@ with engine.begin() as connection:
         'ALTER TABLE "Appointment" '
         'ADD COLUMN IF NOT EXISTS parent_appointment_id INTEGER '
         'REFERENCES "Appointment"(appointment_id)'
+    ))
+    connection.execute(text(
+        'ALTER TABLE "Appointment" '
+        'DROP CONSTRAINT IF EXISTS check_appointment_status'
+    ))
+    connection.execute(text(
+        'ALTER TABLE "Appointment" '
+        'ADD CONSTRAINT check_appointment_status '
+        "CHECK (status IN ('Scheduled', 'Cancelled', 'Completed', 'Missed'))"
     ))
     missing_appointment_ids = connection.execute(text(
         'SELECT appointment_id FROM "Appointment" WHERE meeting_room IS NULL'
@@ -2170,8 +2180,33 @@ def get_physio_patient_progress(
         "recent_sessions": recent_sessions
     }
 
+def mark_missed_appointments(
+    db: Session,
+    therapist_id: int | None = None,
+    student_id: int | None = None,
+):
+    """Mark appointments still untouched one hour after their start time."""
+    malaysia_now = datetime.now(ZoneInfo("Asia/Kuala_Lumpur")).replace(tzinfo=None)
+    cutoff = malaysia_now - timedelta(hours=1)
+    query = db.query(models.Appointment).filter(
+        models.Appointment.status == "Scheduled",
+        models.Appointment.schedule_time < cutoff,
+    )
+    if therapist_id is not None:
+        query = query.filter(models.Appointment.therapist_id == therapist_id)
+    if student_id is not None:
+        query = query.filter(models.Appointment.student_id == student_id)
+    updated = query.update(
+        {models.Appointment.status: "Missed"},
+        synchronize_session=False,
+    )
+    if updated:
+        db.commit()
+
+
 @app.get("/physio/appointments/{physio_id}")
 def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
+    mark_missed_appointments(db, therapist_id=physio_id)
     appointments = db.query(
         models.Appointment, models.User.username, models.Student.matric_no
     ).join(
@@ -2550,6 +2585,7 @@ def get_available_physios(student_id: int, db: Session = Depends(get_db)):
 
 @app.get("/appointments/student/{student_id}")
 def get_student_appointments(student_id: int, db: Session = Depends(get_db)):
+    mark_missed_appointments(db, student_id=student_id)
     appointments = db.query(
         models.Appointment, models.User.username, models.Physiotherapist.specialization
     ).join(
