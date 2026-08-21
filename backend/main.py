@@ -1749,6 +1749,8 @@ def build_recovery_trends(appt_sessions, appt_exercises):
             "completion_date": session.completion_date.isoformat(),
             "accuracy_score": session.accuracy_score,
             "duration_seconds": session.duration_seconds,
+            "pain_before": session.pain_before,
+            "pain_after": session.pain_after,
         } for session in exercise_sessions]
         if not attempts:
             continue
@@ -1756,21 +1758,34 @@ def build_recovery_trends(appt_sessions, appt_exercises):
         first = attempts[0]
         latest = attempts[-1]
         tracking_mode = (exercise.get("assigned_tracking_mode") or "duration").lower()
-        tracks_repetitions = tracking_mode == "reps"
-        accuracy_change = None if tracks_repetitions else (
+        ai_type = (exercise.get("ai_type") or "").lower()
+        uses_ai = exercise.get("requires_ai") is True
+        if uses_ai and ai_type in ("rep_count", "rep_counter"):
+            metric_type = "completion_time"
+        elif uses_ai and ai_type == "posture":
+            metric_type = "accuracy"
+        else:
+            metric_type = "pain"
+
+        accuracy_change = None if metric_type != "accuracy" else (
             latest["accuracy_score"] - first["accuracy_score"]
             if first["accuracy_score"] is not None
             and latest["accuracy_score"] is not None else None
         )
         # Rep-based exercises are compared by the time needed to finish them.
         # Positive means the latest attempt was completed faster.
-        time_change = None if not tracks_repetitions else (
+        time_change = None if metric_type != "completion_time" else (
             first["duration_seconds"] - latest["duration_seconds"]
             if first["duration_seconds"] is not None
             and latest["duration_seconds"] is not None else None
         )
+        pain_reduction = None if metric_type != "pain" else (
+            first["pain_after"] - latest["pain_after"]
+            if first["pain_after"] is not None
+            and latest["pain_after"] is not None else None
+        )
         comparable_changes = [
-            change for change in (accuracy_change, time_change)
+            change for change in (accuracy_change, time_change, pain_reduction)
             if change is not None
         ]
         if len(attempts) < 2 or not comparable_changes:
@@ -1786,11 +1801,13 @@ def build_recovery_trends(appt_sessions, appt_exercises):
             "exercise_id": exercise["exercise_id"],
             "exercise_name": exercise["name"],
             "tracking_mode": tracking_mode,
+            "metric_type": metric_type,
             "attempt_count": len(attempts),
             "first_attempt": first,
             "latest_attempt": latest,
             "accuracy_change": accuracy_change,
             "time_saved_seconds": time_change,
+            "pain_reduction": pain_reduction,
             "trend_status": trend_status,
             "attempts": attempts,
         })
@@ -1884,6 +1901,8 @@ def get_physio_patient_progress(
                     "assigned_reps": prescribed.assigned_reps,
                     "assigned_days": prescribed.assigned_days,
                     "assigned_tracking_mode": prescribed.assigned_tracking_mode,
+                    "requires_ai": exercise.requires_ai,
+                    "ai_type": exercise.ai_type,
                     "evaluation": prescribed.evaluation
                 }
                 chain_exercises[exercise.exercise_id] = ex_data
@@ -3016,6 +3035,8 @@ def get_student_progress(
                     "assigned_reps": prescribed.assigned_reps,
                     "assigned_days": prescribed.assigned_days,
                     "assigned_tracking_mode": prescribed.assigned_tracking_mode,
+                    "requires_ai": exercise.requires_ai,
+                    "ai_type": exercise.ai_type,
                     "evaluation": prescribed.evaluation
                 }
                 chain_exercises[exercise.exercise_id] = ex_data

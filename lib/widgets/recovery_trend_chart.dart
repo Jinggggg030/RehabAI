@@ -7,33 +7,41 @@ class RecoveryTrendChart extends StatelessWidget {
   const RecoveryTrendChart({
     super.key,
     required this.attempts,
-    required this.tracksRepetitions,
+    required this.metricType,
     required this.color,
   });
 
   final List<Map<String, dynamic>> attempts;
-  final bool tracksRepetitions;
+  final String metricType;
   final Color color;
 
   @override
   Widget build(BuildContext context) {
     final values = attempts
         .map<double?>(
-          (attempt) => tracksRepetitions
+          (attempt) => metricType == 'completion_time'
               ? (attempt['duration_seconds'] as num?)?.toDouble()
+              : metricType == 'pain'
+              ? (attempt['pain_after'] as num?)?.toDouble()
               : (attempt['accuracy_score'] as num?)?.toDouble(),
         )
         .whereType<double>()
         .toList();
     if (values.isEmpty) return const SizedBox.shrink();
 
-    final metric = tracksRepetitions ? 'Completion time' : 'Accuracy';
+    final metric = metricType == 'completion_time'
+        ? 'Completion time'
+        : metricType == 'pain'
+        ? 'Pain after exercise'
+        : 'Accuracy';
     final semantics = values
         .asMap()
         .entries
         .map((entry) {
-          final value = tracksRepetitions
+          final value = metricType == 'completion_time'
               ? '${entry.value.toStringAsFixed(0)} seconds'
+              : metricType == 'pain'
+              ? '${entry.value.toStringAsFixed(0)} out of 10 pain'
               : '${entry.value.toStringAsFixed(0)} percent';
           return 'Attempt ${entry.key + 1}: $value';
         })
@@ -63,7 +71,11 @@ class RecoveryTrendChart extends StatelessWidget {
                 painter: _RecoveryTrendPainter(
                   values: values,
                   color: color,
-                  suffix: tracksRepetitions ? 's' : '%',
+                  suffix: metricType == 'completion_time'
+                      ? 's'
+                      : metricType == 'pain'
+                      ? '/10'
+                      : '%',
                   gridColor: context.rehabBorder,
                   pointBackgroundColor: context.rehabSurfaceElevated,
                   labelColor: context.rehabMuted,

@@ -945,13 +945,18 @@ class _RecoveryTrendCard extends StatelessWidget {
     );
     final accuracyChange = (trend['accuracy_change'] as num?)?.toDouble();
     final timeSaved = (trend['time_saved_seconds'] as num?)?.toInt();
+    final painReduction = (trend['pain_reduction'] as num?)?.toDouble();
     final attempts = (trend['attempt_count'] as num?)?.toInt() ?? 0;
     final attemptHistory = (trend['attempts'] as List<dynamic>? ?? [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
         .toList();
     final status = trend['trend_status']?.toString() ?? 'baseline';
-    final tracksRepetitions = trend['tracking_mode'] == 'reps';
+    final metricType =
+        trend['metric_type']?.toString() ??
+        (trend['tracking_mode'] == 'reps' ? 'completion_time' : 'accuracy');
+    final tracksRepetitions = metricType == 'completion_time';
+    final tracksPain = metricType == 'pain';
     final needsAttention = status == 'needs_attention';
     final improving = status == 'improving';
     final color = improving
@@ -966,13 +971,20 @@ class _RecoveryTrendCard extends StatelessWidget {
         : status == 'steady'
         ? 'Steady'
         : 'Baseline recorded';
-    final declineMessage = tracksRepetitions
+    final declineMessage = tracksPain
+        ? 'Post-exercise pain has increased. Review the patient\'s exercise intensity and technique, and follow up if the pain persists.'
+        : tracksRepetitions
         ? 'Completion time has increased. Check in with the patient, review their repetition technique and pain level, and advise them to seek help if the decline continues.'
         : 'Accuracy has dropped. Check in with the patient, review their technique and pain level, and advise them to seek help if the decline continues.';
 
     String accuracy(dynamic value) {
       final score = (value as num?)?.toDouble();
       return score == null ? '—' : '${score.toStringAsFixed(0)}%';
+    }
+
+    String pain(dynamic value) {
+      final score = (value as num?)?.toDouble();
+      return score == null ? '—' : '${score.toStringAsFixed(0)}/10';
     }
 
     return Container(
@@ -1018,7 +1030,7 @@ class _RecoveryTrendCard extends StatelessWidget {
           const SizedBox(height: 14),
           RecoveryTrendChart(
             attempts: attemptHistory,
-            tracksRepetitions: tracksRepetitions,
+            metricType: metricType,
             color: color,
           ),
           const SizedBox(height: 14),
@@ -1027,10 +1039,16 @@ class _RecoveryTrendCard extends StatelessWidget {
               Expanded(
                 child: _AttemptColumn(
                   label: 'FIRST',
-                  value: tracksRepetitions
+                  value: tracksPain
+                      ? pain(first['pain_after'])
+                      : tracksRepetitions
                       ? _seconds(first['duration_seconds'])
                       : accuracy(first['accuracy_score']),
-                  metric: tracksRepetitions ? 'completion time' : 'accuracy',
+                  metric: tracksPain
+                      ? 'pain after exercise'
+                      : tracksRepetitions
+                      ? 'completion time'
+                      : 'accuracy',
                 ),
               ),
               const Padding(
@@ -1040,10 +1058,16 @@ class _RecoveryTrendCard extends StatelessWidget {
               Expanded(
                 child: _AttemptColumn(
                   label: 'LATEST',
-                  value: tracksRepetitions
+                  value: tracksPain
+                      ? pain(latest['pain_after'])
+                      : tracksRepetitions
                       ? _seconds(latest['duration_seconds'])
                       : accuracy(latest['accuracy_score']),
-                  metric: tracksRepetitions ? 'completion time' : 'accuracy',
+                  metric: tracksPain
+                      ? 'pain after exercise'
+                      : tracksRepetitions
+                      ? 'completion time'
+                      : 'accuracy',
                 ),
               ),
             ],
@@ -1070,6 +1094,20 @@ class _RecoveryTrendCard extends StatelessWidget {
                         ? '${_seconds(timeSaved)} faster'
                         : '${_seconds(timeSaved.abs())} slower',
                     positive: timeSaved > 0,
+                  ),
+                if (painReduction != null)
+                  _TrendChip(
+                    icon: painReduction > 0
+                        ? Icons.trending_down
+                        : painReduction < 0
+                        ? Icons.trending_up
+                        : Icons.trending_flat,
+                    label: painReduction > 0
+                        ? '${painReduction.toStringAsFixed(0)} point less pain'
+                        : painReduction < 0
+                        ? '${painReduction.abs().toStringAsFixed(0)} point more pain'
+                        : 'Pain unchanged',
+                    positive: painReduction > 0,
                   ),
               ],
             ),
