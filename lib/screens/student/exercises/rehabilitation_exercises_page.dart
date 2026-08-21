@@ -158,16 +158,23 @@ class _RehabilitationExercisesPageState
       );
       if (res.statusCode == 200) {
         if (mounted) {
+          // The server has confirmed cancellation, so remove the item from
+          // local state immediately instead of waiting for another full fetch.
+          setState(() {
+            scheduledExercises.removeWhere(
+              (exercise) =>
+                  exercise['schedule_id']?.toString() == scheduledId.toString(),
+            );
+          });
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(content: Text('Scheduled exercise cancelled')),
           );
-          _fetchExercises(); // Refresh plan
         }
       }
     } catch (e) {
       debugPrint("Cancel error: $e");
     } finally {
-      setState(() => isLoading = false);
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
