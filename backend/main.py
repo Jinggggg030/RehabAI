@@ -12,7 +12,7 @@ import cv2
 from backend.ai.pose_detector import PoseDetector
 from backend.ai.angle_calculator import calculate_angle
 from backend.ai.chatbot import chatbot_instance
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 import secrets
 import re
 
@@ -69,6 +69,15 @@ models.Base.metadata.create_all(bind=engine)
 # create_all() does not add columns to existing tables. Keep this additive
 # migration here so existing installations can start safely after upgrading.
 with engine.begin() as connection:
+    # Preserve legacy single leave ranges when upgrading to multi-range leave.
+    connection.execute(text(
+        'INSERT INTO "Physiotherapist_Unavailable_Period" '
+        '(therapist_id, start_date, end_date) '
+        "SELECT therapist_id, CAST(leave_start_date + INTERVAL '8 hours' AS DATE), "
+        "CAST(leave_end_date + INTERVAL '8 hours' AS DATE) FROM \"Physiotherapist\" "
+        'WHERE leave_start_date IS NOT NULL AND leave_end_date IS NOT NULL '
+        'ON CONFLICT (therapist_id, start_date, end_date) DO NOTHING'
+    ))
     connection.execute(text(
         'DROP TABLE IF EXISTS "Ai_Feedback" CASCADE'
     ))
@@ -1280,6 +1289,19 @@ def validate_appointment_time(
             detail="The physiotherapist already has a scheduled appointment at this time."
         )
 
+    unavailable = db.query(models.PhysiotherapistUnavailablePeriod).filter(
+        models.PhysiotherapistUnavailablePeriod.therapist_id == therapist_id,
+        models.PhysiotherapistUnavailablePeriod.start_date
+        <= schedule_time_dt.date(),
+        models.PhysiotherapistUnavailablePeriod.end_date
+        >= schedule_time_dt.date(),
+    ).first()
+    if unavailable:
+        raise HTTPException(
+            status_code=400,
+            detail="The physiotherapist is unavailable on the selected date.",
+        )
+
     # A patient cannot attend two appointments at the same time, even when
     # those appointments are with different physiotherapists.
     if student_id is not None:
@@ -2462,6 +2484,32 @@ def reject_rental(rental_id: int, physio_id: int, db: Session = Depends(get_db))
 
 @app.get("/appointments/available_physios/{student_id}")
 def get_available_physios(student_id: int, db: Session = Depends(get_db)):
+    def physio_payload(user, physio, recommended):
+        periods = db.query(models.PhysiotherapistUnavailablePeriod).filter(
+            models.PhysiotherapistUnavailablePeriod.therapist_id
+            == physio.therapist_id
+        ).order_by(
+            models.PhysiotherapistUnavailablePeriod.start_date
+        ).all()
+        return {
+            "therapist_id": user.user_id,
+            "name": user.username,
+            "specialization": physio.specialization,
+            "recommended": recommended,
+            "unavailable_periods": [
+                {
+                    "start_date": period.start_date.isoformat(),
+                    "end_date": period.end_date.isoformat(),
+                }
+                for period in periods
+            ],
+            # Retain these during rollout for older app versions.
+            "leave_start_date": physio.leave_start_date.isoformat()
+            if physio.leave_start_date else None,
+            "leave_end_date": physio.leave_end_date.isoformat()
+            if physio.leave_end_date else None,
+        }
+
     # 1. Try to find the assigned physiotherapist via active prescription
     presc = db.query(models.Appointment).filter(
         models.Appointment.student_id == student_id,
@@ -2474,7 +2522,7 @@ def get_available_physios(student_id: int, db: Session = Depends(get_db)):
         ).filter(models.User.user_id == presc.therapist_id).first()
         if physio:
             u, p = physio
-            return {"physios": [{"therapist_id": u.user_id, "name": u.username, "specialization": p.specialization, "recommended": True, "leave_start_date": p.leave_start_date.isoformat() if p.leave_start_date else None, "leave_end_date": p.leave_end_date.isoformat() if p.leave_end_date else None}]}
+            return {"physios": [physio_payload(u, p, True)]}
             
     # 2. Try to find via recent Live Chat session
     session = db.query(models.LiveChatSession).filter(
@@ -2488,7 +2536,7 @@ def get_available_physios(student_id: int, db: Session = Depends(get_db)):
         ).filter(models.User.user_id == session.therapist_id).first()
         if physio:
             u, p = physio
-            return {"physios": [{"therapist_id": u.user_id, "name": u.username, "specialization": p.specialization, "recommended": True, "leave_start_date": p.leave_start_date.isoformat() if p.leave_start_date else None, "leave_end_date": p.leave_end_date.isoformat() if p.leave_end_date else None}]}
+            return {"physios": [physio_payload(u, p, True)]}
             
     # 3. Fallback: Return all physios
     all_physios = db.query(models.User, models.Physiotherapist).join(
@@ -2497,7 +2545,7 @@ def get_available_physios(student_id: int, db: Session = Depends(get_db)):
     
     result = []
     for u, p in all_physios:
-        result.append({"therapist_id": u.user_id, "name": u.username, "specialization": p.specialization, "recommended": False, "leave_start_date": p.leave_start_date.isoformat() if p.leave_start_date else None, "leave_end_date": p.leave_end_date.isoformat() if p.leave_end_date else None})
+        result.append(physio_payload(u, p, False))
     return {"physios": result}
 
 @app.get("/appointments/student/{student_id}")
@@ -2673,22 +2721,55 @@ def transfer_appointment(appointment_id: int, req: TransferAppointmentReq, db: S
 
 @app.put("/physio/leave/{physio_id}")
 def apply_leave(physio_id: int, req: ApplyLeaveReq, db: Session = Depends(get_db)):
-    from datetime import datetime
     physio = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == physio_id).first()
     if not physio:
         raise HTTPException(status_code=404, detail="Physiotherapist not found")
         
-    start_dt = datetime.fromisoformat(req.start_date.replace('Z', '+00:00'))
-    end_dt = datetime.fromisoformat(req.end_date.replace('Z', '+00:00'))
+    try:
+        # Leave is a calendar date, not an instant in UTC. Parsing only the
+        # YYYY-MM-DD portion prevents Malaysia midnight becoming the day before.
+        start_date = date.fromisoformat(req.start_date[:10])
+        end_date = date.fromisoformat(req.end_date[:10])
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid unavailable date range")
+    if end_date < start_date:
+        raise HTTPException(status_code=400, detail="End date cannot be before start date")
+
+    start_dt = datetime.combine(start_date, time.min)
+    end_exclusive = datetime.combine(end_date + timedelta(days=1), time.min)
     
     physio.leave_start_date = start_dt
-    physio.leave_end_date = end_dt
+    physio.leave_end_date = datetime.combine(end_date, time.min)
+
+    existing_period = db.query(models.PhysiotherapistUnavailablePeriod).filter(
+        models.PhysiotherapistUnavailablePeriod.therapist_id == physio_id,
+        models.PhysiotherapistUnavailablePeriod.start_date == start_date,
+        models.PhysiotherapistUnavailablePeriod.end_date == end_date,
+    ).first()
+    overlapping_period = db.query(
+        models.PhysiotherapistUnavailablePeriod
+    ).filter(
+        models.PhysiotherapistUnavailablePeriod.therapist_id == physio_id,
+        models.PhysiotherapistUnavailablePeriod.start_date <= end_date,
+        models.PhysiotherapistUnavailablePeriod.end_date >= start_date,
+    ).first()
+    if overlapping_period and not existing_period:
+        raise HTTPException(
+            status_code=409,
+            detail="This range overlaps dates that are already unavailable.",
+        )
+    if not existing_period:
+        db.add(models.PhysiotherapistUnavailablePeriod(
+            therapist_id=physio_id,
+            start_date=start_date,
+            end_date=end_date,
+        ))
     
     appointments = db.query(models.Appointment).filter(
         models.Appointment.therapist_id == physio_id,
         models.Appointment.status == "Scheduled",
         models.Appointment.schedule_time >= start_dt,
-        models.Appointment.schedule_time <= end_dt
+        models.Appointment.schedule_time < end_exclusive
     ).all()
     
     for appt in appointments:
@@ -2696,6 +2777,25 @@ def apply_leave(physio_id: int, req: ApplyLeaveReq, db: Session = Depends(get_db
         
     db.commit()
     return {"status": "success", "transferred_count": len(appointments)}
+
+@app.get("/physio/leave/{physio_id}")
+def get_physio_leave(physio_id: int, db: Session = Depends(get_db)):
+    physio = db.query(models.Physiotherapist).filter(
+        models.Physiotherapist.therapist_id == physio_id
+    ).first()
+    if not physio:
+        raise HTTPException(status_code=404, detail="Physiotherapist not found")
+    periods = db.query(models.PhysiotherapistUnavailablePeriod).filter(
+        models.PhysiotherapistUnavailablePeriod.therapist_id == physio_id
+    ).order_by(models.PhysiotherapistUnavailablePeriod.start_date).all()
+    return {"periods": [
+        {
+            "id": period.unavailable_period_id,
+            "start_date": period.start_date.isoformat(),
+            "end_date": period.end_date.isoformat(),
+        }
+        for period in periods
+    ]}
 
 @app.post("/rentals/request")
 def request_rental(req: RentalRequest, db: Session = Depends(get_db)):

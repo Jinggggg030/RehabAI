@@ -316,7 +316,10 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
               child: Center(
                 child: Text(
                   'No appointments found.',
-                  style: GoogleFonts.readexPro(fontSize: 16, color: Colors.grey),
+                  style: GoogleFonts.readexPro(
+                    fontSize: 16,
+                    color: Colors.grey,
+                  ),
                 ),
               ),
             ),
@@ -395,107 +398,107 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                        'Appointment with ${appointment['physiotherapist_name']}',
-                        style: GoogleFonts.readexPro(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: Theme.of(context).colorScheme.onSurface,
+                          'Appointment with ${appointment['physiotherapist_name']}',
+                          style: GoogleFonts.readexPro(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 10),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 10,
-                          vertical: 8,
-                        ),
-                        decoration: BoxDecoration(
-                          color: RehabColors.primaryLight,
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            const Icon(
-                              Icons.calendar_today_outlined,
-                              size: 13,
-                              color: RehabColors.primary,
-                            ),
-                            const SizedBox(width: 5),
-                            Text(
-                              DateFormat('EEE, MMM d').format(
-                                DateTime.tryParse(
-                                      appointment['schedule_time'] ?? '',
-                                    ) ??
-                                    DateTime.now(),
-                              ),
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: RehabColors.ink,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                            const SizedBox(width: 9),
-                            const Icon(
-                              Icons.schedule_rounded,
-                              size: 14,
-                              color: RehabColors.primary,
-                            ),
-                            const SizedBox(width: 4),
-                            Text(
-                              DateFormat('hh:mm a').format(
-                                DateTime.tryParse(
-                                      appointment['schedule_time'] ?? '',
-                                    ) ??
-                                    DateTime.now(),
-                              ),
-                              style: const TextStyle(
-                                fontSize: 11,
-                                color: RehabColors.ink,
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        appointment['specialization'] ?? 'Physiotherapy',
-                        style: GoogleFonts.readexPro(
-                          fontSize: 12,
-                          color: context.rehabMuted, // Light teal color
-                        ),
-                      ),
-                      if (appointment['parent_appointment_time'] != null) ...[
-                        const SizedBox(height: 6),
+                        const SizedBox(height: 10),
                         Container(
                           padding: const EdgeInsets.symmetric(
-                            horizontal: 8,
-                            vertical: 4,
+                            horizontal: 10,
+                            vertical: 8,
                           ),
                           decoration: BoxDecoration(
-                            color: Colors.blue.shade50,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.blue.shade100),
+                            color: RehabColors.primaryLight,
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: Text(
-                            appointment['parent_injury'] != null
-                                ? 'Follow-up for: ${appointment['parent_injury']} (Appointment on: ${DateFormat('EEE, MMM d, h:mm a').format(DateTime.parse(appointment['parent_appointment_time']))})'
-                                : 'Follow-up for appointment on: ${DateFormat('EEE, MMM d, h:mm a').format(DateTime.parse(appointment['parent_appointment_time']))}',
-                            style: GoogleFonts.readexPro(
-                              fontSize: 10,
-                              color: Colors.blue.shade900,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(
+                                Icons.calendar_today_outlined,
+                                size: 13,
+                                color: RehabColors.primary,
+                              ),
+                              const SizedBox(width: 5),
+                              Text(
+                                DateFormat('EEE, MMM d').format(
+                                  DateTime.tryParse(
+                                        appointment['schedule_time'] ?? '',
+                                      ) ??
+                                      DateTime.now(),
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: RehabColors.ink,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                              const SizedBox(width: 9),
+                              const Icon(
+                                Icons.schedule_rounded,
+                                size: 14,
+                                color: RehabColors.primary,
+                              ),
+                              const SizedBox(width: 4),
+                              Text(
+                                DateFormat('hh:mm a').format(
+                                  DateTime.tryParse(
+                                        appointment['schedule_time'] ?? '',
+                                      ) ??
+                                      DateTime.now(),
+                                ),
+                                style: const TextStyle(
+                                  fontSize: 11,
+                                  color: RehabColors.ink,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
                           ),
                         ),
+                        const SizedBox(height: 8),
+                        Text(
+                          appointment['specialization'] ?? 'Physiotherapy',
+                          style: GoogleFonts.readexPro(
+                            fontSize: 12,
+                            color: context.rehabMuted, // Light teal color
+                          ),
+                        ),
+                        if (appointment['parent_appointment_time'] != null) ...[
+                          const SizedBox(height: 6),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.shade50,
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: Colors.blue.shade100),
+                            ),
+                            child: Text(
+                              appointment['parent_injury'] != null
+                                  ? 'Follow-up for: ${appointment['parent_injury']} (Appointment on: ${DateFormat('EEE, MMM d, h:mm a').format(DateTime.parse(appointment['parent_appointment_time']))})'
+                                  : 'Follow-up for appointment on: ${DateFormat('EEE, MMM d, h:mm a').format(DateTime.parse(appointment['parent_appointment_time']))}',
+                              style: GoogleFonts.readexPro(
+                                fontSize: 10,
+                                color: Colors.blue.shade900,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                        ],
                       ],
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          if (isPast && !isCancelled) ...[
+            if (isPast && !isCancelled) ...[
               const SizedBox(height: 16),
               RichText(
                 text: TextSpan(
@@ -958,17 +961,18 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
-            final bool isWeekend = _selectedDay != null &&
+            final bool isWeekend =
+                _selectedDay != null &&
                 (_selectedDay!.weekday == DateTime.saturday ||
                     _selectedDay!.weekday == DateTime.sunday);
 
             final validationError = isWeekend
                 ? "Appointments can only be booked on weekdays (Monday to Friday)."
                 : (selectedTime.hour < 9 || selectedTime.hour >= 18)
-                    ? "Appointments can only be booked during office hours (9:00 AM to 6:00 PM)."
-                    : (selectedTime.hour == 14)
-                        ? "Appointments cannot be booked during the lunch break (2:00 PM to 3:00 PM)."
-                        : null;
+                ? "Appointments can only be booked during office hours (9:00 AM to 6:00 PM)."
+                : (selectedTime.hour == 14)
+                ? "Appointments cannot be booked during the lunch break (2:00 PM to 3:00 PM)."
+                : null;
 
             return Padding(
               padding: EdgeInsets.only(
@@ -1099,39 +1103,58 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                           );
                           if (p == null) return true;
 
-                          final lStart = p['leave_start_date'];
-                          final lEnd = p['leave_end_date'];
-                          if (lStart == null || lEnd == null) return true;
+                          final rawPeriods = p['unavailable_periods'];
+                          final periods = rawPeriods is List
+                              ? List<dynamic>.from(rawPeriods)
+                              : <dynamic>[];
+                          // Compatibility with a backend that still returns
+                          // only the legacy single unavailable range.
+                          if (periods.isEmpty &&
+                              p['leave_start_date'] != null &&
+                              p['leave_end_date'] != null) {
+                            periods.add({
+                              'start_date': p['leave_start_date'],
+                              'end_date': p['leave_end_date'],
+                            });
+                          }
 
-                          try {
-                            final start = DateTime.parse(lStart);
-                            final end = DateTime.parse(lEnd);
-                            final dayStart = DateTime(
-                              day.year,
-                              day.month,
-                              day.day,
-                            );
-                            final leaveStart = DateTime(
-                              start.year,
-                              start.month,
-                              start.day,
-                            );
-                            final leaveEnd = DateTime(
-                              end.year,
-                              end.month,
-                              end.day,
-                            );
+                          for (final period in periods) {
+                            try {
+                              final start = DateTime.parse(
+                                period['start_date'].toString(),
+                              );
+                              final end = DateTime.parse(
+                                period['end_date'].toString(),
+                              );
+                              final dayStart = DateTime(
+                                day.year,
+                                day.month,
+                                day.day,
+                              );
+                              final leaveStart = DateTime(
+                                start.year,
+                                start.month,
+                                start.day,
+                              );
+                              final leaveEnd = DateTime(
+                                end.year,
+                                end.month,
+                                end.day,
+                              );
 
-                            if (dayStart.isAfter(
-                                  leaveStart.subtract(const Duration(days: 1)),
-                                ) &&
-                                dayStart.isBefore(
-                                  leaveEnd.add(const Duration(days: 1)),
-                                )) {
-                              return false;
+                              if (dayStart.isAfter(
+                                    leaveStart.subtract(
+                                      const Duration(days: 1),
+                                    ),
+                                  ) &&
+                                  dayStart.isBefore(
+                                    leaveEnd.add(const Duration(days: 1)),
+                                  )) {
+                                return false;
+                              }
+                            } catch (e) {
+                              debugPrint("Date parse error: $e");
                             }
-                          } catch (e) {
-                            debugPrint("Date parse error: $e");
                           }
                           return true;
                         },
@@ -1197,8 +1220,11 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const Icon(Icons.warning_amber_rounded,
-                              color: Colors.redAccent, size: 20),
+                          const Icon(
+                            Icons.warning_amber_rounded,
+                            color: Colors.redAccent,
+                            size: 20,
+                          ),
                           const SizedBox(width: 8),
                           Expanded(
                             child: Text(
@@ -1221,71 +1247,94 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                         onPressed: validationError != null
                             ? null
                             : () async {
-                          if (selectedPhysioId == null || _selectedDay == null)
-                            return;
-                          final dt = DateTime(
-                            _selectedDay!.year,
-                            _selectedDay!.month,
-                            _selectedDay!.day,
-                            selectedTime.hour,
-                            selectedTime.minute,
-                          );
-                          try {
-                            final apiUrl = kIsWeb
-                                ? 'http://127.0.0.1:8000'
-                                : (dotenv.env['API_URL'] ??
-                                          'http://10.0.2.2:8000')
-                                      .trim();
-                            final res = await http.post(
-                              Uri.parse('$apiUrl/appointments/book'),
-                              headers: {'Content-Type': 'application/json'},
-                              body: jsonEncode({
-                                "student_id": _myUserId,
-                                "therapist_id": selectedPhysioId,
-                                "schedule_time": dt.toIso8601String(),
-                              }),
-                            );
-                            if (!mounted || !pageContext.mounted) return;
-                            if (res.statusCode == 200) {
-                              setState(() {
-                                _didBook = true;
-                              });
-                              Navigator.pop(context);
-                              _fetchAppointments();
-                            } else {
-                              Navigator.pop(context); // Close bottom sheet first so SnackBar is visible on main page
-                              try {
-                                final data = jsonDecode(res.body);
-                                final errorMsg = data['detail'] ?? 'Failed to book appointment.';
-                                ScaffoldMessenger.of(pageContext).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      errorMsg,
-                                      style: GoogleFonts.readexPro(fontWeight: FontWeight.w600),
-                                    ),
-                                    backgroundColor: Colors.redAccent,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
+                                if (selectedPhysioId == null ||
+                                    _selectedDay == null)
+                                  return;
+                                final dt = DateTime(
+                                  _selectedDay!.year,
+                                  _selectedDay!.month,
+                                  _selectedDay!.day,
+                                  selectedTime.hour,
+                                  selectedTime.minute,
                                 );
-                              } catch (_) {
-                                ScaffoldMessenger.of(pageContext).showSnackBar(
-                                  SnackBar(
-                                    content: Text(
-                                      'An error occurred: Status ${res.statusCode}',
-                                      style: GoogleFonts.readexPro(fontWeight: FontWeight.w600),
-                                    ),
-                                    backgroundColor: Colors.redAccent,
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                  ),
-                                );
-                              }
-                            }
-                          } catch (e) {
-                            debugPrint("Error booking: $e");
-                          }
-                        },
+                                try {
+                                  final apiUrl = kIsWeb
+                                      ? 'http://127.0.0.1:8000'
+                                      : (dotenv.env['API_URL'] ??
+                                                'http://10.0.2.2:8000')
+                                            .trim();
+                                  final res = await http.post(
+                                    Uri.parse('$apiUrl/appointments/book'),
+                                    headers: {
+                                      'Content-Type': 'application/json',
+                                    },
+                                    body: jsonEncode({
+                                      "student_id": _myUserId,
+                                      "therapist_id": selectedPhysioId,
+                                      "schedule_time": dt.toIso8601String(),
+                                    }),
+                                  );
+                                  if (!mounted || !pageContext.mounted) return;
+                                  if (res.statusCode == 200) {
+                                    setState(() {
+                                      _didBook = true;
+                                    });
+                                    Navigator.pop(context);
+                                    _fetchAppointments();
+                                  } else {
+                                    Navigator.pop(
+                                      context,
+                                    ); // Close bottom sheet first so SnackBar is visible on main page
+                                    try {
+                                      final data = jsonDecode(res.body);
+                                      final errorMsg =
+                                          data['detail'] ??
+                                          'Failed to book appointment.';
+                                      ScaffoldMessenger.of(
+                                        pageContext,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            errorMsg,
+                                            style: GoogleFonts.readexPro(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          backgroundColor: Colors.redAccent,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    } catch (_) {
+                                      ScaffoldMessenger.of(
+                                        pageContext,
+                                      ).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            'An error occurred: Status ${res.statusCode}',
+                                            style: GoogleFonts.readexPro(
+                                              fontWeight: FontWeight.w600,
+                                            ),
+                                          ),
+                                          backgroundColor: Colors.redAccent,
+                                          behavior: SnackBarBehavior.floating,
+                                          shape: RoundedRectangleBorder(
+                                            borderRadius: BorderRadius.circular(
+                                              12,
+                                            ),
+                                          ),
+                                        ),
+                                      );
+                                    }
+                                  }
+                                } catch (e) {
+                                  debugPrint("Error booking: $e");
+                                }
+                              },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: const Color(0xFF1565C0),
                           padding: const EdgeInsets.symmetric(vertical: 16),

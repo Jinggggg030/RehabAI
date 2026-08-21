@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, DateTime, Text, Float, ForeignKey, CheckConstraint, JSON, Boolean, UniqueConstraint
+from sqlalchemy import Column, Integer, String, Date, DateTime, Text, Float, ForeignKey, CheckConstraint, JSON, Boolean, UniqueConstraint
 from sqlalchemy.orm import declarative_base
 from datetime import datetime
 
@@ -38,6 +38,26 @@ class Physiotherapist(Base):
     leave_start_date = Column(DateTime, nullable=True)
     leave_end_date = Column(DateTime, nullable=True)
     profile_picture = Column(String(255), nullable=True)
+
+class PhysiotherapistUnavailablePeriod(Base):
+    __tablename__ = "Physiotherapist_Unavailable_Period"
+
+    unavailable_period_id = Column(Integer, primary_key=True)
+    therapist_id = Column(
+        Integer,
+        ForeignKey("Physiotherapist.therapist_id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    start_date = Column(Date, nullable=False)
+    end_date = Column(Date, nullable=False)
+
+    __table_args__ = (
+        CheckConstraint("end_date >= start_date", name="check_unavailable_date_range"),
+        UniqueConstraint(
+            "therapist_id", "start_date", "end_date",
+            name="uq_physio_unavailable_period",
+        ),
+    )
 
 class Admin(Base):
     __tablename__ = "Admin"

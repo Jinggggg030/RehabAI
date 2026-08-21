@@ -1843,14 +1843,79 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
   }
 
   Future<void> _showApplyLeaveDialog() async {
+    final now = DateTime.now();
+    final firstDate = DateTime(now.year, now.month, now.day);
+    final lastDate = firstDate.add(const Duration(days: 365));
+    final previousUnavailableRanges = <DateTimeRange>[];
+
+    final apiUrl = kIsWeb
+        ? 'http://127.0.0.1:8000'
+        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    try {
+      final leaveResponse = await http.get(
+        Uri.parse('$apiUrl/physio/leave/${widget.myUserId}'),
+      );
+      if (leaveResponse.statusCode == 200) {
+        final leaveData = jsonDecode(leaveResponse.body);
+        final periods = leaveData['periods'] as List<dynamic>? ?? [];
+        for (final period in periods) {
+          final savedStart = DateTime.tryParse(
+            period['start_date']?.toString() ?? '',
+          );
+          final savedEnd = DateTime.tryParse(
+            period['end_date']?.toString() ?? '',
+          );
+          if (savedStart != null && savedEnd != null) {
+            final start = DateTime(
+              savedStart.year,
+              savedStart.month,
+              savedStart.day,
+            );
+            final end = DateTime(savedEnd.year, savedEnd.month, savedEnd.day);
+            if (!end.isBefore(firstDate) && !start.isAfter(lastDate)) {
+              previousUnavailableRanges.add(
+                DateTimeRange(
+                  start: start.isBefore(firstDate) ? firstDate : start,
+                  end: end.isAfter(lastDate) ? lastDate : end,
+                ),
+              );
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Unable to load previous unavailable dates: $e');
+    }
+
+    if (!mounted) return;
     final picked = await showDateRangePicker(
       context: context,
-      firstDate: DateTime.now(),
-      lastDate: DateTime.now().add(const Duration(days: 365)),
+      firstDate: firstDate,
+      lastDate: lastDate,
+      selectableDayPredicate: (day, selectedStartDay, selectedEndDay) {
+        final calendarDay = DateTime(day.year, day.month, day.day);
+        return !previousUnavailableRanges.any(
+          (range) =>
+              !calendarDay.isBefore(range.start) &&
+              !calendarDay.isAfter(range.end),
+        );
+      },
+      helpText: previousUnavailableRanges.isEmpty
+          ? 'SELECT UNAVAILABLE DATES'
+          : 'RED DATES ARE ALREADY UNAVAILABLE',
+      confirmText: 'SET RANGE',
       builder: (context, child) {
         return Theme(
           data: ThemeData.light().copyWith(
             colorScheme: ColorScheme.light(primary: Colors.blue.shade800),
+            datePickerTheme: DatePickerThemeData(
+              dayForegroundColor: WidgetStateProperty.resolveWith((states) {
+                if (states.contains(WidgetState.disabled)) {
+                  return Colors.red.shade700;
+                }
+                return null;
+              }),
+            ),
           ),
           child: child!,
         );
@@ -1866,9 +1931,6 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
     );
 
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
       final res = await http.get(
         Uri.parse('$apiUrl/physiotherapists/colleagues/${widget.myUserId}'),
       );
@@ -1944,12 +2006,12 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                               ),
                               headers: {'Content-Type': 'application/json'},
                               body: jsonEncode({
-                                "start_date": picked.start
-                                    .toUtc()
-                                    .toIso8601String(),
-                                "end_date": picked.end
-                                    .toUtc()
-                                    .toIso8601String(),
+                                "start_date": DateFormat(
+                                  'yyyy-MM-dd',
+                                ).format(picked.start),
+                                "end_date": DateFormat(
+                                  'yyyy-MM-dd',
+                                ).format(picked.end),
                                 "cover_colleague_id": selectedColleagueId,
                               }),
                             );
@@ -2561,7 +2623,9 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                                             Icons.edit_document,
                                             size: 16,
                                           ),
-                                          label: const Text("Record Rehab Session"),
+                                          label: const Text(
+                                            "Record Rehab Session",
+                                          ),
                                           style: ElevatedButton.styleFrom(
                                             backgroundColor:
                                                 Colors.blue.shade800,
