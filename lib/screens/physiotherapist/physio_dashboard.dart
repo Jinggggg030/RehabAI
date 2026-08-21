@@ -34,6 +34,8 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
   RealtimeChannel? _globalNotificationSub;
   List<dynamic> _notifications = [];
   Timer? _notificationTimer;
+  Timer? _accountStatusTimer;
+  bool _signingOutDeactivatedAccount = false;
   Set<String> _knownNotificationIds = {};
   bool _notificationsInitialized = false;
   bool _notificationFetchInProgress = false;
@@ -59,6 +61,10 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
     if (userRes.statusCode == 200) {
       final userData = jsonDecode(userRes.body);
       if (userData['exists'] == true) {
+        if (userData['is_active'] == false) {
+          await _signOutDeactivatedAccount();
+          return;
+        }
         setState(() {
           _myUserId = userData['user_id'];
           _myUsername = userData['username'];
@@ -71,8 +77,52 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
           const Duration(seconds: 1),
           (_) => _fetchPhysioNotifications(),
         );
+        _accountStatusTimer = Timer.periodic(
+          const Duration(seconds: 5),
+          (_) => _checkAccountStatus(),
+        );
       }
     }
+  }
+
+  Future<void> _checkAccountStatus() async {
+    if (_signingOutDeactivatedAccount) return;
+    final user = _supabase.auth.currentUser;
+    if (user == null) return;
+    try {
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final response = await http.get(
+        Uri.parse('$apiUrl/users/profile/${user.id}'),
+      );
+      if (response.statusCode != 200) return;
+      final data = jsonDecode(response.body);
+      if (data['exists'] != true || data['is_active'] == false) {
+        await _signOutDeactivatedAccount();
+      }
+    } catch (error) {
+      debugPrint('Account status check failed: $error');
+    }
+  }
+
+  Future<void> _signOutDeactivatedAccount() async {
+    if (_signingOutDeactivatedAccount) return;
+    _signingOutDeactivatedAccount = true;
+    _notificationTimer?.cancel();
+    _accountStatusTimer?.cancel();
+    await _supabase.auth.signOut();
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Your account has been deactivated.'),
+        backgroundColor: Colors.red,
+      ),
+    );
+    Navigator.of(context).pushAndRemoveUntil(
+      MaterialPageRoute(builder: (_) => const LoginPage()),
+      (route) => false,
+    );
   }
 
   Future<void> _resolveProfilePicture(String? storedValue) async {
@@ -208,7 +258,9 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
       final response = await http.get(
         Uri.parse('$apiUrl/physio/$_myUserId/notifications'),
       );
-      if (response.statusCode == 200 && mounted) {
+      if (response.statusCode == 403) {
+        await _signOutDeactivatedAccount();
+      } else if (response.statusCode == 200 && mounted) {
         final fetched = List<dynamic>.from(
           jsonDecode(response.body)['notifications'] ?? [],
         );
@@ -316,6 +368,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
   @override
   void dispose() {
     _notificationTimer?.cancel();
+    _accountStatusTimer?.cancel();
     if (_globalNotificationSub != null)
       _supabase.removeChannel(_globalNotificationSub!);
     super.dispose();

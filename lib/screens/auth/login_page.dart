@@ -164,6 +164,12 @@ class _LoginPageState extends State<LoginPage> {
       final data = jsonDecode(checkResponse.body);
       if (!mounted) return;
       if (data['exists'] == true) {
+        if (data['is_active'] == false) {
+          await Supabase.instance.client.auth.signOut();
+          throw Exception(
+            'This account has been deactivated. Please contact the administrator.',
+          );
+        }
         if (data['role'] == 'P') {
           Navigator.pushReplacement(
             context,

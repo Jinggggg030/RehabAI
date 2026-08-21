@@ -18,6 +18,7 @@ class User(Base):
     accommodation_type = Column(String(50), nullable=True)
     fcm_token = Column(String(255), nullable=True)
     role = Column(String(1), nullable=False, default='S')
+    is_active = Column(Boolean, nullable=False, default=True)
 
     __table_args__ = (
         CheckConstraint("role IN ('S', 'P', 'A')", name="check_valid_role"), 

@@ -37,10 +37,7 @@ class _SplashScreenState extends State<SplashScreen>
       curve: Curves.easeOutBack,
     );
 
-    _fadeAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeIn,
-    );
+    _fadeAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
 
     _controller.forward();
     _checkAuthAndNavigate();
@@ -76,6 +73,11 @@ class _SplashScreenState extends State<SplashScreen>
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['exists'] == true) {
+          if (data['is_active'] == false) {
+            await Supabase.instance.client.auth.signOut();
+            _navigateToLanding();
+            return;
+          }
           final role = data['role'];
           if (!mounted) return;
           if (role == 'P') {
@@ -151,10 +153,7 @@ class _SplashScreenState extends State<SplashScreen>
                     const Color(0xFF1A237E).withOpacity(0.4),
                     const Color(0xFF0A0E21),
                   ]
-                : [
-                    const Color(0xFFE3F2FD),
-                    Colors.white,
-                  ],
+                : [const Color(0xFFE3F2FD), Colors.white],
           ),
         ),
         child: SafeArea(
@@ -221,10 +220,9 @@ class _SplashScreenState extends State<SplashScreen>
                         style: GoogleFonts.readexPro(
                           fontSize: 14,
                           fontWeight: FontWeight.w500,
-                          color: Theme.of(context)
-                              .colorScheme
-                              .onSurfaceVariant
-                              .withOpacity(0.7),
+                          color: Theme.of(
+                            context,
+                          ).colorScheme.onSurfaceVariant.withOpacity(0.7),
                         ),
                       ),
                     ),

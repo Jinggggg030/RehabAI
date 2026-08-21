@@ -70,6 +70,10 @@ models.Base.metadata.create_all(bind=engine)
 # create_all() does not add columns to existing tables. Keep this additive
 # migration here so existing installations can start safely after upgrading.
 with engine.begin() as connection:
+    connection.execute(text(
+        'ALTER TABLE "User" '
+        'ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE'
+    ))
     # Preserve legacy single leave ranges when upgrading to multi-range leave.
     connection.execute(text(
         'INSERT INTO "Physiotherapist_Unavailable_Period" '
@@ -181,6 +185,17 @@ physio_heartbeats = {}
 
 def record_physio_heartbeat(physio_id: int):
     physio_heartbeats[physio_id] = datetime.utcnow()
+
+def require_active_physio(db: Session, physio_id: int):
+    active_user = db.query(models.User).filter(
+        models.User.user_id == physio_id,
+        models.User.role == "P",
+        models.User.is_active.is_(True),
+    ).first()
+    if not active_user:
+        physio_heartbeats.pop(physio_id, None)
+        raise HTTPException(status_code=403, detail="Physiotherapist account is deactivated")
+    return active_user
 
 def ensure_meeting_room(appointment: models.Appointment) -> str:
     """Return a non-guessable room shared only through appointment responses."""
@@ -324,10 +339,12 @@ def check_user_profile(supabase_id: str, db: Session = Depends(get_db)):
         user = db.query(models.User).filter(models.User.supabase_id == supabase_id).first()
     
     if user:
+        active = user.is_active is not False
         if user.role == 'P':
             therapist = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == user.user_id).first()
             return {
                 "exists": True, 
+                "is_active": active,
                 "user_id": user.user_id, 
                 "role": user.role,
                 "username": user.username,
@@ -345,6 +362,7 @@ def check_user_profile(supabase_id: str, db: Session = Depends(get_db)):
             student = db.query(models.Student).filter(models.Student.student_id == user.user_id).first()
             return {
                 "exists": True, 
+                "is_active": active,
                 "user_id": user.user_id, 
                 "role": user.role,
                 "username": user.username,
@@ -563,6 +581,7 @@ def mark_notification_read(
 
 @app.get("/physio/{physio_id}/notifications")
 def get_physio_notifications(physio_id: int, db: Session = Depends(get_db)):
+    require_active_physio(db, physio_id)
     record_physio_heartbeat(physio_id)
     from datetime import timedelta
 
@@ -763,6 +782,7 @@ def get_admin_physiotherapists(db: Session = Depends(get_db)):
             "contact_number": p.contact_number,
             "address": p.address,
             "specialization": therapist.specialization if therapist else "",
+            "is_active": p.is_active is not False,
         })
     return {"physiotherapists": result}
 
@@ -830,26 +850,18 @@ def update_admin_physiotherapist(user_id: int, data: PhysiotherapistUpdate, db: 
     db.commit()
     return {"message": "Physiotherapist updated successfully"}
 
-@app.delete("/admin/physiotherapists/{user_id}")
-def delete_admin_physiotherapist(user_id: int, db: Session = Depends(get_db)):
+@app.put("/admin/physiotherapists/{user_id}/deactivate")
+def deactivate_admin_physiotherapist(user_id: int, db: Session = Depends(get_db)):
     user = db.query(models.User).filter(models.User.user_id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="Physiotherapist not found")
     if user.role != 'P':
         raise HTTPException(status_code=400, detail="User is not a physiotherapist")
         
-    # Check if they have active appointments
-    appointments_count = db.query(models.Appointment).filter(models.Appointment.therapist_id == user_id).count()
-    if appointments_count > 0:
-         raise HTTPException(status_code=400, detail="Cannot delete physiotherapist: they have active appointments")
-         
-    # Delete from Physiotherapist and User
-    therapist = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == user_id).first()
-    if therapist:
-        db.delete(therapist)
-    db.delete(user)
+    user.is_active = False
+    physio_heartbeats.pop(user_id, None)
     db.commit()
-    return {"message": "Physiotherapist deleted successfully"}
+    return {"message": "Physiotherapist deactivated successfully"}
 
 @app.get("/admin/rentals")
 def get_admin_rentals(db: Session = Depends(get_db)):
@@ -1336,19 +1348,30 @@ def validate_appointment_time(
 def assign_physio(db: Session, session_id: int, discipline: str):
     # Retrieve all physiotherapists with matching specialization (treat Orthopaedic and Musculoskeletal as synonyms)
     if discipline and discipline.lower() in ["orthopaedic", "orthopedic", "musculoskeletal"]:
-        matching_physios = db.query(models.Physiotherapist).filter(
+        matching_physios = db.query(models.Physiotherapist).join(
+            models.User,
+            models.User.user_id == models.Physiotherapist.therapist_id,
+        ).filter(
+            models.User.is_active.is_(True),
             (models.Physiotherapist.specialization.ilike("%Orthopaedic%")) |
             (models.Physiotherapist.specialization.ilike("%Orthopedic%")) |
             (models.Physiotherapist.specialization.ilike("%Musculoskeletal%"))
         ).all()
     else:
-        matching_physios = db.query(models.Physiotherapist).filter(
+        matching_physios = db.query(models.Physiotherapist).join(
+            models.User,
+            models.User.user_id == models.Physiotherapist.therapist_id,
+        ).filter(
+            models.User.is_active.is_(True),
             models.Physiotherapist.specialization.ilike(f"%{discipline}%")
         ).all()
     
     # If no matching physiotherapists are found, search among all physiotherapists
     if not matching_physios:
-        matching_physios = db.query(models.Physiotherapist).all()
+        matching_physios = db.query(models.Physiotherapist).join(
+            models.User,
+            models.User.user_id == models.Physiotherapist.therapist_id,
+        ).filter(models.User.is_active.is_(True)).all()
         
     if not matching_physios:
         return
@@ -1511,6 +1534,7 @@ def send_message(req: SendMessageReq, db: Session = Depends(get_db)):
 
 @app.get("/physio/chats/{physio_id}")
 def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
+    require_active_physio(db, physio_id)
     record_physio_heartbeat(physio_id)
     chats = db.query(
         models.LiveChatSession.session_id,
@@ -2225,6 +2249,7 @@ def mark_missed_appointments(
 
 @app.get("/physio/appointments/{physio_id}")
 def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
+    require_active_physio(db, physio_id)
     mark_missed_appointments(db, therapist_id=physio_id)
     appointments = db.query(
         models.Appointment, models.User.username, models.Student.matric_no
@@ -2573,7 +2598,10 @@ def get_available_physios(student_id: int, db: Session = Depends(get_db)):
     if presc:
         physio = db.query(models.User, models.Physiotherapist).join(
             models.Physiotherapist, models.User.user_id == models.Physiotherapist.therapist_id
-        ).filter(models.User.user_id == presc.therapist_id).first()
+        ).filter(
+            models.User.user_id == presc.therapist_id,
+            models.User.is_active.is_(True),
+        ).first()
         if physio:
             u, p = physio
             return {"physios": [physio_payload(u, p, True)]}
@@ -2587,7 +2615,10 @@ def get_available_physios(student_id: int, db: Session = Depends(get_db)):
     if session:
         physio = db.query(models.User, models.Physiotherapist).join(
             models.Physiotherapist, models.User.user_id == models.Physiotherapist.therapist_id
-        ).filter(models.User.user_id == session.therapist_id).first()
+        ).filter(
+            models.User.user_id == session.therapist_id,
+            models.User.is_active.is_(True),
+        ).first()
         if physio:
             u, p = physio
             return {"physios": [physio_payload(u, p, True)]}
@@ -2595,7 +2626,7 @@ def get_available_physios(student_id: int, db: Session = Depends(get_db)):
     # 3. Fallback: Return all physios
     all_physios = db.query(models.User, models.Physiotherapist).join(
         models.Physiotherapist, models.User.user_id == models.Physiotherapist.therapist_id
-    ).all()
+    ).filter(models.User.is_active.is_(True)).all()
     
     result = []
     for u, p in all_physios:
@@ -2747,7 +2778,8 @@ def get_physio_colleagues(therapist_id: int, db: Session = Depends(get_db)):
         models.Physiotherapist, models.User.user_id == models.Physiotherapist.therapist_id
     ).filter(
         models.Physiotherapist.specialization == spec,
-        models.Physiotherapist.therapist_id != therapist_id
+        models.Physiotherapist.therapist_id != therapist_id,
+        models.User.is_active.is_(True),
     ).all()
     
     result = []

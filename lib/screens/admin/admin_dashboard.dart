@@ -406,7 +406,12 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   Widget _buildActiveRentals() {
     final allActive = _rentals
-        .where((r) => r['status'] == 'Approved' || r['status'] == 'Active' || r['status'] == 'Returned')
+        .where(
+          (r) =>
+              r['status'] == 'Approved' ||
+              r['status'] == 'Active' ||
+              r['status'] == 'Returned',
+        )
         .toList();
     final query = (_rentalSearch ?? '').trim().toLowerCase();
     final active = query.isEmpty
@@ -478,7 +483,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
-                             Container(
+                            Container(
                               padding: const EdgeInsets.symmetric(
                                 horizontal: 8,
                                 vertical: 4,
@@ -486,16 +491,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               decoration: BoxDecoration(
                                 color: r['status'] == 'Approved'
                                     ? Colors.orange.shade100
-                                    : (r['status'] == 'Returned' ? Colors.blue.shade100 : Colors.green.shade100),
+                                    : (r['status'] == 'Returned'
+                                          ? Colors.blue.shade100
+                                          : Colors.green.shade100),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Text(
-                                r['status'] == 'Returned' ? 'Completed' : r['status'],
+                                r['status'] == 'Returned'
+                                    ? 'Completed'
+                                    : r['status'],
                                 style: GoogleFonts.readexPro(
                                   fontSize: 12,
                                   color: r['status'] == 'Approved'
                                       ? Colors.orange.shade800
-                                      : (r['status'] == 'Returned' ? Colors.blue.shade800 : Colors.green.shade800),
+                                      : (r['status'] == 'Returned'
+                                            ? Colors.blue.shade800
+                                            : Colors.green.shade800),
                                   fontWeight: FontWeight.bold,
                                 ),
                               ),
@@ -891,32 +902,31 @@ class _AdminDashboardState extends State<AdminDashboard> {
     );
   }
 
-  Future<void> _deletePhysiotherapist(int userId) async {
+  Future<void> _deactivatePhysiotherapist(int userId) async {
     setState(() => _isLoading = true);
     try {
       final apiUrl = kIsWeb
           ? 'http://127.0.0.1:8000'
           : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
-      final res = await http.delete(Uri.parse('$apiUrl/admin/physiotherapists/$userId'));
+      final res = await http.put(
+        Uri.parse('$apiUrl/admin/physiotherapists/$userId/deactivate'),
+      );
       if (res.statusCode == 200) {
         _fetchPhysiotherapists();
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Physiotherapist deleted successfully'),
+            content: Text('Physiotherapist deactivated successfully'),
             backgroundColor: Colors.green,
           ),
         );
       } else {
-        final error = jsonDecode(res.body)['detail'] ?? 'Failed to delete';
+        final error = jsonDecode(res.body)['detail'] ?? 'Failed to deactivate';
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(error),
-            backgroundColor: Colors.red,
-          ),
+          SnackBar(content: Text(error), backgroundColor: Colors.red),
         );
       }
     } catch (e) {
-      debugPrint("Error deleting physiotherapist: $e");
+      debugPrint("Error deactivating physiotherapist: $e");
     } finally {
       setState(() => _isLoading = false);
     }
@@ -945,7 +955,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                 itemCount: _physiotherapists.length,
                 itemBuilder: (context, index) {
                   final p = _physiotherapists[index];
-                  final isActive = p['supabase_id'] != null;
+                  final hasCompletedSetup = p['supabase_id'] != null;
+                  final isActive = p['is_active'] != false;
                   return Card(
                     margin: const EdgeInsets.only(bottom: 12),
                     elevation: 1,
@@ -957,10 +968,14 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       contentPadding: const EdgeInsets.all(16),
                       leading: CircleAvatar(
                         radius: 24,
-                        backgroundColor: isActive ? const Color(0xFFE8F5E9) : const Color(0xFFFFF3E0),
+                        backgroundColor: isActive
+                            ? const Color(0xFFE8F5E9)
+                            : const Color(0xFFFFF3E0),
                         child: Icon(
                           Icons.person_outline,
-                          color: isActive ? Colors.green.shade700 : Colors.orange.shade700,
+                          color: isActive
+                              ? Colors.green.shade700
+                              : Colors.orange.shade700,
                         ),
                       ),
                       title: Row(
@@ -979,14 +994,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                               vertical: 2,
                             ),
                             decoration: BoxDecoration(
-                              color: isActive ? Colors.green.shade100 : Colors.orange.shade100,
+                              color: isActive
+                                  ? Colors.green.shade100
+                                  : Colors.orange.shade100,
                               borderRadius: BorderRadius.circular(8),
                             ),
                             child: Text(
-                              isActive ? 'Active' : 'Pending Setup',
+                              !isActive
+                                  ? 'Deactivated'
+                                  : hasCompletedSetup
+                                  ? 'Active'
+                                  : 'Pending Setup',
                               style: GoogleFonts.readexPro(
                                 fontSize: 10,
-                                color: isActive ? Colors.green.shade800 : Colors.orange.shade800,
+                                color: isActive
+                                    ? Colors.green.shade800
+                                    : Colors.orange.shade800,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -1009,7 +1032,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             Text("Email: ${p['email']}"),
                             Text("Phone: ${p['contact_number']}"),
                             Text("IC/Passport: ${p['identity_number']}"),
-                            if (p['address'] != null && p['address'].toString().isNotEmpty)
+                            if (p['address'] != null &&
+                                p['address'].toString().isNotEmpty)
                               Text("Address: ${p['address']}"),
                           ],
                         ),
@@ -1021,36 +1045,45 @@ class _AdminDashboardState extends State<AdminDashboard> {
                             icon: const Icon(Icons.edit, color: Colors.blue),
                             onPressed: () => _showPhysiotherapistDialog(p),
                           ),
-                          IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () {
-                              showDialog(
-                                context: context,
-                                builder: (c) => AlertDialog(
-                                  title: const Text('Delete Physiotherapist?'),
-                                  content: Text(
-                                    'Are you sure you want to delete ${p['username']}? This action cannot be undone.',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () => Navigator.pop(c),
-                                      child: const Text('Cancel'),
+                          if (isActive)
+                            IconButton(
+                              icon: const Icon(
+                                Icons.person_off,
+                                color: Colors.red,
+                              ),
+                              tooltip: 'Deactivate account',
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (c) => AlertDialog(
+                                    title: const Text(
+                                      'Deactivate Physiotherapist?',
                                     ),
-                                    TextButton(
-                                      onPressed: () {
-                                        Navigator.pop(c);
-                                        _deletePhysiotherapist(p['user_id']);
-                                      },
-                                      child: const Text(
-                                        'Delete',
-                                        style: TextStyle(color: Colors.red),
+                                    content: Text(
+                                      'Deactivate ${p['username']}? Their records will be retained, but they will no longer be able to access the system.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(c),
+                                        child: const Text('Cancel'),
                                       ),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            },
-                          ),
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.pop(c);
+                                          _deactivatePhysiotherapist(
+                                            p['user_id'],
+                                          );
+                                        },
+                                        child: const Text(
+                                          'Deactivate',
+                                          style: TextStyle(color: Colors.red),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            ),
                         ],
                       ),
                     ),
@@ -1072,12 +1105,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
 
   void _showPhysiotherapistDialog([Map<String, dynamic>? physio]) {
     final isEdit = physio != null;
-    final nameController = TextEditingController(text: physio?['username'] ?? '');
+    final nameController = TextEditingController(
+      text: physio?['username'] ?? '',
+    );
     final emailController = TextEditingController(text: physio?['email'] ?? '');
-    final identityController = TextEditingController(text: physio?['identity_number'] ?? '');
-    final contactController = TextEditingController(text: physio?['contact_number'] ?? '');
-    final addressController = TextEditingController(text: physio?['address'] ?? '');
-    final specController = TextEditingController(text: physio?['specialization'] ?? '');
+    final identityController = TextEditingController(
+      text: physio?['identity_number'] ?? '',
+    );
+    final contactController = TextEditingController(
+      text: physio?['contact_number'] ?? '',
+    );
+    final addressController = TextEditingController(
+      text: physio?['address'] ?? '',
+    );
+    final specController = TextEditingController(
+      text: physio?['specialization'] ?? '',
+    );
     String selectedGender = physio?['gender'] ?? 'Male';
 
     showDialog(
@@ -1100,18 +1143,24 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: emailController,
-                    decoration: const InputDecoration(labelText: 'Email Address'),
+                    decoration: const InputDecoration(
+                      labelText: 'Email Address',
+                    ),
                     enabled: !isEdit,
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: identityController,
-                    decoration: const InputDecoration(labelText: 'Identity Number (IC/Passport)'),
+                    decoration: const InputDecoration(
+                      labelText: 'Identity Number (IC/Passport)',
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextField(
                     controller: contactController,
-                    decoration: const InputDecoration(labelText: 'Contact Number'),
+                    decoration: const InputDecoration(
+                      labelText: 'Contact Number',
+                    ),
                   ),
                   const SizedBox(height: 8),
                   DropdownButtonFormField<String>(
@@ -1131,7 +1180,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   const SizedBox(height: 8),
                   TextField(
                     controller: specController,
-                    decoration: const InputDecoration(labelText: 'Specialization'),
+                    decoration: const InputDecoration(
+                      labelText: 'Specialization',
+                    ),
                   ),
                   const SizedBox(height: 8),
                   TextField(
@@ -1171,7 +1222,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   try {
                     final apiUrl = kIsWeb
                         ? 'http://127.0.0.1:8000'
-                        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+                        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000')
+                              .trim();
                     final body = jsonEncode({
                       'username': nameController.text.trim(),
                       'email': emailController.text.trim(),
@@ -1190,7 +1242,9 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       );
                     } else {
                       res = await http.put(
-                        Uri.parse('$apiUrl/admin/physiotherapists/${physio['user_id']}'),
+                        Uri.parse(
+                          '$apiUrl/admin/physiotherapists/${physio['user_id']}',
+                        ),
                         headers: {'Content-Type': 'application/json'},
                         body: body,
                       );
@@ -1199,14 +1253,22 @@ class _AdminDashboardState extends State<AdminDashboard> {
                       _fetchPhysiotherapists();
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
-                          content: Text(isEdit ? 'Updated successfully' : 'Pre-registered successfully'),
+                          content: Text(
+                            isEdit
+                                ? 'Updated successfully'
+                                : 'Pre-registered successfully',
+                          ),
                           backgroundColor: Colors.green,
                         ),
                       );
                     } else {
-                      final error = jsonDecode(res.body)['detail'] ?? 'Failed to save';
+                      final error =
+                          jsonDecode(res.body)['detail'] ?? 'Failed to save';
                       ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text(error), backgroundColor: Colors.red),
+                        SnackBar(
+                          content: Text(error),
+                          backgroundColor: Colors.red,
+                        ),
                       );
                     }
                   } catch (e) {
@@ -1394,8 +1456,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                 _selectedIndex == 0
                                     ? 'Rental Operations'
                                     : _selectedIndex == 1
-                                        ? 'Inventory Intelligence'
-                                        : 'Physiotherapist Directory',
+                                    ? 'Inventory Intelligence'
+                                    : 'Physiotherapist Directory',
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w800,
@@ -1495,8 +1557,8 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           child: _selectedIndex == 0
                               ? _buildActiveRentals()
                               : _selectedIndex == 1
-                                  ? _buildInventory()
-                                  : _buildPhysiotherapists(),
+                              ? _buildInventory()
+                              : _buildPhysiotherapists(),
                         ),
                       ),
                     ),
