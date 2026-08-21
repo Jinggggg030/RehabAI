@@ -961,12 +961,62 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
       builder: (context) {
         return StatefulBuilder(
           builder: (context, setModalState) {
+            final selectedPhysio = selectedPhysioId == null
+                ? null
+                : _availablePhysios.cast<dynamic>().firstWhere(
+                    (item) => item?['therapist_id'] == selectedPhysioId,
+                    orElse: () => null,
+                  );
+            final rawPeriods = selectedPhysio?['unavailable_periods'];
+            final unavailablePeriods = rawPeriods is List
+                ? List<dynamic>.from(rawPeriods)
+                : <dynamic>[];
+            if (unavailablePeriods.isEmpty &&
+                selectedPhysio?['leave_start_date'] != null &&
+                selectedPhysio?['leave_end_date'] != null) {
+              unavailablePeriods.add({
+                'start_date': selectedPhysio['leave_start_date'],
+                'end_date': selectedPhysio['leave_end_date'],
+              });
+            }
+
+            bool isUnavailableDate(DateTime day) {
+              final calendarDay = DateTime(day.year, day.month, day.day);
+              for (final period in unavailablePeriods) {
+                final parsedStart = DateTime.tryParse(
+                  period['start_date']?.toString() ?? '',
+                );
+                final parsedEnd = DateTime.tryParse(
+                  period['end_date']?.toString() ?? '',
+                );
+                if (parsedStart == null || parsedEnd == null) continue;
+                final start = DateTime(
+                  parsedStart.year,
+                  parsedStart.month,
+                  parsedStart.day,
+                );
+                final end = DateTime(
+                  parsedEnd.year,
+                  parsedEnd.month,
+                  parsedEnd.day,
+                );
+                if (!calendarDay.isBefore(start) && !calendarDay.isAfter(end)) {
+                  return true;
+                }
+              }
+              return false;
+            }
+
             final bool isWeekend =
                 _selectedDay != null &&
                 (_selectedDay!.weekday == DateTime.saturday ||
                     _selectedDay!.weekday == DateTime.sunday);
 
-            final validationError = isWeekend
+            final selectedDateUnavailable =
+                _selectedDay != null && isUnavailableDate(_selectedDay!);
+            final validationError = selectedDateUnavailable
+                ? "The physiotherapist is unavailable on the selected date."
+                : isWeekend
                 ? "Appointments can only be booked on weekdays (Monday to Friday)."
                 : (selectedTime.hour < 9 || selectedTime.hour >= 18)
                 ? "Appointments can only be booked during office hours (9:00 AM to 6:00 PM)."
@@ -1065,8 +1115,12 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                               ),
                             );
                           }).toList(),
-                          onChanged: (val) =>
-                              setModalState(() => selectedPhysioId = val),
+                          onChanged: (val) => setModalState(() {
+                            selectedPhysioId = val;
+                            // Require a fresh date selection because each
+                            // physiotherapist has different unavailable ranges.
+                            _selectedDay = null;
+                          }),
                         ),
                       ),
                     ),
@@ -1084,6 +1138,9 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: TableCalendar(
+                        key: ValueKey(
+                          '$selectedPhysioId-${jsonEncode(unavailablePeriods)}',
+                        ),
                         firstDay: DateTime.now(),
                         lastDay: DateTime.now().add(const Duration(days: 365)),
                         focusedDay: _focusedDay,
@@ -1095,68 +1152,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                               day.weekday == DateTime.sunday) {
                             return false;
                           }
-                          if (selectedPhysioId == null) return true;
-                          final p = _availablePhysios.firstWhere(
-                            (element) =>
-                                element['therapist_id'] == selectedPhysioId,
-                            orElse: () => null,
-                          );
-                          if (p == null) return true;
-
-                          final rawPeriods = p['unavailable_periods'];
-                          final periods = rawPeriods is List
-                              ? List<dynamic>.from(rawPeriods)
-                              : <dynamic>[];
-                          // Compatibility with a backend that still returns
-                          // only the legacy single unavailable range.
-                          if (periods.isEmpty &&
-                              p['leave_start_date'] != null &&
-                              p['leave_end_date'] != null) {
-                            periods.add({
-                              'start_date': p['leave_start_date'],
-                              'end_date': p['leave_end_date'],
-                            });
-                          }
-
-                          for (final period in periods) {
-                            try {
-                              final start = DateTime.parse(
-                                period['start_date'].toString(),
-                              );
-                              final end = DateTime.parse(
-                                period['end_date'].toString(),
-                              );
-                              final dayStart = DateTime(
-                                day.year,
-                                day.month,
-                                day.day,
-                              );
-                              final leaveStart = DateTime(
-                                start.year,
-                                start.month,
-                                start.day,
-                              );
-                              final leaveEnd = DateTime(
-                                end.year,
-                                end.month,
-                                end.day,
-                              );
-
-                              if (dayStart.isAfter(
-                                    leaveStart.subtract(
-                                      const Duration(days: 1),
-                                    ),
-                                  ) &&
-                                  dayStart.isBefore(
-                                    leaveEnd.add(const Duration(days: 1)),
-                                  )) {
-                                return false;
-                              }
-                            } catch (e) {
-                              debugPrint("Date parse error: $e");
-                            }
-                          }
-                          return true;
+                          return !isUnavailableDate(day);
                         },
                         onDaySelected: (selectedDay, focusedDay) {
                           setModalState(() {
