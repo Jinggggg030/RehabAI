@@ -99,6 +99,49 @@ Return ONLY JSON:
             update["pain_point"] = None
         return update
 
+    def _valid_answer(self, field, value):
+        text = self._key(value)
+        if not text:
+            return False
+        if field == "severity":
+            match = re.search(r"(?<!\d)(10|[1-9])(?!\d)", text)
+            number_words = {
+                "one", "two", "three", "four", "five", "six", "seven",
+                "eight", "nine", "ten",
+            }
+            return bool(match) or any(word in text.split() for word in number_words)
+        if field == "duration":
+            time_words = {
+                "minute", "minutes", "hour", "hours", "day", "days",
+                "week", "weeks", "month", "months", "year", "years",
+                "today", "yesterday", "morning", "night", "recently",
+            }
+            return any(word in text.split() for word in time_words)
+        if field == "pain_point":
+            cleaned = self._remove_generic_pain_point({
+                "area": "", "pain_point": value,
+            })
+            return bool(cleaned.get("pain_point"))
+        return True
+
+    @staticmethod
+    def _invalid_answer_message(symptom, field):
+        area = symptom["area"]
+        return {
+            "pain_point": (
+                f"Please describe the {area} pain type, such as sharp, dull, "
+                "aching, burning, or throbbing."
+            ),
+            "severity": (
+                f"Please answer with a number from 1 to 10 for your {area} "
+                "symptom, where 1 is very mild and 10 is the worst pain imaginable."
+            ),
+            "duration": (
+                f"Please tell me how long you have had the {area} symptom, "
+                "such as 3 days, 2 weeks, or 1 month."
+            ),
+        }[field]
+
     @staticmethod
     def _yes(message):
         return message.strip().lower() in {
@@ -254,6 +297,10 @@ Return ONLY JSON:
 
             updates = [self._remove_generic_pain_point(x)
                        for x in result.get("updates", []) if x.get("area")]
+            for update in updates:
+                for field in ("severity", "duration"):
+                    if update.get(field) and not self._valid_answer(field, update[field]):
+                        update[field] = None
             is_correction = self._is_correction(user_message)
             # Short answers refer to the symptom currently being questioned.
             if active and len(updates) == 1:
@@ -323,15 +370,20 @@ Return ONLY JSON:
             extracted_detail = any(
                 update.get(field) for update in updates for field in FIELDS
             )
-            if active and expected_field and not extracted_detail and not is_correction:
+            invalid_expected_answer = False
+            if active and expected_field and not is_correction:
                 active_index = self._find(state, active)
-                if active_index is not None and user_message.strip():
+                answer_is_valid = self._valid_answer(expected_field, user_message)
+                if active_index is not None and answer_is_valid and not extracted_detail:
                     state["symptoms"][active_index][expected_field] = user_message.strip()
+                elif not answer_is_valid:
+                    invalid_expected_answer = True
 
             self._sync_legacy(state)
             symptom, field = self._next_missing(state)
             if symptom:
-                reply = self._question(symptom, field)
+                reply = (self._invalid_answer_message(symptom, field)
+                         if invalid_expected_answer else self._question(symptom, field))
                 state["history"].append({"role": "assistant", "content": reply})
                 return state, reply, "Triage"
 
