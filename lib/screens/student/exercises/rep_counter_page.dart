@@ -449,6 +449,7 @@ class _RepCounterPageState extends State<RepCounterPage> {
           plannedSets: _totalSets,
           sessionOrigin:
               widget.exercise['session_origin']?.toString() ?? 'Self-selected',
+          purpose: widget.exercise['purpose']?.toString(),
         ),
       ),
     );

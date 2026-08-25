@@ -94,6 +94,10 @@ with engine.begin() as connection:
         'ADD COLUMN IF NOT EXISTS session_origin VARCHAR(20)'
     ))
     connection.execute(text(
+        'ALTER TABLE "Session_Log" '
+        'ADD COLUMN IF NOT EXISTS purpose VARCHAR(120)'
+    ))
+    connection.execute(text(
         'ALTER TABLE "Prescribed_Exercise" '
         'ADD COLUMN IF NOT EXISTS assigned_reps INTEGER'
     ))
@@ -1110,15 +1114,20 @@ def get_all_prescribed_exercises(db: Session = Depends(get_db)):
 class ScheduleExerciseRequest(BaseModel):
     exercise_id: int
     scheduled_date: datetime
+    purpose: str
 
 @app.post("/students/{student_id}/scheduled_exercises")
 def schedule_exercise(student_id: int, request: ScheduleExerciseRequest, db: Session = Depends(get_db)):
+    purpose = request.purpose.strip()
+    if not purpose:
+        raise HTTPException(status_code=400, detail="Purpose is required")
     new_scheduled = models.SessionLog(
         student_id=student_id,
         exercise_id=request.exercise_id,
         completion_date=request.scheduled_date,
         status="Pending",
-        session_origin="Self-selected"
+        session_origin="Self-selected",
+        purpose=purpose
     )
     db.add(new_scheduled)
     db.commit()
@@ -1154,7 +1163,8 @@ def get_scheduled_exercises(student_id: int, db: Session = Depends(get_db)):
                 "requires_ai": ex.requires_ai,
                 "ai_type": ex.ai_type,
                 "scheduled_date": se.completion_date.isoformat(),
-                "status": se.status
+                "status": se.status,
+                "purpose": se.purpose
             })
     return {"scheduled_exercises": result}
 
@@ -1195,6 +1205,7 @@ def get_completed_exercises(student_id: int, db: Session = Depends(get_db)):
             "pain_before": session.pain_before,
             "pain_after": session.pain_after,
             "session_origin": session.session_origin,
+            "purpose": session.purpose,
             "status": session.status
         })
 
@@ -2117,12 +2128,15 @@ def get_physio_patient_progress(
             )
         })
 
-    for exercise_id in sorted({
-        session.exercise_id for session in self_selected_sessions
-    }):
+    self_selected_keys = sorted({
+        (session.exercise_id, session.purpose.strip() if session.purpose else "General rehabilitation")
+        for session in self_selected_sessions
+    }, key=lambda item: (item[1].lower(), item[0]))
+    for exercise_id, purpose in self_selected_keys:
         exercise_sessions = [
             session for session in self_selected_sessions
             if session.exercise_id == exercise_id
+            and (session.purpose.strip() if session.purpose else "General rehabilitation") == purpose
         ]
         exercise_accuracy = [
             session.accuracy_score for session in exercise_sessions
@@ -2133,6 +2147,7 @@ def get_physio_patient_progress(
             "exercise_id": exercise_id,
             "name": exercise_catalog.get(exercise_id, "Exercise"),
             "source": "Self-selected",
+            "purpose": purpose,
             "assigned_sets": None,
             "assigned_duration": None,
             "evaluation": None,
@@ -2186,7 +2201,8 @@ def get_physio_patient_progress(
             "completed_sets": session.completed_sets,
             "accuracy_score": session.accuracy_score,
             "pain_before": session.pain_before,
-            "pain_after": session.pain_after
+            "pain_after": session.pain_after,
+            "purpose": session.purpose or "General rehabilitation"
         })
 
     student_record = db.query(models.Student).filter(models.Student.student_id == student.user_id).first()
@@ -2945,11 +2961,15 @@ class SessionLogRequest(BaseModel):
     planned_sets: Optional[int] = None
     schedule_id: Optional[int] = None
     session_origin: Optional[str] = None
+    purpose: Optional[str] = None
 
 @app.post("/session_logs")
 def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
     if req.session_origin not in {None, "Assigned", "Self-selected"}:
         raise HTTPException(status_code=400, detail="Invalid session origin")
+    purpose = req.purpose.strip() if req.purpose else None
+    if (req.session_origin or "Self-selected") == "Self-selected" and not purpose and not req.schedule_id:
+        raise HTTPException(status_code=400, detail="Purpose is required for self-selected sessions")
 
     if req.schedule_id:
         existing_log = db.query(models.SessionLog).filter(models.SessionLog.schedule_id == req.schedule_id).first()
@@ -2963,6 +2983,8 @@ def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
             existing_log.planned_sets = req.planned_sets
             if req.session_origin is not None:
                 existing_log.session_origin = req.session_origin
+            if purpose is not None:
+                existing_log.purpose = purpose
             existing_log.completion_date = datetime.utcnow()
             existing_log.status = "Completed"
             db.commit()
@@ -2979,6 +3001,7 @@ def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
         completed_sets=req.completed_sets,
         planned_sets=req.planned_sets,
         session_origin=req.session_origin or "Self-selected",
+        purpose=purpose,
         completion_date=datetime.utcnow(),
         status="Completed"
     )
@@ -3258,12 +3281,15 @@ def get_student_progress(
             )
         })
 
-    for exercise_id in sorted({
-        session.exercise_id for session in self_selected_sessions
-    }):
+    self_selected_keys = sorted({
+        (session.exercise_id, session.purpose.strip() if session.purpose else "General rehabilitation")
+        for session in self_selected_sessions
+    }, key=lambda item: (item[1].lower(), item[0]))
+    for exercise_id, purpose in self_selected_keys:
         exercise_sessions = [
             session for session in self_selected_sessions
             if session.exercise_id == exercise_id
+            and (session.purpose.strip() if session.purpose else "General rehabilitation") == purpose
         ]
         exercise_accuracy = [
             session.accuracy_score for session in exercise_sessions
@@ -3274,6 +3300,7 @@ def get_student_progress(
             "exercise_id": exercise_id,
             "name": exercise_catalog.get(exercise_id, "Exercise"),
             "source": "Self-selected",
+            "purpose": purpose,
             "assigned_sets": None,
             "assigned_duration": None,
             "evaluation": None,
@@ -3326,7 +3353,8 @@ def get_student_progress(
             "completed_sets": session.completed_sets,
             "accuracy_score": session.accuracy_score,
             "pain_before": session.pain_before,
-            "pain_after": session.pain_after
+            "pain_after": session.pain_after,
+            "purpose": session.purpose or "General rehabilitation"
         })
 
     student_record = db.query(models.Student).filter(models.Student.student_id == student.user_id).first()
@@ -3347,5 +3375,19 @@ def get_student_progress(
         },
         "exercises": per_exercise,
         "recent_sessions": recent_sessions,
-        "weekly_activity": weekly_activity
+        "weekly_activity": weekly_activity,
+        "self_selected_purposes": sorted({
+            session.purpose.strip() for session in self_selected_sessions
+            if session.purpose and session.purpose.strip()
+        }, key=str.lower)
     }
+
+@app.get("/students/{student_id}/exercise_purposes")
+def get_exercise_purposes(student_id: int, db: Session = Depends(get_db)):
+    rows = db.query(models.SessionLog.purpose).filter(
+        models.SessionLog.student_id == student_id,
+        models.SessionLog.session_origin == "Self-selected",
+        models.SessionLog.purpose.isnot(None)
+    ).distinct().all()
+    purposes = {row[0].strip() for row in rows if row[0] and row[0].strip()}
+    return {"purposes": sorted(purposes, key=str.lower)}

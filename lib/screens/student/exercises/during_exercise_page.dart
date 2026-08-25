@@ -352,6 +352,7 @@ class _DuringExercisePageState extends State<DuringExercisePage> {
           scheduleId: widget.scheduleId,
           sessionOrigin:
               widget.exercise['session_origin']?.toString() ?? 'Self-selected',
+          purpose: widget.exercise['purpose']?.toString(),
         ),
       ),
     );

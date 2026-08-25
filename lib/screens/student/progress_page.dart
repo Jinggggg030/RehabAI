@@ -26,6 +26,7 @@ class _ProgressPageState extends State<ProgressPage> {
   int? _selectedAppointmentId;
   bool _isLoading = true;
   String? _errorMessage;
+  int _progressView = 0;
 
   @override
   void initState() {
@@ -129,6 +130,9 @@ class _ProgressPageState extends State<ProgressPage> {
             as Map<String, dynamic>?;
 
     return [
+      _buildProgressMenu(),
+      const SizedBox(height: 22),
+      if (_progressView == 1) ..._buildSelfSelectedContent(progress) else ...[
       _buildTimelineSelector(progress),
       const SizedBox(height: 22),
       _buildRecoveryTrends(selectedAppt),
@@ -142,6 +146,86 @@ class _ProgressPageState extends State<ProgressPage> {
       _buildExercisePerformance(progress),
       const SizedBox(height: 22),
       _buildRecentSessions(selectedAppt),
+      ],
+    ];
+  }
+
+  Widget _buildProgressMenu() {
+    return SizedBox(
+      width: double.infinity,
+      child: SegmentedButton<int>(
+        segments: const [
+          ButtonSegment(value: 0, icon: Icon(Icons.medical_services_outlined), label: Text('Physiotherapist assigned')),
+          ButtonSegment(value: 1, icon: Icon(Icons.person_outline), label: Text('Self-scheduled & Perform now')),
+        ],
+        selected: {_progressView},
+        onSelectionChanged: (selection) => setState(() => _progressView = selection.first),
+      ),
+    );
+  }
+
+  List<Widget> _buildSelfSelectedContent(Map<String, dynamic> progress) {
+    final exercises = (progress['exercises'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .where((item) => item['source'] == 'Self-selected')
+        .toList();
+    final sessions = (progress['recent_sessions'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .where((item) => item['source'] == 'Self-selected')
+        .toList();
+    return [
+      _SectionCard(
+        title: 'Self-directed Exercise Progress',
+        subtitle: 'Exercises you scheduled yourself or started with Perform now',
+        child: exercises.isEmpty
+            ? const Padding(padding: EdgeInsets.all(22), child: Center(child: Text('No self-directed sessions completed yet.')))
+            : SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: DataTable(
+                  columns: const [
+                    DataColumn(label: Text('Purpose')),
+                    DataColumn(label: Text('Exercise')),
+                    DataColumn(label: Text('Sessions')),
+                    DataColumn(label: Text('Minutes')),
+                    DataColumn(label: Text('Accuracy')),
+                    DataColumn(label: Text('Last completed')),
+                  ],
+                  rows: exercises.map((exercise) {
+                    final seconds = (exercise['total_duration_seconds'] as num?)?.toInt() ?? 0;
+                    final accuracy = (exercise['average_accuracy'] as num?)?.toDouble();
+                    final last = DateTime.tryParse(exercise['last_completed']?.toString() ?? '');
+                    return DataRow(cells: [
+                      DataCell(Text(exercise['purpose']?.toString() ?? 'General rehabilitation')),
+                      DataCell(Text(exercise['name']?.toString() ?? 'Exercise')),
+                      DataCell(Text('${exercise['session_count'] ?? 0}')),
+                      DataCell(Text((seconds / 60).toStringAsFixed(1))),
+                      DataCell(Text(accuracy == null ? '—' : '${accuracy.toStringAsFixed(0)}%')),
+                      DataCell(Text(last == null ? 'Not completed' : DateFormat('MMM dd').format(last.toLocal()))),
+                    ]);
+                  }).toList(),
+                ),
+              ),
+      ),
+      const SizedBox(height: 22),
+      _SectionCard(
+        title: 'Recent Self-directed Sessions',
+        subtitle: 'Your latest scheduled and immediate exercise outcomes',
+        child: sessions.isEmpty
+            ? const Padding(padding: EdgeInsets.all(22), child: Center(child: Text('No completed sessions yet.')))
+            : Column(children: sessions.take(12).map((session) {
+                final date = DateTime.tryParse(session['completion_date']?.toString() ?? '')?.toLocal();
+                return ListTile(
+                  leading: const CircleAvatar(child: Icon(Icons.fitness_center)),
+                  title: Text(session['exercise_name']?.toString() ?? 'Exercise'),
+                  subtitle: Text('${session['purpose'] ?? 'General rehabilitation'} • ${date == null ? 'Date unavailable' : DateFormat('MMM dd, yyyy • hh:mm a').format(date)}'),
+                  trailing: session['accuracy_score'] == null
+                      ? null
+                      : Text('${(session['accuracy_score'] as num).toStringAsFixed(0)}%'),
+                );
+              }).toList()),
+      ),
     ];
   }
 

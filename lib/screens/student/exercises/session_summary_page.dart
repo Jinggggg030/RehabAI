@@ -19,6 +19,7 @@ class SessionSummaryPage extends StatefulWidget {
   final int? completedSets;
   final int? plannedSets;
   final String sessionOrigin;
+  final String? purpose;
 
   const SessionSummaryPage({
     super.key,
@@ -33,6 +34,7 @@ class SessionSummaryPage extends StatefulWidget {
     this.completedSets,
     this.plannedSets,
     this.sessionOrigin = 'Self-selected',
+    this.purpose,
   });
 
   @override
@@ -67,6 +69,7 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
         'completed_sets': widget.completedSets,
         'planned_sets': widget.plannedSets,
         'session_origin': widget.sessionOrigin,
+        'purpose': widget.purpose,
       };
 
       if (widget.scheduleId != null) {

@@ -481,6 +481,7 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
           plannedSets: _totalSets,
           sessionOrigin:
               widget.exercise['session_origin']?.toString() ?? 'Self-selected',
+          purpose: widget.exercise['purpose']?.toString(),
         ),
       ),
     );

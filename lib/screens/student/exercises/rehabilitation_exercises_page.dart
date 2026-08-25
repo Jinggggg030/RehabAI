@@ -68,7 +68,32 @@ class _RehabilitationExercisesPageState
     setState(() => _activeTabIndex = _tabController.index);
   }
 
+  Future<String?> _selectPurpose() async {
+    List<String> previous = [];
+    try {
+      final studentId = await getCurrentBackendUserId();
+      final response = await http.get(
+        Uri.parse('$apiUrl/students/$studentId/exercise_purposes'),
+      );
+      if (response.statusCode == 200) {
+        previous = (jsonDecode(response.body)['purposes'] as List<dynamic>? ?? [])
+            .map((item) => item.toString())
+            .toList();
+      }
+    } catch (error) {
+      debugPrint('Purpose loading error: $error');
+    }
+    if (!mounted) return null;
+    final result = await showDialog<String>(
+      context: context,
+      builder: (_) => _PurposeDialog(previousPurposes: previous),
+    );
+    return result;
+  }
+
   Future<void> _scheduleExercise(Map<String, dynamic> exercise) async {
+    final purpose = await _selectPurpose();
+    if (purpose == null) return;
     final DateTime? pickedDate = await showDatePicker(
       context: context,
       initialDate: DateTime.now(),
@@ -126,6 +151,7 @@ class _RehabilitationExercisesPageState
             body: jsonEncode({
               'exercise_id': exercise['exercise_id'],
               'scheduled_date': dt.toIso8601String(),
+              'purpose': purpose,
             }),
           );
           if (res.statusCode == 200) {
@@ -832,12 +858,21 @@ class _RehabilitationExercisesPageState
                     ],
                     ElevatedButton(
                       onPressed: () async {
+                        final isAssigned = exercise['_source'] == 'assigned';
+                        final purpose = isAssigned
+                            ? null
+                            : await _selectPurpose();
+                        if (!isAssigned && purpose == null) return;
+                        final sessionExercise = <String, dynamic>{
+                          ...Map<String, dynamic>.from(exercise),
+                          if (purpose != null) 'purpose': purpose,
+                        };
                         await Navigator.push(
                           context,
                           MaterialPageRoute(
                             builder: (context) => ExerciseDetailsPage(
-                              isAssigned: exercise['_source'] == 'assigned',
-                              exercise: exercise,
+                              isAssigned: isAssigned,
+                              exercise: sessionExercise,
                               scheduleId: exercise['schedule_id'],
                             ),
                           ),
@@ -960,5 +995,95 @@ class _RehabilitationExercisesPageState
     final minutes = seconds ~/ 60;
     final remainder = seconds % 60;
     return minutes > 0 ? '${minutes}m ${remainder}s' : '${remainder}s';
+  }
+}
+
+class _PurposeDialog extends StatefulWidget {
+  const _PurposeDialog({required this.previousPurposes});
+
+  final List<String> previousPurposes;
+
+  @override
+  State<_PurposeDialog> createState() => _PurposeDialogState();
+}
+
+class _PurposeDialogState extends State<_PurposeDialog> {
+  late final TextEditingController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      title: const Text('What are you working on?'),
+      content: SizedBox(
+        width: 420,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Choose a previous purpose or enter a new one, such as leg pain or shoulder recovery.',
+            ),
+            if (widget.previousPurposes.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 8,
+                runSpacing: 6,
+                children: widget.previousPurposes
+                    .map(
+                      (purpose) => ChoiceChip(
+                        label: Text(purpose),
+                        selected: _controller.text == purpose,
+                        onSelected: (_) => setState(() {
+                          _controller.text = purpose;
+                          _controller.selection = TextSelection.collapsed(
+                            offset: purpose.length,
+                          );
+                        }),
+                      ),
+                    )
+                    .toList(),
+              ),
+            ],
+            const SizedBox(height: 14),
+            TextField(
+              controller: _controller,
+              maxLength: 120,
+              autofocus: widget.previousPurposes.isEmpty,
+              textCapitalization: TextCapitalization.sentences,
+              decoration: const InputDecoration(
+                labelText: 'Purpose / injury area',
+                hintText: 'e.g. Leg pain',
+                border: OutlineInputBorder(),
+              ),
+              onChanged: (_) => setState(() {}),
+            ),
+          ],
+        ),
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: _controller.text.trim().isEmpty
+              ? null
+              : () => Navigator.pop(context, _controller.text.trim()),
+          child: const Text('Continue'),
+        ),
+      ],
+    );
   }
 }

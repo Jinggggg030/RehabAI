@@ -269,6 +269,7 @@ class SessionLog(Base):
     exercise_id = Column(Integer, nullable=False)
     status = Column(String(20), nullable=False, default="Completed")
     session_origin = Column(String(20), nullable=True)
+    purpose = Column(String(120), nullable=True)
     
     completed_reps = Column(Integer, nullable=True)
     duration_seconds = Column(Integer, nullable=True)
