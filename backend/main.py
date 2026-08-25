@@ -3359,6 +3359,38 @@ def get_student_progress(
 
     student_record = db.query(models.Student).filter(models.Student.student_id == student.user_id).first()
 
+    self_purpose_progress = []
+    purpose_names = sorted({
+        session.purpose.strip() if session.purpose else "General rehabilitation"
+        for session in self_selected_sessions
+    }, key=str.lower)
+    for purpose in purpose_names:
+        purpose_sessions = [
+            session for session in self_selected_sessions
+            if (session.purpose.strip() if session.purpose else "General rehabilitation") == purpose
+        ]
+        purpose_exercise_ids = {session.exercise_id for session in purpose_sessions}
+        purpose_exercises = [{
+            "exercise_id": exercise.exercise_id,
+            "name": exercise.name,
+            "assigned_tracking_mode": "reps" if any(
+                session.exercise_id == exercise.exercise_id and session.completed_reps is not None
+                for session in purpose_sessions
+            ) else "duration",
+            "requires_ai": exercise.requires_ai,
+            "ai_type": exercise.ai_type,
+        } for exercise in db.query(models.Exercise).filter(
+            models.Exercise.exercise_id.in_(purpose_exercise_ids)
+        ).all()] if purpose_exercise_ids else []
+        self_purpose_progress.append({
+            "purpose": purpose,
+            "session_count": len(purpose_sessions),
+            "total_duration_minutes": sum(
+                session.duration_seconds or 0 for session in purpose_sessions
+            ) // 60,
+            "recovery_trends": build_recovery_trends(purpose_sessions, purpose_exercises),
+        })
+
     return {
         "patient": {
             "student_id": student.user_id,
@@ -3379,7 +3411,8 @@ def get_student_progress(
         "self_selected_purposes": sorted({
             session.purpose.strip() for session in self_selected_sessions
             if session.purpose and session.purpose.strip()
-        }, key=str.lower)
+        }, key=str.lower),
+        "self_purpose_progress": self_purpose_progress
     }
 
 @app.get("/students/{student_id}/exercise_purposes")

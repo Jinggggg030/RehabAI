@@ -27,6 +27,7 @@ class _ProgressPageState extends State<ProgressPage> {
   bool _isLoading = true;
   String? _errorMessage;
   int _progressView = 0;
+  String? _selectedSelfPurpose;
 
   @override
   void initState() {
@@ -56,6 +57,16 @@ class _ProgressPageState extends State<ProgressPage> {
       if (!mounted) return;
       setState(() {
         _progress = decoded;
+        final purposeGroups = decoded['self_purpose_progress'] as List<dynamic>? ?? [];
+        final availablePurposes = purposeGroups
+            .whereType<Map>()
+            .map((group) => group['purpose']?.toString())
+            .whereType<String>()
+            .toList();
+        if (availablePurposes.isNotEmpty &&
+            !availablePurposes.contains(_selectedSelfPurpose)) {
+          _selectedSelfPurpose = availablePurposes.first;
+        }
         final appointments = decoded['appointments'] as List<dynamic>? ?? [];
         if (appointments.isNotEmpty && _selectedAppointmentId == null) {
           final activeAppt = appointments.firstWhere(
@@ -165,20 +176,71 @@ class _ProgressPageState extends State<ProgressPage> {
   }
 
   List<Widget> _buildSelfSelectedContent(Map<String, dynamic> progress) {
+    final purposeGroups = (progress['self_purpose_progress'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((item) => Map<String, dynamic>.from(item))
+        .toList();
+    final purposes = purposeGroups
+        .map((group) => group['purpose']?.toString())
+        .whereType<String>()
+        .toList();
+    final selectedPurpose = purposes.contains(_selectedSelfPurpose)
+        ? _selectedSelfPurpose
+        : (purposes.isEmpty ? null : purposes.first);
+    final selectedGroup = purposeGroups.firstWhere(
+      (group) => group['purpose'] == selectedPurpose,
+      orElse: () => <String, dynamic>{},
+    );
     final exercises = (progress['exercises'] as List<dynamic>? ?? [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
-        .where((item) => item['source'] == 'Self-selected')
+        .where((item) =>
+            item['source'] == 'Self-selected' &&
+            item['purpose'] == selectedPurpose)
         .toList();
     final sessions = (progress['recent_sessions'] as List<dynamic>? ?? [])
         .whereType<Map>()
         .map((item) => Map<String, dynamic>.from(item))
-        .where((item) => item['source'] == 'Self-selected')
+        .where((item) =>
+            item['source'] == 'Self-selected' &&
+            (item['purpose'] ?? 'General rehabilitation') == selectedPurpose)
         .toList();
     return [
       _SectionCard(
+        title: 'Rehabilitation Purpose',
+        subtitle: 'Select the condition or recovery goal you want to review',
+        child: purposes.isEmpty
+            ? const Padding(
+                padding: EdgeInsets.all(22),
+                child: Center(child: Text('No rehabilitation purposes recorded yet.')),
+              )
+            : DropdownButtonFormField<String>(
+                value: selectedPurpose,
+                isExpanded: true,
+                decoration: const InputDecoration(
+                  labelText: 'Purpose / injury area',
+                  prefixIcon: Icon(Icons.personal_injury_outlined),
+                  border: OutlineInputBorder(),
+                ),
+                items: purposes
+                    .map((purpose) => DropdownMenuItem(
+                          value: purpose,
+                          child: Text(purpose),
+                        ))
+                    .toList(),
+                onChanged: (purpose) =>
+                    setState(() => _selectedSelfPurpose = purpose),
+              ),
+      ),
+      if (selectedPurpose != null) ...[
+        const SizedBox(height: 22),
+        _buildRecoveryTrends({
+          'recovery_trends': selectedGroup['recovery_trends'] ?? [],
+        }),
+        const SizedBox(height: 22),
+      _SectionCard(
         title: 'Self-directed Exercise Progress',
-        subtitle: 'Exercises you scheduled yourself or started with Perform now',
+        subtitle: 'Performance for $selectedPurpose',
         child: exercises.isEmpty
             ? const Padding(padding: EdgeInsets.all(22), child: Center(child: Text('No self-directed sessions completed yet.')))
             : SingleChildScrollView(
@@ -211,7 +273,7 @@ class _ProgressPageState extends State<ProgressPage> {
       const SizedBox(height: 22),
       _SectionCard(
         title: 'Recent Self-directed Sessions',
-        subtitle: 'Your latest scheduled and immediate exercise outcomes',
+        subtitle: 'Latest scheduled and immediate sessions for $selectedPurpose',
         child: sessions.isEmpty
             ? const Padding(padding: EdgeInsets.all(22), child: Center(child: Text('No completed sessions yet.')))
             : Column(children: sessions.take(12).map((session) {
@@ -226,6 +288,7 @@ class _ProgressPageState extends State<ProgressPage> {
                 );
               }).toList()),
       ),
+      ],
     ];
   }
 
