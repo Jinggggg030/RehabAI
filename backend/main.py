@@ -867,6 +867,18 @@ def deactivate_admin_physiotherapist(user_id: int, db: Session = Depends(get_db)
     db.commit()
     return {"message": "Physiotherapist deactivated successfully"}
 
+@app.put("/admin/physiotherapists/{user_id}/activate")
+def activate_admin_physiotherapist(user_id: int, db: Session = Depends(get_db)):
+    user = db.query(models.User).filter(models.User.user_id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="Physiotherapist not found")
+    if user.role != 'P':
+        raise HTTPException(status_code=400, detail="User is not a physiotherapist")
+
+    user.is_active = True
+    db.commit()
+    return {"message": "Physiotherapist activated successfully"}
+
 @app.get("/admin/rentals")
 def get_admin_rentals(db: Session = Depends(get_db)):
     rentals = db.query(models.RentalRecord).all()

@@ -932,6 +932,36 @@ class _AdminDashboardState extends State<AdminDashboard> {
     }
   }
 
+  Future<void> _activatePhysiotherapist(int userId) async {
+    setState(() => _isLoading = true);
+    try {
+      final apiUrl = kIsWeb
+          ? 'http://127.0.0.1:8000'
+          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final res = await http.put(
+        Uri.parse('$apiUrl/admin/physiotherapists/$userId/activate'),
+      );
+      if (res.statusCode == 200) {
+        _fetchPhysiotherapists();
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Physiotherapist activated successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        final error = jsonDecode(res.body)['detail'] ?? 'Failed to activate';
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(error), backgroundColor: Colors.red),
+        );
+      }
+    } catch (e) {
+      debugPrint("Error activating physiotherapist: $e");
+    } finally {
+      setState(() => _isLoading = false);
+    }
+  }
+
   Widget _buildPhysiotherapists() {
     if (_isLoading && _physiotherapists.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -1077,6 +1107,47 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                         child: const Text(
                                           'Deactivate',
                                           style: TextStyle(color: Colors.red),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                );
+                              },
+                            )
+                          else
+                            IconButton(
+                              icon: const Icon(
+                                Icons.person_add_alt_1,
+                                color: Colors.green,
+                              ),
+                              tooltip: 'Activate account',
+                              onPressed: () {
+                                showDialog(
+                                  context: context,
+                                  builder: (c) => AlertDialog(
+                                    title: const Text(
+                                      'Activate Physiotherapist?',
+                                    ),
+                                    content: Text(
+                                      'Activate ${p['username']}? They will be able to access the system again.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () => Navigator.pop(c),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      TextButton(
+                                        onPressed: () {
+                                          Navigator.pop(c);
+                                          _activatePhysiotherapist(
+                                            p['user_id'],
+                                          );
+                                        },
+                                        child: const Text(
+                                          'Activate',
+                                          style: TextStyle(
+                                            color: Colors.green,
+                                          ),
                                         ),
                                       ),
                                     ],
