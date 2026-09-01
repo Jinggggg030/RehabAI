@@ -10,7 +10,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 
-FIELDS = ("pain_point", "severity", "duration")
+FIELDS = ("pain_point", "severity", "duration", "cause")
 
 
 class RehabChatbot:
@@ -30,7 +30,7 @@ Rules:
 
 Return ONLY JSON:
 {"updates":[{"area":"body area","pain_point":null,"severity":null,
-"duration":null}],"is_emergency":false}
+"duration":null,"cause":null}],"is_emergency":false}
 """
         self.generation_config = {
             "temperature": 0.1,
@@ -40,7 +40,7 @@ Return ONLY JSON:
     @staticmethod
     def _blank(area):
         return {"area": str(area).strip(), "pain_point": None,
-                "severity": None, "duration": None}
+                "severity": None, "duration": None, "cause": None}
 
     @staticmethod
     def _key(value):
@@ -122,6 +122,11 @@ Return ONLY JSON:
                 "area": "", "pain_point": value,
             })
             return bool(cleaned.get("pain_point"))
+        if field == "cause":
+            return len(text) >= 3 and not text.isdigit() and text not in {
+                "yes", "no", "none", "nothing", "not sure", "unsure",
+                "idk", "hello", "hi",
+            }
         return True
 
     @staticmethod
@@ -139,6 +144,11 @@ Return ONLY JSON:
             "duration": (
                 f"Please tell me how long you have had the {area} symptom, "
                 "such as 3 days, 2 weeks, or 1 month."
+            ),
+            "cause": (
+                f"Please describe what may have caused or triggered your {area} "
+                "symptom, such as a fall, playing a sport, lifting something, "
+                "or sitting for a long time."
             ),
         }[field]
 
@@ -180,18 +190,23 @@ Return ONLY JSON:
                 f"worst pain imaginable, how would you rate your {area} symptom?"
             ),
             "duration": f"How long have you had the {area} symptom?",
+            "cause": (
+                f"What caused or triggered your {area} symptom? For example, "
+                "did it begin after a fall, during sport, while lifting, or "
+                "after sitting for a long time?"
+            ),
         }[field]
 
     def classify_discipline(self, state):
         text = " ".join(
-            f"{x.get('area', '')} {x.get('pain_point', '')}"
+            f"{x.get('area', '')} {x.get('pain_point', '')} {x.get('cause', '')}"
             for x in state.get("symptoms", [])
         ).lower()
         groups = [
             ("Neurological", ["numb", "tingl", "stroke", "nerve", "sciatica", "paralysis", "burning", "weakness"]),
-            ("Sports", ["ankle", "acl", "hamstring", "sport", "sprain", "strain", "ligament", "meniscus", "workout", "achilles", "calf"]),
+            ("Sports", ["ankle", "acl", "hamstring", "sport", "sprain", "strain", "ligament", "meniscus", "workout", "achilles", "calf", "badminton", "football", "basketball", "running", "gym"]),
             ("Cardiorespiratory", ["breath", "lung", "chest", "asthma", "copd", "cardiac", "heart", "oxygen"]),
-            ("Ergonomic", ["posture", "ergonomic", "sit long", "desk", "computer", "text neck"]),
+            ("Ergonomic", ["posture", "ergonomic", "sit long", "sitting", "desk", "computer", "laptop", "text neck", "repetitive"]),
         ]
         for discipline, words in groups:
             if any(word in text for word in words):
@@ -315,7 +330,7 @@ Return ONLY JSON:
             updates = [self._remove_generic_pain_point(x)
                        for x in result.get("updates", []) if x.get("area")]
             for update in updates:
-                for field in ("severity", "duration"):
+                for field in ("severity", "duration", "cause"):
                     if update.get(field) and not self._valid_answer(field, update[field]):
                         update[field] = None
             is_correction = self._is_correction(user_message)
@@ -361,7 +376,7 @@ Return ONLY JSON:
                 state["pending_field_corrections"] = proposed_corrections
                 state["awaiting_field_correction_confirmation"] = True
                 labels = {"pain_point": "pain type", "severity": "severity",
-                          "duration": "duration"}
+                          "duration": "duration", "cause": "cause or trigger"}
                 descriptions = [
                     f"the {item['area']} {labels[item['field']]} from "
                     f"{item['old_value']} to {item['value']}"
@@ -406,7 +421,8 @@ Return ONLY JSON:
 
             if state["symptoms"]:
                 state["awaiting_confirmation"] = True
-                lines = [f"- {x['area']}: {x['pain_point']}, severity {x['severity']}, for {x['duration']}"
+                lines = [f"- {x['area']}: {x['pain_point']}, severity {x['severity']}, "
+                         f"for {x['duration']}; cause/trigger: {x['cause']}"
                          for x in state["symptoms"]]
                 summary = ("System: Triage complete. Here is my assessment:\n\n" +
                            "\n".join(lines) + "\n\nIs this correct? (Yes/No)")

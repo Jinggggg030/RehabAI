@@ -1401,7 +1401,7 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  "Area: ${widget.triageData['pain_area'] ?? 'Unknown'} | Severity: ${widget.triageData['severity'] ?? 'Unknown'} | Duration: ${widget.triageData['duration'] ?? 'Unknown'}",
+                  "Area: ${widget.triageData['pain_area'] ?? 'Unknown'} | Severity: ${widget.triageData['severity'] ?? 'Unknown'} | Duration: ${widget.triageData['duration'] ?? 'Unknown'} | Cause: ${widget.triageData['cause'] ?? 'Unknown'}",
                   style: const TextStyle(color: Colors.black87),
                 ),
               ],
@@ -2314,6 +2314,11 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
                                 Icons.schedule_outlined,
                                 'Duration',
                                 triage['duration'],
+                              ),
+                              detailTile(
+                                Icons.help_outline_rounded,
+                                'Cause or trigger',
+                                triage['cause'],
                               ),
                               detailTile(
                                 Icons.medical_information_outlined,
