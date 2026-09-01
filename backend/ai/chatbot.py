@@ -271,8 +271,25 @@ Return ONLY JSON:
                 state["discipline"] = discipline
                 return state, ("System: Thank you for confirming. You will now be "
                                f"connected to a physiotherapist specializing in {discipline}."), "Active"
-            state["awaiting_confirmation"] = False
-            return state, "Thank you. Which body area should I correct?", "Triage"
+            if self._no(user_message):
+                # The displayed assessment was rejected. Do not reuse any of
+                # its unconfirmed values when the patient starts again.
+                state["symptoms"] = []
+                state["pending_symptoms"] = []
+                state["active_symptom_index"] = 0
+                state["awaiting_confirmation"] = False
+                state["awaiting_symptom_confirmation"] = False
+                state["awaiting_symptom_selection"] = False
+                state["pending_field_corrections"] = []
+                state["awaiting_field_correction_confirmation"] = False
+                state["confirmed"] = False
+                state["discipline"] = None
+                self._sync_legacy(state)
+                return state, (
+                    "No problem. Let's start the assessment again. "
+                    "Which area of your body is causing pain?"
+                ), "Triage"
+            return state, "Please confirm the assessment with Yes or No.", "Triage"
 
         active = None
         expected_field = None

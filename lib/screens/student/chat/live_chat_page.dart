@@ -210,7 +210,15 @@ class _LiveChatPageState extends State<LiveChatPage> {
                     return;
                   }
                 }
-                _messages.add(_chatMessageFromRow(newMsg));
+                final incomingMessage = _chatMessageFromRow(newMsg);
+                if (_messages.isNotEmpty &&
+                    _messages.last.isUser == incomingMessage.isUser &&
+                    _messages.last.text == incomingMessage.text &&
+                    _messages.last.teleconferenceRoom ==
+                        incomingMessage.teleconferenceRoom) {
+                  return;
+                }
+                _messages.add(incomingMessage);
               });
               _scrollToBottom();
               final room = TeleconferenceService.roomFromInvite(textContent);

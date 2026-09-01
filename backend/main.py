@@ -1489,7 +1489,8 @@ def start_chat(req: StartChatReq, db: Session = Depends(get_db)):
     return {
         "session_id": new_session.session_id,
         "discipline": updated_state.get("discipline"),
-        "auto_reply": auto_reply
+        "auto_reply": auto_reply,
+        "session_status": session_status,
     }
 
 class SendMessageReq(BaseModel):
@@ -1510,6 +1511,7 @@ class CancelAppointmentReq(BaseModel):
 @app.post("/chat/send")
 def send_message(req: SendMessageReq, db: Session = Depends(get_db)):
     try:
+        auto_reply = None
         user_log = models.ChatLog(
             session_id=req.session_id,
             sender_id=req.user_id,
@@ -1547,8 +1549,12 @@ def send_message(req: SendMessageReq, db: Session = Depends(get_db)):
             # Phase 4: Assign physio
             if new_status == "Active" and session.discipline:
                 assign_physio(db, session.session_id, session.discipline)
-                
-        return {"status": "success"}
+
+        return {
+            "status": "success",
+            "auto_reply": auto_reply,
+            "session_status": session.session_status if session else None,
+        }
     except Exception as e:
         import traceback
         tb = traceback.format_exc()
