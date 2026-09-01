@@ -9,7 +9,6 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:rehab_ai/services/teleconference_service.dart';
 import 'dart:async';
 import 'package:rehab_ai/theme/rehab_theme.dart';
-import 'package:rehab_ai/screens/student/appointments/my_appointments_page.dart';
 
 class ChatMessage {
   final String text;
@@ -32,13 +31,15 @@ class LiveChatPage extends StatefulWidget {
 }
 
 class _LiveChatPageState extends State<LiveChatPage> {
+  static const String _welcomeText =
+      "Hello! I'm your Rehab AI assistant. Tell me about your symptoms, including where you feel them and when they started.";
+
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
 
   final List<ChatMessage> _messages = [
     ChatMessage(
-      text:
-          "Hello! I'm your Rehab AI assistant. How can I help you with your therapy today?",
+      text: _welcomeText,
       isUser: false,
     ),
   ];
@@ -81,7 +82,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
           .from('Live_Chat_Session')
           .select('session_id')
           .eq('student_id', userId)
-          .eq('session_status', 'Active')
+          .inFilter('session_status', ['Triage', 'Active'])
           .order('created_at', ascending: false)
           .limit(1)
           .maybeSingle();
@@ -89,8 +90,6 @@ class _LiveChatPageState extends State<LiveChatPage> {
       if (sessionRes != null) {
         setState(() {
           _sessionId = sessionRes['session_id'];
-          // Clear initial welcome message as we will load history
-          _messages.clear();
         });
         _subscribeToMessages();
       }
@@ -148,21 +147,25 @@ class _LiveChatPageState extends State<LiveChatPage> {
       if (mounted) {
         String? pendingInvite;
         setState(() {
-          _messages.clear();
-          for (var row in List<dynamic>.from(res)) {
-            final textContent = row['content'] ?? '';
-            if (textContent == '[SYSTEM: CHAT_CLOSED]') {
-              _isChatEnded = true;
-              continue;
-            }
-            final message = _chatMessageFromRow(row);
-            _messages.add(message);
-            if (message.teleconferenceRoom != null && !message.isUser) {
-              pendingInvite = message.teleconferenceRoom;
-            } else if (message.isUser &&
-                (message.text == 'Video consultation accepted.' ||
-                    message.text == 'Video consultation declined.')) {
-              pendingInvite = null;
+          // Keep optimistic/API messages if history is temporarily unavailable.
+          if (res.isNotEmpty) {
+            _messages.clear();
+            _messages.add(ChatMessage(text: _welcomeText, isUser: false));
+            for (var row in List<dynamic>.from(res)) {
+              final textContent = row['content'] ?? '';
+              if (textContent == '[SYSTEM: CHAT_CLOSED]') {
+                _isChatEnded = true;
+                continue;
+              }
+              final message = _chatMessageFromRow(row);
+              _messages.add(message);
+              if (message.teleconferenceRoom != null && !message.isUser) {
+                pendingInvite = message.teleconferenceRoom;
+              } else if (message.isUser &&
+                  (message.text == 'Video consultation accepted.' ||
+                      message.text == 'Video consultation declined.')) {
+                pendingInvite = null;
+              }
             }
           }
         });
@@ -389,10 +392,19 @@ class _LiveChatPageState extends State<LiveChatPage> {
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
+          final autoReply = data['auto_reply']?.toString();
           setState(() {
             _sessionId = data['session_id'];
             _isTyping = false;
+            if (autoReply != null &&
+                autoReply.isNotEmpty &&
+                !_messages.any(
+                  (message) => !message.isUser && message.text == autoReply,
+                )) {
+              _messages.add(ChatMessage(text: autoReply, isUser: false));
+            }
           });
+          _scrollToBottom();
           _subscribeToMessages();
         } else {
           setState(() {
@@ -431,9 +443,19 @@ class _LiveChatPageState extends State<LiveChatPage> {
             );
           });
         } else {
+          final data = jsonDecode(response.body);
+          final autoReply = data['auto_reply']?.toString();
           setState(() {
             _isTyping = false;
+            if (autoReply != null &&
+                autoReply.isNotEmpty &&
+                !_messages.any(
+                  (message) => !message.isUser && message.text == autoReply,
+                )) {
+              _messages.add(ChatMessage(text: autoReply, isUser: false));
+            }
           });
+          _scrollToBottom();
         }
       }
     } catch (e) {
@@ -575,19 +597,30 @@ class _LiveChatPageState extends State<LiveChatPage> {
                       Padding(
                         padding: const EdgeInsets.all(16.0),
                         child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            // Quick Replies (Optional)
-                            SingleChildScrollView(
-                              scrollDirection: Axis.horizontal,
-                              child: Row(
-                                children: [
-                                  _buildQuickReply('Need assistance'),
-                                   const SizedBox(width: 8),
-                                   _buildQuickReply('Book Appointment'),
-                                ],
-                              ),
+                            Row(
+                              children: [
+                                const Icon(
+                                  Icons.info_outline_rounded,
+                                  size: 18,
+                                  color: Color(0xFF1565C0),
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'To start, describe your symptoms and where you feel them.',
+                                    style: GoogleFonts.readexPro(
+                                      fontSize: 13,
+                                      color: Theme.of(context)
+                                          .colorScheme
+                                          .onSurfaceVariant,
+                                    ),
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 12),
+                            const SizedBox(height: 10),
 
                             // Input Field
                             Container(
@@ -613,11 +646,6 @@ class _LiveChatPageState extends State<LiveChatPage> {
                                         fontSize: 14,
                                       ),
                                       decoration: InputDecoration(
-                                        hintText: 'Type your message...',
-                                        hintStyle: GoogleFonts.readexPro(
-                                          color: Colors.grey.shade400,
-                                          fontSize: 14,
-                                        ),
                                         border: InputBorder.none,
                                       ),
                                     ),
@@ -750,53 +778,6 @@ class _LiveChatPageState extends State<LiveChatPage> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildQuickReply(String text) {
-    return InkWell(
-      onTap: () async {
-        if (text == 'Book Appointment') {
-          final booked = await Navigator.push<bool>(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const MyAppointmentsPage(
-                openBookingOnStart: true,
-                closeAfterBooking: true,
-              ),
-            ),
-          );
-          if (booked == true && mounted) {
-            setState(() {
-              _messages.add(ChatMessage(
-                text: "System: Appointment booked successfully!",
-                isUser: false,
-              ));
-            });
-            _scrollToBottom();
-          }
-        } else {
-          _messageController.text = text;
-          _sendMessage();
-        }
-      },
-      borderRadius: BorderRadius.circular(16),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: context.rehabSurface,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFF1565C0).withOpacity(0.3)),
-        ),
-        child: Text(
-          text,
-          style: GoogleFonts.readexPro(
-            fontSize: 12,
-            fontWeight: FontWeight.w500,
-            color: const Color(0xFF1565C0),
-          ),
         ),
       ),
     );
