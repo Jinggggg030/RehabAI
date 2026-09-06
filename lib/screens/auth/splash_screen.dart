@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
@@ -18,41 +17,26 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
-class _SplashScreenState extends State<SplashScreen>
-    with SingleTickerProviderStateMixin {
-  late AnimationController _controller;
-  late Animation<double> _scaleAnimation;
-  late Animation<double> _fadeAnimation;
+class _SplashScreenState extends State<SplashScreen> {
+  bool _hasNavigated = false;
 
   @override
   void initState() {
     super.initState();
-    _controller = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 1600),
-    );
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAuthAndNavigate();
+    });
 
-    _scaleAnimation = CurvedAnimation(
-      parent: _controller,
-      curve: Curves.easeOutBack,
-    );
-
-    _fadeAnimation = CurvedAnimation(parent: _controller, curve: Curves.easeIn);
-
-    _controller.forward();
-    _checkAuthAndNavigate();
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
+    // Never leave the user on the loading screen indefinitely.
+    Future<void>.delayed(const Duration(seconds: 12), () {
+      if (mounted && !_hasNavigated) {
+        debugPrint('Auth routing timed out; opening the landing page.');
+        _navigateToLanding();
+      }
+    });
   }
 
   Future<void> _checkAuthAndNavigate() async {
-    // Show splash animation for at least 3.5 seconds
-    await Future.delayed(const Duration(milliseconds: 3500));
-
     if (!mounted) return;
 
     final sessionUser = Supabase.instance.client.auth.currentUser;
@@ -70,17 +54,20 @@ class _SplashScreenState extends State<SplashScreen>
           .get(Uri.parse('$apiUrl/users/profile/${sessionUser.id}'))
           .timeout(const Duration(seconds: 8));
 
+      if (!mounted || _hasNavigated) return;
+
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['exists'] == true) {
           if (data['is_active'] == false) {
-            await Supabase.instance.client.auth.signOut();
+            await _signOutBestEffort();
             _navigateToLanding();
             return;
           }
           final role = data['role'];
-          if (!mounted) return;
+          if (!mounted || _hasNavigated) return;
           if (role == 'P') {
+            _hasNavigated = true;
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -91,6 +78,7 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             );
           } else if (role == 'A') {
+            _hasNavigated = true;
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(
@@ -101,6 +89,7 @@ class _SplashScreenState extends State<SplashScreen>
               ),
             );
           } else {
+            _hasNavigated = true;
             Navigator.pushReplacement(
               context,
               MaterialPageRoute(builder: (context) => const MainScreen()),
@@ -108,7 +97,7 @@ class _SplashScreenState extends State<SplashScreen>
           }
         } else {
           // Supabase session exists but profile doesn't exist in backend DB
-          await Supabase.instance.client.auth.signOut();
+          await _signOutBestEffort();
           _navigateToLanding();
         }
       } else {
@@ -122,8 +111,19 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
+  Future<void> _signOutBestEffort() async {
+    try {
+      await Supabase.instance.client.auth
+          .signOut()
+          .timeout(const Duration(seconds: 3));
+    } catch (e) {
+      debugPrint('Could not clear the saved session during startup: $e');
+    }
+  }
+
   void _navigateToLanding() {
-    if (mounted) {
+    if (mounted && !_hasNavigated) {
+      _hasNavigated = true;
       Navigator.pushReplacement(
         context,
         PageRouteBuilder(
@@ -140,118 +140,11 @@ class _SplashScreenState extends State<SplashScreen>
 
   @override
   Widget build(BuildContext context) {
-    final isDarkMode = Theme.of(context).brightness == Brightness.dark;
-
-    return Scaffold(
-      body: Container(
-        decoration: BoxDecoration(
-          gradient: RadialGradient(
-            center: Alignment.center,
-            radius: 1.3,
-            colors: isDarkMode
-                ? [
-                    const Color(0xFF1A237E).withOpacity(0.4),
-                    const Color(0xFF0A0E21),
-                  ]
-                : [const Color(0xFFE3F2FD), Colors.white],
-          ),
-        ),
-        child: SafeArea(
-          child: Stack(
-            children: [
-              Center(
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    // Animated glowing Logo Icon
-                    ScaleTransition(
-                      scale: _scaleAnimation,
-                      child: FadeTransition(
-                        opacity: _fadeAnimation,
-                        child: Container(
-                          width: 130,
-                          height: 130,
-                          decoration: BoxDecoration(
-                            shape: BoxShape.circle,
-                            gradient: const LinearGradient(
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
-                              colors: [Color(0xFF2196F3), Color(0xFF1565C0)],
-                            ),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF2196F3).withOpacity(0.5),
-                                blurRadius: 30,
-                                spreadRadius: 5,
-                                offset: const Offset(0, 8),
-                              ),
-                            ],
-                          ),
-                          child: const Icon(
-                            Icons.health_and_safety_rounded,
-                            size: 64,
-                            color: Colors.white,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 32),
-
-                    // App Title
-                    FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: Text(
-                        'RehabAI',
-                        style: GoogleFonts.outfit(
-                          fontSize: 36,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 1.5,
-                          color: Theme.of(context).colorScheme.onSurface,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-
-                    // App Subtitle
-                    FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: Text(
-                        'Smart Therapy. Real Results.',
-                        style: GoogleFonts.readexPro(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w500,
-                          color: Theme.of(
-                            context,
-                          ).colorScheme.onSurfaceVariant.withOpacity(0.7),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              // Subtly loading indicator at the bottom
-              Positioned(
-                bottom: 60,
-                left: 0,
-                right: 0,
-                child: Center(
-                  child: FadeTransition(
-                    opacity: _fadeAnimation,
-                    child: SizedBox(
-                      width: 40,
-                      height: 40,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3.5,
-                        valueColor: AlwaysStoppedAnimation<Color>(
-                          const Color(0xFF1565C0).withOpacity(0.8),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ),
+    return const Scaffold(
+      backgroundColor: Colors.white,
+      body: Center(
+        child: CircularProgressIndicator(
+          color: Color(0xFF1565C0),
         ),
       ),
     );

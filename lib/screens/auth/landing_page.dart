@@ -38,32 +38,13 @@ class LandingPage extends StatelessWidget {
                 children: [
                   const SizedBox(height: 20),
                   // Glowing custom logo emblem
-                  Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [Color(0xFF2196F3), Color(0xFF1565C0)],
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF2196F3).withOpacity(0.4),
-                          blurRadius: 24,
-                          spreadRadius: 2,
-                          offset: const Offset(0, 8),
-                        ),
-                      ],
-                    ),
-                    child: const Icon(
-                      Icons.health_and_safety_rounded,
-                      size: 58,
-                      color: Colors.white,
-                    ),
+                  Image.asset(
+                    'assets/images/RehabAI_logo.png',
+                    width: 220,
+                    height: 220,
+                    fit: BoxFit.contain,
                   ),
-                  const SizedBox(height: 48),
+                  const SizedBox(height: 20),
 
                   // Brand name and greeting
                   Text(
