@@ -7,6 +7,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class EquipmentRentalPage extends StatefulWidget {
   const EquipmentRentalPage({super.key});
@@ -48,9 +49,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final userRes = await http.get(
         Uri.parse('$apiUrl/users/profile/${user.id}'),
       );
@@ -685,11 +684,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                             : () async {
                                 setModalState(() => isSubmitting = true);
                                 try {
-                                  final apiUrl = kIsWeb
-                                      ? 'http://127.0.0.1:8000'
-                                      : (dotenv.env['API_URL'] ??
-                                                'http://10.0.2.2:8000')
-                                            .trim();
+                                  final apiUrl = ApiConfig.baseUrl;
 
                                   DateTime finalDate = collectionDate!;
                                   finalDate = DateTime(

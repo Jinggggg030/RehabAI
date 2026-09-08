@@ -9,6 +9,7 @@ import 'package:rehab_ai/screens/auth/landing_page.dart';
 import 'package:rehab_ai/screens/student/main_screen.dart';
 import 'package:rehab_ai/screens/physiotherapist/physio_dashboard.dart';
 import 'package:rehab_ai/screens/admin/admin_dashboard.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -46,9 +47,7 @@ class _SplashScreenState extends State<SplashScreen> {
     }
 
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
 
       final response = await http
           .get(Uri.parse('$apiUrl/users/profile/${sessionUser.id}'))

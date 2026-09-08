@@ -9,6 +9,7 @@ import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:rehab_ai/screens/student/chat/live_chat_page.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class MyAppointmentsPage extends StatefulWidget {
   const MyAppointmentsPage({
@@ -60,9 +61,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final userRes = await http.get(
         Uri.parse('$apiUrl/users/profile/${user.id}'),
       );
@@ -84,9 +83,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
 
   Future<void> _fetchAppointments() async {
     if (_myUserId == null) return;
-    final apiUrl = kIsWeb
-        ? 'http://127.0.0.1:8000'
-        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final apiUrl = ApiConfig.baseUrl;
     final res = await http.get(
       Uri.parse('$apiUrl/appointments/student/$_myUserId'),
     );
@@ -122,9 +119,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
   }
 
   Future<void> _fetchCancellationReasons() async {
-    final apiUrl = kIsWeb
-        ? 'http://127.0.0.1:8000'
-        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final apiUrl = ApiConfig.baseUrl;
     final res = await http.get(
       Uri.parse('$apiUrl/appointments/cancellation_reasons'),
     );
@@ -138,9 +133,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
 
   Future<void> _fetchAvailablePhysios() async {
     if (_myUserId == null) return;
-    final apiUrl = kIsWeb
-        ? 'http://127.0.0.1:8000'
-        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final apiUrl = ApiConfig.baseUrl;
     final res = await http.get(
       Uri.parse('$apiUrl/appointments/available_physios/$_myUserId'),
     );
@@ -942,9 +935,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
     String otherReason,
   ) async {
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.put(
         Uri.parse('$apiUrl/appointments/$appointmentId/cancel'),
         headers: {'Content-Type': 'application/json'},
@@ -1271,11 +1262,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                                   selectedTime.minute,
                                 );
                                 try {
-                                  final apiUrl = kIsWeb
-                                      ? 'http://127.0.0.1:8000'
-                                      : (dotenv.env['API_URL'] ??
-                                                'http://10.0.2.2:8000')
-                                            .trim();
+                                  final apiUrl = ApiConfig.baseUrl;
                                   final res = await http.post(
                                     Uri.parse('$apiUrl/appointments/book'),
                                     headers: {

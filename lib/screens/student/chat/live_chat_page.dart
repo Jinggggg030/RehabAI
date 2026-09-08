@@ -9,6 +9,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:rehab_ai/services/teleconference_service.dart';
 import 'dart:async';
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class ChatMessage {
   final String text;
@@ -65,9 +66,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
 
     try {
       // Find the user_id from the FastAPI using supabase_id to bypass RLS
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final userRes = await http.get(
         Uri.parse('$apiUrl/users/profile/${user.id}'),
       );
@@ -111,9 +110,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
-    final apiUrl = kIsWeb
-        ? 'http://127.0.0.1:8000'
-        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final apiUrl = ApiConfig.baseUrl;
     final userRes = await http.get(
       Uri.parse('$apiUrl/users/profile/${user.id}'),
     );
@@ -333,9 +330,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
 
   Future<bool> _respondToTeleconference({required bool accepted}) async {
     if (_sessionId == null || _myUserId == null) return false;
-    final apiUrl = kIsWeb
-        ? 'http://127.0.0.1:8000'
-        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final apiUrl = ApiConfig.baseUrl;
     try {
       final response = await http.post(
         Uri.parse('$apiUrl/chats/$_sessionId/teleconference/respond'),
@@ -369,9 +364,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
     _messageController.clear();
 
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final userRes = await http.get(
         Uri.parse('$apiUrl/users/profile/${user.id}'),
       );
@@ -389,9 +382,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
         });
         _scrollToBottom();
 
-        final apiUrl = kIsWeb
-            ? 'http://127.0.0.1:8000'
-            : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+        final apiUrl = ApiConfig.baseUrl;
         final response = await http.post(
           Uri.parse('$apiUrl/chat/start'),
           headers: {'Content-Type': 'application/json'},
@@ -430,9 +421,7 @@ class _LiveChatPageState extends State<LiveChatPage> {
         });
         _scrollToBottom();
 
-        final apiUrl = kIsWeb
-            ? 'http://127.0.0.1:8000'
-            : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+        final apiUrl = ApiConfig.baseUrl;
         final response = await http.post(
           Uri.parse('$apiUrl/chat/send'),
           headers: {'Content-Type': 'application/json'},

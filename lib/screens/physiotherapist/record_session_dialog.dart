@@ -4,6 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class RecordSessionDialog extends StatefulWidget {
   final Map<String, dynamic> appointment;
@@ -41,9 +42,7 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
 
   Future<void> _fetchExercises() async {
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.get(Uri.parse('$apiUrl/exercises'));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -126,9 +125,7 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
 
     setState(() => _isSubmitting = true);
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       
       final payload = {
         "prescription": _prescriptionController.text,

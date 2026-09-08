@@ -13,6 +13,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'dart:async';
 import 'package:rehab_ai/theme/rehab_theme.dart';
 import 'package:rehab_ai/services/local_notification_service.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class MainScreen extends StatefulWidget {
   const MainScreen({super.key});
@@ -50,9 +51,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
     int? myUserId;
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final userRes = await http.get(
         Uri.parse('$apiUrl/users/profile/${user.id}'),
       );
@@ -134,9 +133,7 @@ class _MainScreenState extends State<MainScreen> with WidgetsBindingObserver {
 
   Future<void> _fetchNotifications(int userId) async {
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
 
       final res = await http.get(
         Uri.parse('$apiUrl/users/$userId/notifications'),

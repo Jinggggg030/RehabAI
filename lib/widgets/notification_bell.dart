@@ -10,6 +10,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:rehab_ai/utils/current_user_id.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class NotificationBell extends StatelessWidget {
   const NotificationBell({super.key});
@@ -69,9 +70,7 @@ class NotificationBell extends StatelessWidget {
         .toList();
 
     final userId = await getCurrentBackendUserId();
-    final apiUrl = kIsWeb
-        ? 'http://127.0.0.1:8000'
-        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final apiUrl = ApiConfig.baseUrl;
     await http.post(
       Uri.parse('$apiUrl/users/$userId/notifications/read'),
       headers: {'Content-Type': 'application/json'},

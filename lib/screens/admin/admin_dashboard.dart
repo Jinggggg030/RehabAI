@@ -12,6 +12,8 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:async';
 import 'package:rehab_ai/theme/rehab_theme.dart';
 import 'package:rehab_ai/widgets/portal_backdrop.dart';
+import 'package:rehab_ai/config/api_config.dart';
+
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -56,9 +58,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
-    final apiUrl = kIsWeb
-        ? 'http://127.0.0.1:8000'
-        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final apiUrl = ApiConfig.baseUrl;
     final userRes = await http.get(
       Uri.parse('$apiUrl/users/profile/${user.id}'),
     );
@@ -79,9 +79,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> _fetchRentals({bool silent = false}) async {
     if (!silent) setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.get(Uri.parse('$apiUrl/admin/rentals'));
       if (res.statusCode == 200) {
         if (mounted) {
@@ -100,9 +98,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> _fetchEquipment() async {
     setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.get(Uri.parse('$apiUrl/equipment'));
       if (res.statusCode == 200) {
         setState(() {
@@ -119,9 +115,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> _fetchPhysiotherapists() async {
     setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.get(Uri.parse('$apiUrl/admin/physiotherapists'));
       if (res.statusCode == 200) {
         setState(() {
@@ -144,9 +138,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }) async {
     setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final body = {'status': newStatus, 'admin_id': _myUserId};
       if (returnStatus != null) {
         body['return_status'] = returnStatus;
@@ -679,10 +671,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Navigator.pop(context);
                   setState(() => _isLoading = true);
                   try {
-                    final apiUrl = kIsWeb
-                        ? 'http://127.0.0.1:8000'
-                        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000')
-                              .trim();
+                    final apiUrl = ApiConfig.baseUrl;
                     var imageUrl = eq?['image']?.toString();
                     if (selectedImage != null) {
                       imageUrl = await _uploadEquipmentImage(selectedImage!);
@@ -760,9 +749,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> _deleteEquipment(int id) async {
     setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.delete(Uri.parse('$apiUrl/admin/equipment/$id'));
       if (res.statusCode == 200) {
         _fetchEquipment();
@@ -905,9 +892,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> _deactivatePhysiotherapist(int userId) async {
     setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.put(
         Uri.parse('$apiUrl/admin/physiotherapists/$userId/deactivate'),
       );
@@ -935,9 +920,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
   Future<void> _activatePhysiotherapist(int userId) async {
     setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.put(
         Uri.parse('$apiUrl/admin/physiotherapists/$userId/activate'),
       );
@@ -1291,10 +1274,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   Navigator.pop(context);
                   setState(() => _isLoading = true);
                   try {
-                    final apiUrl = kIsWeb
-                        ? 'http://127.0.0.1:8000'
-                        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000')
-                              .trim();
+                    final apiUrl = ApiConfig.baseUrl;
                     final body = jsonEncode({
                       'username': nameController.text.trim(),
                       'email': emailController.text.trim(),

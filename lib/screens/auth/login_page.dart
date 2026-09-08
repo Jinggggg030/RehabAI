@@ -13,6 +13,8 @@ import 'package:rehab_ai/screens/physiotherapist/physio_dashboard.dart';
 import 'package:rehab_ai/screens/admin/admin_dashboard.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/config/api_config.dart';
+
 
 class LoginPage extends StatefulWidget {
   const LoginPage({super.key});
@@ -153,9 +155,7 @@ class _LoginPageState extends State<LoginPage> {
     String name = '',
     String email = '',
   }) async {
-    final apiUrl = kIsWeb
-        ? 'http://127.0.0.1:8000'
-        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final apiUrl = ApiConfig.baseUrl;
     final checkResponse = await http
         .get(Uri.parse('$apiUrl/users/profile/${user.id}'))
         .timeout(const Duration(seconds: 10));

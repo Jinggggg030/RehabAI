@@ -8,6 +8,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class RentalStatusPage extends StatefulWidget {
   const RentalStatusPage({super.key});
@@ -37,9 +38,7 @@ class _RentalStatusPageState extends State<RentalStatusPage>
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final userRes = await http.get(
         Uri.parse('$apiUrl/users/profile/${user.id}'),
       );

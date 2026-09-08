@@ -14,6 +14,7 @@ import 'package:rehab_ai/theme/rehab_theme.dart';
 import 'package:rehab_ai/widgets/portal_backdrop.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class PhysioDashboard extends StatefulWidget {
   const PhysioDashboard({super.key});
@@ -51,9 +52,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
-    final apiUrl = kIsWeb
-        ? 'http://127.0.0.1:8000'
-        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final apiUrl = ApiConfig.baseUrl;
     final userRes = await http.get(
       Uri.parse('$apiUrl/users/profile/${user.id}'),
     );
@@ -90,9 +89,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
     final user = _supabase.auth.currentUser;
     if (user == null) return;
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final response = await http.get(
         Uri.parse('$apiUrl/users/profile/${user.id}'),
       );
@@ -146,9 +143,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
 
   Future<void> _fetchAssignedSessions() async {
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.get(Uri.parse('$apiUrl/physio/chats/$_myUserId'));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
@@ -252,9 +247,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
     if (_myUserId == null || _notificationFetchInProgress) return;
     _notificationFetchInProgress = true;
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final response = await http.get(
         Uri.parse('$apiUrl/physio/$_myUserId/notifications'),
       );
@@ -347,9 +340,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
     });
 
     if (_myUserId == null) return;
-    final apiUrl = kIsWeb
-        ? 'http://127.0.0.1:8000'
-        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final apiUrl = ApiConfig.baseUrl;
     for (final notification in notificationsToRead) {
       try {
         await http.post(
@@ -856,9 +847,7 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
   Future<void> _fetchChats({bool isBackground = false}) async {
     if (!isBackground) setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.get(
         Uri.parse('$apiUrl/physio/chats/${widget.myUserId}'),
       );
@@ -887,9 +876,7 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
   Future<void> _markChatRead(int sessionId) async {
     widget.onChatRead(sessionId.toString());
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       await http.post(
         Uri.parse(
           '$apiUrl/physio/chats/$sessionId/read'
@@ -1198,9 +1185,7 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
 
   Future<void> _startTeleconference() async {
     if (widget.isClosed) return;
-    final apiUrl = kIsWeb
-        ? 'http://127.0.0.1:8000'
-        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final apiUrl = ApiConfig.baseUrl;
     try {
       final response = await http.post(
         Uri.parse('$apiUrl/physio/chats/${widget.sessionId}/teleconference'),
@@ -1247,9 +1232,7 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
     if (text.isEmpty) return;
     _messageController.clear();
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       await http.post(
         Uri.parse('$apiUrl/chat/send'),
         headers: {'Content-Type': 'application/json'},
@@ -1293,9 +1276,7 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
     if (confirm != true) return;
 
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.put(
         Uri.parse('$apiUrl/physio/chats/${widget.sessionId}/close'),
       );
@@ -1559,9 +1540,7 @@ class _PhysioPatientsTabState extends State<PhysioPatientsTab> {
   Future<void> _fetchPatients() async {
     setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.get(
         Uri.parse('$apiUrl/physio/patients/${widget.myUserId}'),
       );
@@ -1727,9 +1706,7 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
   Future<void> _fetchAppointments() async {
     setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.get(
         Uri.parse('$apiUrl/physio/appointments/${widget.myUserId}'),
       );
@@ -1777,9 +1754,7 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
     );
 
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.get(
         Uri.parse('$apiUrl/physiotherapists/colleagues/${widget.myUserId}'),
       );
@@ -1901,9 +1876,7 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
     final lastDate = firstDate.add(const Duration(days: 365));
     final previousUnavailableRanges = <DateTimeRange>[];
 
-    final apiUrl = kIsWeb
-        ? 'http://127.0.0.1:8000'
-        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    final apiUrl = ApiConfig.baseUrl;
     try {
       final leaveResponse = await http.get(
         Uri.parse('$apiUrl/physio/leave/${widget.myUserId}'),
@@ -2742,9 +2715,7 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
   Future<void> _fetchRentals() async {
     setState(() => _isLoading = true);
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.get(
         Uri.parse('$apiUrl/physio/rentals/${widget.myUserId}'),
       );
@@ -2761,9 +2732,7 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
 
   Future<void> _updateRentalStatus(int rentalId, String action) async {
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final res = await http.post(
         Uri.parse(
           '$apiUrl/physio/rentals/$rentalId/$action'

@@ -8,6 +8,7 @@ import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class ProfileSetupPage extends StatefulWidget {
   final String name;
@@ -49,9 +50,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
       _isLoading = true;
     });
     try {
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
       final response = await http.get(
         Uri.parse('$apiUrl/users/pre-registered/${widget.email}'),
       );
@@ -127,9 +126,7 @@ class _ProfileSetupPageState extends State<ProfileSetupPage> {
         _address3Controller.text.trim(),
       ].where((e) => e.isNotEmpty).join(", ");
 
-      final apiUrl = kIsWeb
-          ? 'http://127.0.0.1:8000'
-          : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+      final apiUrl = ApiConfig.baseUrl;
 
       final isPhysio = _isPreRegistered && _preRegisteredRole == 'P';
 
