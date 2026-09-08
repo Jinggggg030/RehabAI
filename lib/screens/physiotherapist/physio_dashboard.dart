@@ -3004,9 +3004,7 @@ class _PhysioProfileTabState extends State<PhysioProfileTab> {
   String? _resolvedProfilePictureUrl;
   final ImagePicker _imagePicker = ImagePicker();
 
-  String get _apiUrl => kIsWeb
-      ? 'http://127.0.0.1:8000'
-      : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+  final apiUrl = ApiConfig.baseUrl;
 
   @override
   void initState() {

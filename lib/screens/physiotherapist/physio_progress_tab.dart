@@ -9,6 +9,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:rehab_ai/screens/physiotherapist/student_profile_dialog.dart';
 import 'package:rehab_ai/widgets/recovery_trend_chart.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class PhysioProgressTab extends StatefulWidget {
   final int physioId;
@@ -20,9 +21,7 @@ class PhysioProgressTab extends StatefulWidget {
 }
 
 class _PhysioProgressTabState extends State<PhysioProgressTab> {
-  final String _apiUrl = kIsWeb
-      ? 'http://127.0.0.1:8000'
-      : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+  final apiUrl = ApiConfig.baseUrl;
   final TextEditingController _searchController = TextEditingController();
 
   List<Map<String, dynamic>> _patients = [];

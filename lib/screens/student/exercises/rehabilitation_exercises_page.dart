@@ -9,6 +9,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/intl.dart';
 import 'package:rehab_ai/utils/current_user_id.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class RehabilitationExercisesPage extends StatefulWidget {
   const RehabilitationExercisesPage({super.key});
@@ -36,9 +37,7 @@ class _RehabilitationExercisesPageState
   String selectedDiscipline = 'All';
   List<String> disciplines = ['All'];
 
-  final String apiUrl = kIsWeb
-      ? 'http://127.0.0.1:8000'
-      : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+  String get _apiUrl => ApiConfig.baseUrl;
 
   List<dynamic> get _myExercises => [
     ...scheduledExercises.map(

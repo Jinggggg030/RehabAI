@@ -5,6 +5,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:rehab_ai/config/api_config.dart';
 
 class StudentProfileDialog extends StatefulWidget {
   final String studentId;
@@ -20,15 +21,15 @@ class _StudentProfileDialogState extends State<StudentProfileDialog> {
   Map<String, dynamic>? _profileData;
   String? _resolvedProfilePictureUrl;
 
-  String get _apiUrl => kIsWeb
-      ? 'http://127.0.0.1:8000'
-      : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+  final apiUrl = ApiConfig.baseUrl;
 
   @override
   void initState() {
     super.initState();
     _fetchProfile();
   }
+
+  String get _apiUrl => ApiConfig.baseUrl;
 
   Future<void> _fetchProfile() async {
     try {

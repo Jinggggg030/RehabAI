@@ -6,6 +6,7 @@ import 'dart:convert';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:rehab_ai/utils/current_user_id.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class SessionSummaryPage extends StatefulWidget {
   final String exerciseName;
@@ -52,9 +53,7 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
   }
 
   Future<void> _saveSessionLog() async {
-    final String apiUrl = kIsWeb
-        ? 'http://127.0.0.1:8000'
-        : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+    String get _apiUrl => ApiConfig.baseUrl;
 
     try {
       final studentId = await getCurrentBackendUserId();

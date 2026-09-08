@@ -9,6 +9,7 @@ import 'package:rehab_ai/widgets/notification_bell.dart';
 import 'package:rehab_ai/utils/current_user_id.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
 import 'package:rehab_ai/widgets/recovery_trend_chart.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class ProgressPage extends StatefulWidget {
   const ProgressPage({super.key});
@@ -18,9 +19,7 @@ class ProgressPage extends StatefulWidget {
 }
 
 class _ProgressPageState extends State<ProgressPage> {
-  final String _apiUrl = kIsWeb
-      ? 'http://127.0.0.1:8000'
-      : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+  String get _apiUrl => ApiConfig.baseUrl;
 
   Map<String, dynamic>? _progress;
   int? _selectedAppointmentId;

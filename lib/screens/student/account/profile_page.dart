@@ -9,6 +9,7 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:image_picker/image_picker.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
+import 'package:rehab_ai/config/api_config.dart';
 
 class ProfilePage extends StatefulWidget {
   const ProfilePage({super.key});
@@ -25,9 +26,7 @@ class _ProfilePageState extends State<ProfilePage> {
   String? _resolvedProfilePictureUrl;
   final ImagePicker _imagePicker = ImagePicker();
 
-  String get _apiUrl => kIsWeb
-      ? 'http://127.0.0.1:8000'
-      : (dotenv.env['API_URL'] ?? 'http://10.0.2.2:8000').trim();
+  String get _apiUrl => ApiConfig.baseUrl;
 
   @override
   void initState() {
