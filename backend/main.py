@@ -1759,42 +1759,114 @@ def close_chat(session_id: int, db: Session = Depends(get_db)):
 
 @app.get("/physio/patients/{physio_id}")
 def get_physio_patients(physio_id: int, db: Session = Depends(get_db)):
-    students = db.query(models.User.user_id, models.User.username, models.User.email).join(
-        models.Appointment, models.User.user_id == models.Appointment.student_id
-    ).filter(models.Appointment.therapist_id == physio_id).distinct().all()
-    
-    result = []
-    for s in students:
-        presc = db.query(models.Appointment).filter(
-            models.Appointment.student_id == s.user_id,
+    from sqlalchemy import func, and_
+    from sqlalchemy.orm import aliased
+
+    AppointmentLatest = aliased(models.Appointment)
+
+    latest_prescription_subquery = (
+        db.query(
+            models.Appointment.student_id,
+            func.max(models.Appointment.schedule_time).label("latest_schedule")
+        )
+        .filter(
             models.Appointment.therapist_id == physio_id,
             models.Appointment.prescription != None
-        ).order_by(models.Appointment.schedule_time.desc()).first()
-        
-        exercises = []
-        if presc:
-            pexs = db.query(models.PrescribedExercise, models.Exercise.name).join(
-                models.Exercise, models.PrescribedExercise.exercise_id == models.Exercise.exercise_id
-            ).filter(models.PrescribedExercise.appointment_id == presc.appointment_id).all()
-            for px, ename in pexs:
-                exercises.append({
-                    "id": px.prescribed_exercise_id,
-                    "name": ename,
-                    "assigned_sets": px.assigned_sets,
-                    "assigned_duration": px.assigned_duration,
-                    "assigned_reps": px.assigned_reps,
-                    "assigned_days": px.assigned_days,
-                    "assigned_tracking_mode": px.assigned_tracking_mode,
-                    "evaluation": px.evaluation
-                })
-                
+        )
+        .group_by(models.Appointment.student_id)
+        .subquery()
+    )
+
+    patients = (
+        db.query(
+            models.User.user_id,
+            models.User.username,
+            models.User.email,
+            AppointmentLatest.appointment_id,
+            AppointmentLatest.prescription
+        )
+        .join(
+            models.Appointment,
+            models.User.user_id == models.Appointment.student_id
+        )
+        .outerjoin(
+            latest_prescription_subquery,
+            models.User.user_id ==
+            latest_prescription_subquery.c.student_id
+        )
+        .outerjoin(
+            AppointmentLatest,
+            and_(
+                AppointmentLatest.student_id ==
+                latest_prescription_subquery.c.student_id,
+
+                AppointmentLatest.schedule_time ==
+                latest_prescription_subquery.c.latest_schedule,
+
+                AppointmentLatest.therapist_id == physio_id
+            )
+        )
+        .filter(
+            models.Appointment.therapist_id == physio_id
+        )
+        .distinct()
+        .all()
+    )
+
+    appointment_ids = [
+        p.appointment_id
+        for p in patients
+        if p.appointment_id is not None
+    ]
+
+    exercises_by_appointment = {}
+
+    if appointment_ids:
+        exercise_rows = (
+            db.query(
+                models.PrescribedExercise,
+                models.Exercise.name
+            )
+            .join(
+                models.Exercise,
+                models.PrescribedExercise.exercise_id ==
+                models.Exercise.exercise_id
+            )
+            .filter(
+                models.PrescribedExercise.appointment_id.in_(appointment_ids)
+            )
+            .all()
+        )
+
+        for px, exercise_name in exercise_rows:
+            exercises_by_appointment.setdefault(
+                px.appointment_id,
+                []
+            ).append({
+                "id": px.prescribed_exercise_id,
+                "name": exercise_name,
+                "assigned_sets": px.assigned_sets,
+                "assigned_duration": px.assigned_duration,
+                "assigned_reps": px.assigned_reps,
+                "assigned_days": px.assigned_days,
+                "assigned_tracking_mode": px.assigned_tracking_mode,
+                "evaluation": px.evaluation
+            })
+
+    result = []
+
+    for p in patients:
         result.append({
-            "student_id": s.user_id,
-            "student_name": s.username,
-            "email": s.email,
-            "active_prescription": presc.prescription if presc else None,
-            "exercises": exercises
+            "student_id": p.user_id,
+            "student_name": p.username,
+            "email": p.email,
+            "active_prescription": p.prescription,
+            "exercises": exercises_by_appointment.get(
+                p.appointment_id,
+                []
+            )
         })
+
     return {"patients": result}
 
 def get_root_appointment(db: Session, appointment: models.Appointment) -> models.Appointment:
