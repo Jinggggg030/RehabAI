@@ -3012,6 +3012,8 @@ class _PhysioProfileTabState extends State<PhysioProfileTab> {
     _fetchProfile();
   }
 
+  String get _apiUrl => ApiConfig.baseUrl;
+
   Future<void> _fetchProfile() async {
     try {
       final user = Supabase.instance.client.auth.currentUser;

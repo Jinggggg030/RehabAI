@@ -72,7 +72,7 @@ class _RehabilitationExercisesPageState
     try {
       final studentId = await getCurrentBackendUserId();
       final response = await http.get(
-        Uri.parse('$apiUrl/students/$studentId/exercise_purposes'),
+        Uri.parse('$_apiUrl/students/$studentId/exercise_purposes'),
       );
       if (response.statusCode == 200) {
         previous = (jsonDecode(response.body)['purposes'] as List<dynamic>? ?? [])
@@ -145,7 +145,7 @@ class _RehabilitationExercisesPageState
         try {
           final studentId = await getCurrentBackendUserId();
           final res = await http.post(
-            Uri.parse('$apiUrl/students/$studentId/scheduled_exercises'),
+            Uri.parse('$_apiUrl/students/$studentId/scheduled_exercises'),
             headers: {'Content-Type': 'application/json'},
             body: jsonEncode({
               'exercise_id': exercise['exercise_id'],
@@ -177,7 +177,7 @@ class _RehabilitationExercisesPageState
     setState(() => isLoading = true);
     try {
       final res = await http.put(
-        Uri.parse('$apiUrl/scheduled_exercises/$scheduledId/status'),
+        Uri.parse('$_apiUrl/scheduled_exercises/$scheduledId/status'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'status': 'Cancelled'}),
       );
@@ -207,7 +207,7 @@ class _RehabilitationExercisesPageState
     try {
       final studentId = await getCurrentBackendUserId();
       // Fetch all exercises
-      final resAll = await http.get(Uri.parse('$apiUrl/exercises'));
+      final resAll = await http.get(Uri.parse('$_apiUrl/exercises'));
       if (resAll.statusCode == 200) {
         final fetchedExercises = jsonDecode(resAll.body)['exercises'] ?? [];
 
@@ -232,7 +232,7 @@ class _RehabilitationExercisesPageState
 
       // Fetch exercises belonging to the authenticated student.
       final resAssigned = await http.get(
-        Uri.parse('$apiUrl/students/$studentId/prescribed_exercises'),
+        Uri.parse('$_apiUrl/students/$studentId/prescribed_exercises'),
       );
       if (resAssigned.statusCode == 200) {
         setState(() {
@@ -242,7 +242,7 @@ class _RehabilitationExercisesPageState
 
       // Fetch self-scheduled exercises
       final resScheduled = await http.get(
-        Uri.parse('$apiUrl/students/$studentId/scheduled_exercises'),
+        Uri.parse('$_apiUrl/students/$studentId/scheduled_exercises'),
       );
       if (resScheduled.statusCode == 200) {
         setState(() {
@@ -252,7 +252,7 @@ class _RehabilitationExercisesPageState
       }
 
       final resCompleted = await http.get(
-        Uri.parse('$apiUrl/students/$studentId/completed_exercises'),
+        Uri.parse('$_apiUrl/students/$studentId/completed_exercises'),
       );
       if (resCompleted.statusCode == 200) {
         setState(() {

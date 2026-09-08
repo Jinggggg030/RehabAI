@@ -45,6 +45,8 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
     super.dispose();
   }
 
+  String get _apiUrl => ApiConfig.baseUrl;
+
   Future<void> _fetchPatients() async {
     setState(() {
       _loadingPatients = true;

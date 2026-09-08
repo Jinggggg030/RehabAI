@@ -52,9 +52,9 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
     _saveSessionLog();
   }
 
-  Future<void> _saveSessionLog() async {
-    String get _apiUrl => ApiConfig.baseUrl;
+  String get _apiUrl => ApiConfig.baseUrl;
 
+  Future<void> _saveSessionLog() async {
     try {
       final studentId = await getCurrentBackendUserId();
       final bodyData = {
@@ -76,7 +76,7 @@ class _SessionSummaryPageState extends State<SessionSummaryPage> {
       }
 
       final res = await http.post(
-        Uri.parse('$apiUrl/session_logs'),
+        Uri.parse('$_apiUrl/session_logs'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode(bodyData),
       );
