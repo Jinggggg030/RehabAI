@@ -1029,27 +1029,49 @@ def get_all_appointments(db: Session = Depends(get_db)):
 
 @app.get("/exercises")
 def get_all_exercises(db: Session = Depends(get_db)):
-    exercises = db.query(models.Exercise).all()
-    result = []
-    for ex in exercises:
-        disciplines = db.query(models.Discipline.description).join(
-            models.ExerciseDiscipline, 
-            models.Discipline.discipline_id == models.ExerciseDiscipline.discipline_id
-        ).filter(models.ExerciseDiscipline.exercise_id == ex.exercise_id).all()
-        
-        discipline_list = [d[0] for d in disciplines]
-        
-        result.append({
-            "exercise_id": ex.exercise_id,
-            "name": ex.name,
-            "description": ex.description,
-            "disciplines": discipline_list,
-            "reference_joint_angle": ex.reference_joint_angle,
-            "video_url": ex.video_url,
-            "requires_ai": ex.requires_ai,
-            "ai_type": ex.ai_type
-        })
-    return {"exercises": result}
+
+    rows = (
+        db.query(
+            models.Exercise,
+            models.Discipline.description
+        )
+        .outerjoin(
+            models.ExerciseDiscipline,
+            models.Exercise.exercise_id ==
+            models.ExerciseDiscipline.exercise_id
+        )
+        .outerjoin(
+            models.Discipline,
+            models.ExerciseDiscipline.discipline_id ==
+            models.Discipline.discipline_id
+        )
+        .all()
+    )
+
+    exercises_dict = {}
+
+    for exercise, discipline_description in rows:
+
+        if exercise.exercise_id not in exercises_dict:
+            exercises_dict[exercise.exercise_id] = {
+                "exercise_id": exercise.exercise_id,
+                "name": exercise.name,
+                "description": exercise.description,
+                "disciplines": [],
+                "reference_joint_angle": exercise.reference_joint_angle,
+                "video_url": exercise.video_url,
+                "requires_ai": exercise.requires_ai,
+                "ai_type": exercise.ai_type
+            }
+
+        if discipline_description:
+            exercises_dict[exercise.exercise_id]["disciplines"].append(
+                discipline_description
+            )
+
+    return {
+        "exercises": list(exercises_dict.values())
+    }
 
 @app.get("/students/{student_id}/prescribed_exercises")
 def get_prescribed_exercises(student_id: int, db: Session = Depends(get_db)):
