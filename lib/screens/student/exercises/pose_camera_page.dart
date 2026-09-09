@@ -186,7 +186,14 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
           }
 
           if (_setActive && _trackingMode == AiTrackingMode.reps) {
-            if (result.correctPose) {
+            if (analyzer.isDynamicCurl) {
+              if (result.repCompleted) {
+                _setRepCount++;
+                _totalRepCount++;
+                repCompleted = true;
+                reachedTarget = _setRepCount >= _targetPerSet;
+              }
+            } else if (result.correctPose) {
               _correctFrames++;
               _incorrectFrames = 0;
               if (_postureRepReady && _correctFrames >= 5) {
@@ -219,9 +226,11 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
           }
         }
       } else {
+        _analyzer?.reset();
         if (mounted) {
           setState(() {
             _poses = [];
+            _accuracy = 0;
             _feedbackText = "Step into the frame";
           });
           if (_setActive) {
@@ -257,7 +266,9 @@ class _PoseCameraPageState extends State<PoseCameraPage> {
       _postureRepReady = true;
       _correctFrames = 0;
       _incorrectFrames = 0;
-      _feedbackText = 'Set $_currentSet started. Hold the correct posture.';
+      _feedbackText = analyzer.isDynamicCurl
+          ? 'Set $_currentSet started. Lower your arm, curl up, then lower again.'
+          : 'Set $_currentSet started. Hold the correct posture.';
     });
     unawaited(_voiceCoach.speak(_feedbackText, force: true));
     _timer = Timer.periodic(const Duration(seconds: 1), (_) {
@@ -681,10 +692,10 @@ class PosePainter extends CustomPainter {
       case InputImageRotation.rotation270deg:
         x =
             landmark.x *
-                canvasSize.width /
-                (Platform.isIOS
-                    ? absoluteImageSize.width
-                    : absoluteImageSize.height);
+            canvasSize.width /
+            (Platform.isIOS
+                ? absoluteImageSize.width
+                : absoluteImageSize.height);
         y =
             landmark.y *
             canvasSize.height /

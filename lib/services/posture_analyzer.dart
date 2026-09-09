@@ -10,11 +10,13 @@ class PostureResult {
   final double accuracy;
   final String feedback;
   final bool correctPose;
+  final bool repCompleted;
 
   const PostureResult({
     required this.accuracy,
     required this.feedback,
     required this.correctPose,
+    this.repCompleted = false,
   });
 }
 
@@ -79,6 +81,11 @@ class PostureAnalyzer {
   final String requestedExerciseName;
   int _consecutiveCorrectFrames = 0;
   _BodySide? _activeArmSide;
+  int _curlPhase = 0;
+  int _curlStableFrames = 0;
+  int? _curlCandidate;
+
+  bool get isDynamicCurl => rule?.name == 'Bicep Curl';
 
   PostureAnalyzer._(
     this.rule, {
@@ -148,6 +155,9 @@ class PostureAnalyzer {
   void reset() {
     _consecutiveCorrectFrames = 0;
     _activeArmSide = null;
+    _curlPhase = 0;
+    _curlStableFrames = 0;
+    _curlCandidate = null;
   }
 
   PostureResult analyzePose(Pose pose) {
@@ -167,6 +177,8 @@ class PostureAnalyzer {
         correctPose: false,
       );
     }
+
+    if (isDynamicCurl) return _analyzeCurl(pose);
 
     final evaluations = activeRule.checks
         .map((check) => _evaluateCheck(pose, check))
@@ -208,6 +220,95 @@ class PostureAnalyzer {
           : 'Good position. Hold steady '
                 '($_consecutiveCorrectFrames/${activeRule.stableFrames}).',
       correctPose: stable,
+    );
+  }
+
+  PostureResult _analyzeCurl(Pose pose) {
+    // Track one visible arm throughout a cycle; legs are irrelevant for
+    // seated and standing curls. Prefer the arm with higher confidence.
+    if (_activeArmSide == null) {
+      double bestConfidence = -1;
+      for (final side in _BodySide.values) {
+        final points = [
+          'shoulder',
+          'elbow',
+          'wrist',
+        ].map((joint) => _armLandmark(pose, side, joint)).toList();
+        if (points.any((point) => point == null)) continue;
+        final confidence = points.map((point) => point!.likelihood).reduce(min);
+        if (confidence > bestConfidence) {
+          bestConfidence = confidence;
+          _activeArmSide = side;
+        }
+      }
+    }
+    final side = _activeArmSide;
+    final shoulder = side == null ? null : _armLandmark(pose, side, 'shoulder');
+    final elbow = side == null ? null : _armLandmark(pose, side, 'elbow');
+    final wrist = side == null ? null : _armLandmark(pose, side, 'wrist');
+    if (shoulder == null ||
+        elbow == null ||
+        wrist == null ||
+        _distance(shoulder, elbow) == 0 ||
+        _distance(elbow, wrist) == 0) {
+      reset();
+      return const PostureResult(
+        accuracy: 0,
+        correctPose: false,
+        feedback: 'Keep the working shoulder, elbow and wrist visible.',
+      );
+    }
+
+    final angle = PoseMath.calculateAngle(shoulder, elbow, wrist);
+    final upperArmTilt = _vectorAngle(
+      elbow.x - shoulder.x,
+      elbow.y - shoulder.y,
+      0,
+      1,
+    );
+    // Form quality is independent of curl progress: lowering is valid too.
+    final score = (100 - max(0.0, upperArmTilt - 30) / 45 * 100)
+        .clamp(0, 100)
+        .toDouble();
+    final correct = upperArmTilt <= 30;
+    final phase = angle >= 150
+        ? 1
+        : angle <= 65
+        ? 2
+        : 0;
+    bool completed = false;
+    if (!correct) {
+      _curlPhase = 0;
+      _curlCandidate = null;
+      _curlStableFrames = 0;
+    } else if (phase == 0) {
+      _curlCandidate = null;
+      _curlStableFrames = 0;
+    } else {
+      _curlStableFrames = _curlCandidate == phase ? _curlStableFrames + 1 : 1;
+      _curlCandidate = phase;
+      if (_curlStableFrames >= rule!.stableFrames) {
+        if (phase == 1) {
+          completed = _curlPhase == 2;
+          _curlPhase = 1;
+        } else if (_curlPhase == 1) {
+          _curlPhase = 2;
+        }
+      }
+    }
+    return PostureResult(
+      accuracy: score,
+      correctPose: correct,
+      repCompleted: completed,
+      feedback: !correct
+          ? 'Keep your upper arm beside your body as you curl.'
+          : completed
+          ? 'Rep completed. Curl up again.'
+          : _curlPhase == 0
+          ? 'Lower your arm to the start position.'
+          : _curlPhase == 1
+          ? 'Good form. Curl your hand toward your shoulder.'
+          : 'Good form. Lower your arm to complete the rep.',
     );
   }
 
