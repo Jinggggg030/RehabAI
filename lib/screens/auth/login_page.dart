@@ -158,7 +158,7 @@ class _LoginPageState extends State<LoginPage> {
     final apiUrl = ApiConfig.baseUrl;
     final checkResponse = await http
         .get(Uri.parse('$apiUrl/users/profile/${user.id}'))
-        .timeout(const Duration(seconds: 10));
+        .timeout(const Duration(seconds: 30));
 
     if (checkResponse.statusCode == 200) {
       final data = jsonDecode(checkResponse.body);
