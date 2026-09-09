@@ -147,10 +147,10 @@ with engine.begin() as connection:
         "ADD COLUMN IF NOT EXISTS assigned_tracking_mode VARCHAR(20) "
         "NOT NULL DEFAULT 'duration'"
     ))
-    connection.execute(text(
-        'ALTER TABLE "Live_Chat_Session" '
-        'ADD COLUMN IF NOT EXISTS teleconference_room VARCHAR(100)'
-    ))
+    #connection.execute(text(
+    #    'ALTER TABLE "Live_Chat_Session" '
+    #    'ADD COLUMN IF NOT EXISTS teleconference_room VARCHAR(100)'
+    #))
     connection.execute(text(
         'ALTER TABLE "Student" '
         'ADD COLUMN IF NOT EXISTS profile_picture VARCHAR(255)'
