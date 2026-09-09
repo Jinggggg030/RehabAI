@@ -1333,6 +1333,24 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                                   }
                                 } catch (e) {
                                   debugPrint("Error booking: $e");
+
+                                  if (!mounted || !pageContext.mounted) return;
+                                  Navigator.pop(context);
+                                  ScaffoldMessenger.of(pageContext).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        'Unable to connect to the server. Please check your internet connection and try again.',
+                                        style: GoogleFonts.readexPro(
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                      backgroundColor: Colors.redAccent,
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  );
                                 }
                               },
                         style: ElevatedButton.styleFrom(
