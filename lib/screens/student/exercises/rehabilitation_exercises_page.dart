@@ -1,11 +1,11 @@
+import 'package:rehab_ai/services/cloud_request.dart';
+import 'package:rehab_ai/widgets/cloud_error_state.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'exercise_details_page.dart';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:intl/intl.dart';
 import 'package:rehab_ai/utils/current_user_id.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
@@ -33,6 +33,7 @@ class _RehabilitationExercisesPageState
   List<dynamic> scheduledExercises = [];
   List<dynamic> completedExercises = [];
   bool isLoading = true;
+  String? _loadError;
 
   String selectedDiscipline = 'All';
   List<String> disciplines = ['All'];
@@ -75,9 +76,10 @@ class _RehabilitationExercisesPageState
         Uri.parse('$_apiUrl/students/$studentId/exercise_purposes'),
       );
       if (response.statusCode == 200) {
-        previous = (jsonDecode(response.body)['purposes'] as List<dynamic>? ?? [])
-            .map((item) => item.toString())
-            .toList();
+        previous =
+            (jsonDecode(response.body)['purposes'] as List<dynamic>? ?? [])
+                .map((item) => item.toString())
+                .toList();
       }
     } catch (error) {
       debugPrint('Purpose loading error: $error');
@@ -204,10 +206,14 @@ class _RehabilitationExercisesPageState
   }
 
   Future<void> _fetchExercises() async {
+    setState(() {
+      isLoading = true;
+      _loadError = null;
+    });
     try {
       final studentId = await getCurrentBackendUserId();
       // Fetch all exercises
-      final resAll = await http.get(Uri.parse('$_apiUrl/exercises'));
+      final resAll = await cloudGet(Uri.parse('$_apiUrl/exercises'));
       if (resAll.statusCode == 200) {
         final fetchedExercises = jsonDecode(resAll.body)['exercises'] ?? [];
 
@@ -221,6 +227,7 @@ class _RehabilitationExercisesPageState
           }
         }
 
+        if (!mounted) return;
         setState(() {
           allExercises = fetchedExercises;
           disciplines = discSet.toList()
@@ -231,30 +238,33 @@ class _RehabilitationExercisesPageState
       }
 
       // Fetch exercises belonging to the authenticated student.
-      final resAssigned = await http.get(
+      final resAssigned = await cloudGet(
         Uri.parse('$_apiUrl/students/$studentId/prescribed_exercises'),
       );
       if (resAssigned.statusCode == 200) {
+        if (!mounted) return;
         setState(() {
           assignedExercises = jsonDecode(resAssigned.body)['exercises'] ?? [];
         });
       }
 
       // Fetch self-scheduled exercises
-      final resScheduled = await http.get(
+      final resScheduled = await cloudGet(
         Uri.parse('$_apiUrl/students/$studentId/scheduled_exercises'),
       );
       if (resScheduled.statusCode == 200) {
+        if (!mounted) return;
         setState(() {
           scheduledExercises =
               jsonDecode(resScheduled.body)['scheduled_exercises'] ?? [];
         });
       }
 
-      final resCompleted = await http.get(
+      final resCompleted = await cloudGet(
         Uri.parse('$_apiUrl/students/$studentId/completed_exercises'),
       );
       if (resCompleted.statusCode == 200) {
+        if (!mounted) return;
         setState(() {
           completedExercises =
               jsonDecode(resCompleted.body)['completed_exercises'] ?? [];
@@ -262,10 +272,13 @@ class _RehabilitationExercisesPageState
       }
     } catch (e) {
       debugPrint("Error fetching exercises: $e");
+      if (mounted) setState(() => _loadError = cloudErrorMessage(e));
     } finally {
-      setState(() {
-        isLoading = false;
-      });
+      if (mounted) {
+        setState(() {
+          isLoading = false;
+        });
+      }
     }
   }
 
@@ -450,6 +463,11 @@ class _RehabilitationExercisesPageState
             Expanded(
               child: isLoading
                   ? const Center(child: CircularProgressIndicator())
+                  : _loadError != null
+                  ? CloudErrorState(
+                      message: _loadError!,
+                      onRetry: _fetchExercises,
+                    )
                   : TabBarView(
                       controller: _tabController,
                       children: [

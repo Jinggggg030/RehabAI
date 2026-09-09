@@ -1,11 +1,11 @@
+import 'package:rehab_ai/services/cloud_request.dart';
+import 'package:rehab_ai/widgets/cloud_error_state.dart';
 import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:rehab_ai/services/teleconference_service.dart';
 import 'dart:async';
 import 'package:rehab_ai/theme/rehab_theme.dart';
@@ -39,12 +39,12 @@ class _LiveChatPageState extends State<LiveChatPage> {
   final ScrollController _scrollController = ScrollController();
 
   final List<ChatMessage> _messages = [
-    ChatMessage(
-      text: _welcomeText,
-      isUser: false,
-    ),
+    ChatMessage(text: _welcomeText, isUser: false),
   ];
   bool _isTyping = false;
+  bool _isLoadingSession = true;
+  bool _initialMessageHandled = false;
+  String? _loadError;
   bool _isChatEnded = false;
   RealtimeChannel? _sessionSubscription;
 
@@ -61,13 +61,24 @@ class _LiveChatPageState extends State<LiveChatPage> {
   }
 
   Future<void> _fetchActiveSession() async {
+    if (!mounted) return;
+    setState(() {
+      _isLoadingSession = true;
+      _loadError = null;
+    });
     final user = _supabase.auth.currentUser;
-    if (user == null) return;
+    if (user == null) {
+      setState(() {
+        _isLoadingSession = false;
+        _loadError = 'Please sign in to retrieve your chat.';
+      });
+      return;
+    }
 
     try {
       // Find the user_id from the FastAPI using supabase_id to bypass RLS
       final apiUrl = ApiConfig.baseUrl;
-      final userRes = await http.get(
+      final userRes = await cloudGet(
         Uri.parse('$apiUrl/users/profile/${user.id}'),
       );
       if (userRes.statusCode != 200) return;
@@ -84,18 +95,27 @@ class _LiveChatPageState extends State<LiveChatPage> {
           .inFilter('session_status', ['Triage', 'Active'])
           .order('created_at', ascending: false)
           .limit(1)
-          .maybeSingle();
+          .maybeSingle()
+          .timeout(const Duration(seconds: 15));
 
+      if (!mounted) return;
       if (sessionRes != null) {
         setState(() {
           _sessionId = sessionRes['session_id'];
         });
-        _subscribeToMessages();
+        await _subscribeToMessages();
       }
     } catch (e) {
       debugPrint("Error fetching active session: $e");
+      if (mounted) setState(() => _loadError = cloudErrorMessage(e));
     } finally {
-      if (widget.initialMessage != null && widget.initialMessage!.isNotEmpty) {
+      if (mounted) setState(() => _isLoadingSession = false);
+      if (mounted &&
+          _loadError == null &&
+          !_initialMessageHandled &&
+          widget.initialMessage != null &&
+          widget.initialMessage!.isNotEmpty) {
+        _initialMessageHandled = true;
         _messageController.text = widget.initialMessage!;
         _sendMessage();
       }
@@ -105,13 +125,21 @@ class _LiveChatPageState extends State<LiveChatPage> {
   RealtimeChannel? _subscription;
 
   Future<void> _subscribeToMessages() async {
+    try {
+      await _loadMessagesAndSubscribe();
+    } catch (error) {
+      if (mounted) setState(() => _loadError = cloudErrorMessage(error));
+    }
+  }
+
+  Future<void> _loadMessagesAndSubscribe() async {
     if (_sessionId == null) return;
 
     final user = _supabase.auth.currentUser;
     if (user == null) return;
 
     final apiUrl = ApiConfig.baseUrl;
-    final userRes = await http.get(
+    final userRes = await cloudGet(
       Uri.parse('$apiUrl/users/profile/${user.id}'),
     );
     if (userRes.statusCode == 200) {
@@ -134,7 +162,8 @@ class _LiveChatPageState extends State<LiveChatPage> {
           .from('Chat_Log')
           .select()
           .eq('session_id', _sessionId!)
-          .order('timestamp', ascending: true);
+          .order('timestamp', ascending: true)
+          .timeout(const Duration(seconds: 15));
       if (res.isNotEmpty) {
         final lastMsg = List<dynamic>.from(res).last;
         if (lastMsg['timestamp'] != null) {
@@ -173,7 +202,10 @@ class _LiveChatPageState extends State<LiveChatPage> {
       }
     } catch (e) {
       debugPrint("Error fetching messages: $e");
+      rethrow;
     }
+
+    if (!mounted) return;
 
     // 2. Subscribe to realtime updates
     _subscription = _supabase
@@ -351,7 +383,9 @@ class _LiveChatPageState extends State<LiveChatPage> {
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty) return;
+    if (text.isEmpty || _isTyping || _isLoadingSession || _loadError != null) {
+      return;
+    }
 
     final user = _supabase.auth.currentUser;
     if (user == null) {
@@ -362,15 +396,17 @@ class _LiveChatPageState extends State<LiveChatPage> {
     }
 
     _messageController.clear();
+    setState(() => _isTyping = true);
 
     try {
       final apiUrl = ApiConfig.baseUrl;
-      final userRes = await http.get(
+      final userRes = await cloudGet(
         Uri.parse('$apiUrl/users/profile/${user.id}'),
       );
       if (userRes.statusCode != 200) return;
       final userData = jsonDecode(userRes.body);
-      if (userData['exists'] != true) return;
+      if (userData['exists'] != true) throw StateError('Missing profile');
+      if (!mounted) return;
 
       final userId = userData['user_id'];
 
@@ -387,7 +423,8 @@ class _LiveChatPageState extends State<LiveChatPage> {
           Uri.parse('$apiUrl/chat/start'),
           headers: {'Content-Type': 'application/json'},
           body: jsonEncode({"user_id": userId, "message": text}),
-        );
+        ).timeout(const Duration(seconds: 30));
+        if (!mounted) return;
 
         if (response.statusCode == 200) {
           final data = jsonDecode(response.body);
@@ -430,7 +467,8 @@ class _LiveChatPageState extends State<LiveChatPage> {
             "user_id": userId,
             "message": text,
           }),
-        );
+        ).timeout(const Duration(seconds: 30));
+        if (!mounted) return;
 
         if (response.statusCode != 200) {
           setState(() {
@@ -460,8 +498,15 @@ class _LiveChatPageState extends State<LiveChatPage> {
       if (mounted) {
         setState(() {
           _isTyping = false;
+          _loadError = cloudErrorMessage(e);
+          if (_messageController.text.isEmpty) _messageController.text = text;
         });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Message delivery could not be confirmed. Reconnect and check the chat before sending again.'),
+        ));
       }
+    } finally {
+      if (mounted) setState(() => _isTyping = false);
     }
   }
 
@@ -562,6 +607,15 @@ class _LiveChatPageState extends State<LiveChatPage> {
                 ),
                 child: Column(
                   children: [
+                    if (_isLoadingSession)
+                      const LinearProgressIndicator()
+                    else if (_loadError != null)
+                      Flexible(
+                        child: CloudErrorState(
+                          message: _loadError!,
+                          onRetry: _fetchActiveSession,
+                        ),
+                      ),
                     // Chat Messages List
                     Expanded(
                       child: ListView.builder(
@@ -609,9 +663,9 @@ class _LiveChatPageState extends State<LiveChatPage> {
                                     'To start, describe your symptoms and where you feel them.',
                                     style: GoogleFonts.readexPro(
                                       fontSize: 13,
-                                      color: Theme.of(context)
-                                          .colorScheme
-                                          .onSurfaceVariant,
+                                      color: Theme.of(
+                                        context,
+                                      ).colorScheme.onSurfaceVariant,
                                     ),
                                   ),
                                 ),
@@ -648,7 +702,12 @@ class _LiveChatPageState extends State<LiveChatPage> {
                                     ),
                                   ),
                                   IconButton(
-                                    onPressed: _sendMessage,
+                                    onPressed:
+                                        _isTyping ||
+                                            _isLoadingSession ||
+                                            _loadError != null
+                                        ? null
+                                        : _sendMessage,
                                     icon: const Icon(
                                       Icons.send_rounded,
                                       color: Color(0xFF1565C0),

@@ -1,11 +1,10 @@
+import 'package:rehab_ai/services/cloud_request.dart';
+import 'package:rehab_ai/widgets/cloud_error_state.dart';
 import 'package:rehab_ai/widgets/notification_bell.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:rehab_ai/config/api_config.dart';
@@ -22,6 +21,7 @@ class _RentalStatusPageState extends State<RentalStatusPage>
   late TabController _tabController;
   final _supabase = Supabase.instance.client;
   bool _isLoading = true;
+  String? _loadError;
 
   List<dynamic> _rentals = [];
 
@@ -33,13 +33,16 @@ class _RentalStatusPageState extends State<RentalStatusPage>
   }
 
   Future<void> _fetchRentals() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null) return;
+      if (user == null) throw StateError('Not signed in');
 
       final apiUrl = ApiConfig.baseUrl;
-      final userRes = await http.get(
+      final userRes = await cloudGet(
         Uri.parse('$apiUrl/users/profile/${user.id}'),
       );
 
@@ -47,7 +50,7 @@ class _RentalStatusPageState extends State<RentalStatusPage>
         final userData = jsonDecode(userRes.body);
         if (userData['exists'] == true) {
           final int myUserId = userData['user_id'];
-          final res = await http.get(
+          final res = await cloudGet(
             Uri.parse('$apiUrl/rentals/student/$myUserId'),
           );
           if (res.statusCode == 200) {
@@ -57,6 +60,7 @@ class _RentalStatusPageState extends State<RentalStatusPage>
       }
     } catch (e) {
       debugPrint("Error fetching rentals: $e");
+      if (mounted) setState(() => _loadError = cloudErrorMessage(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -200,6 +204,11 @@ class _RentalStatusPageState extends State<RentalStatusPage>
             Expanded(
               child: _isLoading
                   ? const Center(child: CircularProgressIndicator())
+                  : _loadError != null
+                  ? CloudErrorState(
+                      message: _loadError!,
+                      onRetry: _fetchRentals,
+                    )
                   : TabBarView(
                       controller: _tabController,
                       children: [
@@ -476,11 +485,15 @@ class _RentalStatusPageState extends State<RentalStatusPage>
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  rental['status'] == 'Returned' ? 'Completed' : (rental['status'] ?? 'Completed'),
+                  rental['status'] == 'Returned'
+                      ? 'Completed'
+                      : (rental['status'] ?? 'Completed'),
                   style: GoogleFonts.readexPro(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: rental['status'] == 'Lost' ? RehabColors.danger : RehabColors.green,
+                    color: rental['status'] == 'Lost'
+                        ? RehabColors.danger
+                        : RehabColors.green,
                   ),
                 ),
               ],

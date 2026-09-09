@@ -1,9 +1,7 @@
+import 'package:rehab_ai/services/cloud_request.dart';
 import 'dart:convert';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:rehab_ai/widgets/notification_bell.dart';
 import 'package:rehab_ai/utils/current_user_id.dart';
@@ -44,7 +42,7 @@ class _ProgressPageState extends State<ProgressPage> {
 
     try {
       final studentId = await getCurrentBackendUserId();
-      final response = await http.get(
+      final response = await cloudGet(
         Uri.parse('$_apiUrl/students/$studentId/progress'),
       );
       if (response.statusCode != 200) {
@@ -81,7 +79,7 @@ class _ProgressPageState extends State<ProgressPage> {
       setState(() {
         _isLoading = false;
         _errorMessage =
-            'Unable to load progress. Check the backend connection.';
+            cloudErrorMessage(error);
       });
       debugPrint('Progress loading error: $error');
     }

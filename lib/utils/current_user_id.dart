@@ -1,8 +1,6 @@
+import 'package:rehab_ai/services/cloud_request.dart';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:rehab_ai/config/api_config.dart';
 
@@ -13,9 +11,9 @@ Future<int> getCurrentBackendUserId() async {
   }
 
   final apiUrl = ApiConfig.baseUrl;
-  final response = await http
-      .get(Uri.parse('$apiUrl/users/profile/${user.id}'))
-      .timeout(const Duration(seconds: 10));
+  final response = await cloudGet(
+    Uri.parse('$apiUrl/users/profile/${user.id}'),
+  ).timeout(const Duration(seconds: 10));
 
   if (response.statusCode != 200) {
     throw StateError('Unable to resolve the current user.');

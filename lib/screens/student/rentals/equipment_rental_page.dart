@@ -1,10 +1,10 @@
+import 'package:rehab_ai/services/cloud_request.dart';
+import 'package:rehab_ai/widgets/cloud_error_state.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/student/rentals/rental_status_page.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:rehab_ai/theme/rehab_theme.dart';
 import 'package:rehab_ai/config/api_config.dart';
@@ -19,6 +19,7 @@ class EquipmentRentalPage extends StatefulWidget {
 class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
   final _supabase = Supabase.instance.client;
   bool _isLoading = true;
+  String? _loadError;
   int? _myUserId;
   String? _accommodationType;
   String? _userAddress;
@@ -44,13 +45,16 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
   }
 
   Future<void> _initData() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     try {
       final user = _supabase.auth.currentUser;
-      if (user == null) return;
+      if (user == null) throw StateError('Not signed in');
 
       final apiUrl = ApiConfig.baseUrl;
-      final userRes = await http.get(
+      final userRes = await cloudGet(
         Uri.parse('$apiUrl/users/profile/${user.id}'),
       );
 
@@ -61,9 +65,9 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
           _accommodationType = userData['accommodation_type'];
           _userAddress = userData['address'];
 
-          final eqRes = await http.get(Uri.parse('$apiUrl/equipment'));
-          final catRes = await http.get(Uri.parse('$apiUrl/categories'));
-          final reasonRes = await http.get(Uri.parse('$apiUrl/rental_reasons'));
+          final eqRes = await cloudGet(Uri.parse('$apiUrl/equipment'));
+          final catRes = await cloudGet(Uri.parse('$apiUrl/categories'));
+          final reasonRes = await cloudGet(Uri.parse('$apiUrl/rental_reasons'));
 
           if (eqRes.statusCode == 200) {
             _equipmentList = jsonDecode(eqRes.body)['equipment'];
@@ -78,6 +82,7 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
       }
     } catch (e) {
       debugPrint("Init Data Error: $e");
+      if (mounted) setState(() => _loadError = cloudErrorMessage(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -146,7 +151,11 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                           ),
                           const SizedBox(height: 3),
                           Text(
-                            '${_equipmentList.length} rehabilitation tools available',
+                            _loadError != null
+                                ? 'Equipment could not be retrieved'
+                                : _isLoading
+                                ? 'Loading equipment...'
+                                : '${_equipmentList.length} rehabilitation tools available',
                             style: const TextStyle(
                               color: Colors.white60,
                               fontSize: 11,
@@ -208,6 +217,13 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
               if (_isLoading)
                 const Expanded(
                   child: Center(child: CircularProgressIndicator()),
+                )
+              else if (_loadError != null)
+                Expanded(
+                  child: CloudErrorState(
+                    message: _loadError!,
+                    onRetry: _initData,
+                  ),
                 )
               else
                 Expanded(
@@ -582,7 +598,9 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                                       fontSize: 12,
                                       color: collectionDate == null
                                           ? context.rehabMuted
-                                          : Theme.of(context).colorScheme.onSurface,
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
                                     ),
                                   ),
                                   const Icon(
@@ -631,7 +649,9 @@ class _EquipmentRentalPageState extends State<EquipmentRentalPage> {
                                       fontSize: 12,
                                       color: collectionTime == null
                                           ? context.rehabMuted
-                                          : Theme.of(context).colorScheme.onSurface,
+                                          : Theme.of(
+                                              context,
+                                            ).colorScheme.onSurface,
                                     ),
                                   ),
                                   const Icon(

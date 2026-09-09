@@ -1,10 +1,10 @@
+import 'package:rehab_ai/services/cloud_request.dart';
+import 'package:rehab_ai/widgets/cloud_error_state.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:intl/intl.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:rehab_ai/screens/student/chat/live_chat_page.dart';
@@ -31,6 +31,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
   final _supabase = Supabase.instance.client;
   int? _myUserId;
   bool _isLoading = true;
+  String? _loadError;
   List<dynamic> _upcoming = [];
   List<dynamic> _past = [];
   List<dynamic> _cancelled = [];
@@ -56,13 +57,16 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
   }
 
   Future<void> _initData() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     try {
       final user = _supabase.auth.currentUser;
       if (user == null) return;
 
       final apiUrl = ApiConfig.baseUrl;
-      final userRes = await http.get(
+      final userRes = await cloudGet(
         Uri.parse('$apiUrl/users/profile/${user.id}'),
       );
 
@@ -76,6 +80,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
       }
     } catch (e) {
       debugPrint("Init Data Error: $e");
+      if (mounted) setState(() => _loadError = cloudErrorMessage(e));
     } finally {
       if (mounted) setState(() => _isLoading = false);
     }
@@ -84,7 +89,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
   Future<void> _fetchAppointments() async {
     if (_myUserId == null) return;
     final apiUrl = ApiConfig.baseUrl;
-    final res = await http.get(
+    final res = await cloudGet(
       Uri.parse('$apiUrl/appointments/student/$_myUserId'),
     );
     if (res.statusCode == 200) {
@@ -92,6 +97,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
       final all = data['appointments'] as List<dynamic>;
       final now = DateTime.now();
 
+      if (!mounted) return;
       setState(() {
         _cancelled = all
             .where(
@@ -120,11 +126,12 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
 
   Future<void> _fetchCancellationReasons() async {
     final apiUrl = ApiConfig.baseUrl;
-    final res = await http.get(
+    final res = await cloudGet(
       Uri.parse('$apiUrl/appointments/cancellation_reasons'),
     );
     if (res.statusCode == 200) {
       final data = jsonDecode(res.body);
+      if (!mounted) return;
       setState(() {
         _cancellationReasons = data['reasons'] ?? [];
       });
@@ -297,11 +304,14 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
     bool isCancelled = false,
   }) {
     if (_isLoading) return const Center(child: CircularProgressIndicator());
+    if (_loadError != null) {
+      return CloudErrorState(message: _loadError!, onRetry: _initData);
+    }
     List<dynamic> list = isUpcoming ? _upcoming : (isPast ? _past : _cancelled);
 
     if (list.isEmpty) {
       return RefreshIndicator(
-        onRefresh: _fetchAppointments,
+        onRefresh: _initData,
         child: ListView(
           physics: const AlwaysScrollableScrollPhysics(),
           children: [
@@ -323,7 +333,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
     }
 
     return RefreshIndicator(
-      onRefresh: _fetchAppointments,
+      onRefresh: _initData,
       child: ListView.separated(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
@@ -942,7 +952,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
         body: jsonEncode({"reason_id": reasonId, "other_reason": otherReason}),
       );
       if (res.statusCode == 200) {
-        _fetchAppointments();
+        _initData();
       }
     } catch (e) {
       debugPrint("Error cancelling appointment: $e");
@@ -1068,7 +1078,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                             builder: (context) => const LiveChatPage(),
                           ),
                         ).then((_) {
-                          _fetchAppointments();
+                          _initData();
                         });
                       },
                       child: Container(
@@ -1280,7 +1290,7 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
                                       _didBook = true;
                                     });
                                     Navigator.pop(context);
-                                    _fetchAppointments();
+                                    _initData();
                                   } else {
                                     Navigator.pop(
                                       context,
@@ -1336,7 +1346,9 @@ class _MyAppointmentsPageState extends State<MyAppointmentsPage>
 
                                   if (!mounted || !pageContext.mounted) return;
                                   Navigator.pop(context);
-                                  ScaffoldMessenger.of(pageContext).showSnackBar(
+                                  ScaffoldMessenger.of(
+                                    pageContext,
+                                  ).showSnackBar(
                                     SnackBar(
                                       content: Text(
                                         'Unable to connect to the server. Please check your internet connection and try again.',
