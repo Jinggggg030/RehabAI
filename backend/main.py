@@ -2,9 +2,8 @@ from typing import Optional, List
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from sqlalchemy import text
 from pydantic import BaseModel
-from backend.database import engine, get_db
+from backend.database import get_db
 from backend import models
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm.attributes import flag_modified
@@ -38,11 +37,11 @@ def build_treatment_plan_label(triage_data=None, subject=None):
                 flags=re.IGNORECASE,
             )
         elif not any(
-            symptom in area_lower
-            for symptom in (
-                "pain", "ache", "stiffness", "swelling", "numbness",
-                "weakness", "sprain", "strain", "injury",
-            )
+                symptom in area_lower
+                for symptom in (
+                        "pain", "ache", "stiffness", "swelling", "numbness",
+                        "weakness", "sprain", "strain", "injury",
+                )
         ):
             if "stiff" in point:
                 symptom = "stiffness"
@@ -65,123 +64,6 @@ def build_treatment_plan_label(triage_data=None, subject=None):
         return clean_subject
     return "General Rehabilitation"
 
-models.Base.metadata.create_all(bind=engine)
-
-# create_all() does not add columns to existing tables. Keep this additive
-# migration here so existing installations can start safely after upgrading.
-with engine.begin() as connection:
-    connection.execute(text(
-        'ALTER TABLE "User" '
-        'ADD COLUMN IF NOT EXISTS is_active BOOLEAN NOT NULL DEFAULT TRUE'
-    ))
-    # Preserve legacy single leave ranges when upgrading to multi-range leave.
-    connection.execute(text(
-        'INSERT INTO "Physiotherapist_Unavailable_Period" '
-        '(therapist_id, start_date, end_date) '
-        "SELECT therapist_id, CAST(leave_start_date + INTERVAL '8 hours' AS DATE), "
-        "CAST(leave_end_date + INTERVAL '8 hours' AS DATE) FROM \"Physiotherapist\" "
-        'WHERE leave_start_date IS NOT NULL AND leave_end_date IS NOT NULL '
-        'ON CONFLICT (therapist_id, start_date, end_date) DO NOTHING'
-    ))
-    connection.execute(text(
-        'DROP TABLE IF EXISTS "Ai_Feedback" CASCADE'
-    ))
-    connection.execute(text(
-        'DROP TABLE IF EXISTS "Notification" CASCADE'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Session_Log" '
-        'ADD COLUMN IF NOT EXISTS session_origin VARCHAR(20)'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Session_Log" '
-        'ADD COLUMN IF NOT EXISTS purpose VARCHAR(120)'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Prescribed_Exercise" '
-        'ADD COLUMN IF NOT EXISTS assigned_reps INTEGER'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Appointment" '
-        'ADD COLUMN IF NOT EXISTS meeting_room VARCHAR(100) UNIQUE'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Appointment" '
-        'ADD COLUMN IF NOT EXISTS parent_appointment_id INTEGER '
-        'REFERENCES "Appointment"(appointment_id)'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Appointment" '
-        'DROP CONSTRAINT IF EXISTS check_appointment_status'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Appointment" '
-        'ADD CONSTRAINT check_appointment_status '
-        "CHECK (status IN ('Scheduled', 'Cancelled', 'Completed', 'Missed'))"
-    ))
-    missing_appointment_ids = connection.execute(text(
-        'SELECT appointment_id FROM "Appointment" WHERE meeting_room IS NULL'
-    )).scalars().all()
-    for appointment_id in missing_appointment_ids:
-        connection.execute(
-            text(
-                'UPDATE "Appointment" SET meeting_room = :meeting_room '
-                'WHERE appointment_id = :appointment_id'
-            ),
-            {
-                "appointment_id": appointment_id,
-                "meeting_room": f"rehab-ai-{secrets.token_hex(16)}",
-            },
-        )
-    connection.execute(text(
-        'ALTER TABLE "Prescribed_Exercise" '
-        'ADD COLUMN IF NOT EXISTS assigned_days INTEGER NOT NULL DEFAULT 1'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Prescribed_Exercise" '
-        'ADD COLUMN IF NOT EXISTS assigned_at TIMESTAMP NOT NULL '
-        'DEFAULT CURRENT_TIMESTAMP'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Prescribed_Exercise" '
-        "ADD COLUMN IF NOT EXISTS assigned_tracking_mode VARCHAR(20) "
-        "NOT NULL DEFAULT 'duration'"
-    ))
-    #connection.execute(text(
-    #    'ALTER TABLE "Live_Chat_Session" '
-    #    'ADD COLUMN IF NOT EXISTS teleconference_room VARCHAR(100)'
-    #))
-    connection.execute(text(
-        'ALTER TABLE "Student" '
-        'ADD COLUMN IF NOT EXISTS profile_picture VARCHAR(255)'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Physiotherapist" '
-        'ADD COLUMN IF NOT EXISTS profile_picture VARCHAR(255)'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Live_Chat_Session" '
-        'ADD COLUMN IF NOT EXISTS teleconference_status VARCHAR(20)'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Live_Chat_Session" '
-        'ADD COLUMN IF NOT EXISTS consultation_prescription TEXT'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Live_Chat_Session" '
-        'ADD COLUMN IF NOT EXISTS consultation_appointment_id INTEGER '
-        'REFERENCES "Appointment"(appointment_id)'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Rental_Record" '
-        'DROP CONSTRAINT IF EXISTS check_rental_status'
-    ))
-    connection.execute(text(
-        'ALTER TABLE "Rental_Record" '
-        'ADD CONSTRAINT check_rental_status CHECK (status IN (\'Pending\', \'Approved\', \'Active\', \'Returned\', \'Lost\', \'Rejected\'))'
-    ))
-
-
 app = FastAPI(title="Rehab AI Backend")
 
 # In-memory dictionary tracking physiotherapist activity: therapist_id -> last_activity_datetime
@@ -195,7 +77,7 @@ def require_active_physio(db: Session, physio_id: int):
         models.User.user_id == physio_id,
         models.User.role == "P",
         models.User.is_active.is_(True),
-    ).first()
+        ).first()
     if not active_user:
         physio_heartbeats.pop(physio_id, None)
         raise HTTPException(status_code=403, detail="Physiotherapist account is deactivated")
@@ -235,13 +117,13 @@ def create_user_profile(profile: UserProfileCreate, db: Session = Depends(get_db
     existing_user = db.query(models.User).filter(models.User.supabase_id == profile.supabase_id).first()
     if existing_user:
         raise HTTPException(status_code=400, detail="User profile already exists")
-    
+
     # Check if this email was pre-registered by the admin
     pre_registered = db.query(models.User).filter(
         models.User.email == profile.email,
         models.User.supabase_id.is_(None)
     ).first()
-    
+
     if pre_registered:
         pre_registered.supabase_id = profile.supabase_id
         if profile.username:
@@ -256,11 +138,11 @@ def create_user_profile(profile: UserProfileCreate, db: Session = Depends(get_db
             pre_registered.address = profile.address
         if profile.accommodation_type:
             pre_registered.accommodation_type = profile.accommodation_type
-            
+
         db.commit()
         db.refresh(pre_registered)
         return {"message": "Profile linked successfully", "user_id": pre_registered.user_id, "role": pre_registered.role}
-        
+
     new_user = models.User(
         supabase_id=profile.supabase_id,
         username=profile.username,
@@ -282,7 +164,7 @@ def create_user_profile(profile: UserProfileCreate, db: Session = Depends(get_db
     )
     db.add(new_student)
     db.commit()
-    
+
     return {"message": "Profile created successfully", "user_id": new_user.user_id, "role": new_user.role}
 
 
@@ -302,7 +184,7 @@ def update_user_profile(supabase_id: str, profile: UserProfileUpdate, db: Sessio
     user = db.query(models.User).filter(models.User.supabase_id == supabase_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
-        
+
     if profile.username is not None:
         user.username = profile.username
     if profile.email is not None:
@@ -317,9 +199,9 @@ def update_user_profile(supabase_id: str, profile: UserProfileUpdate, db: Sessio
         user.address = profile.address
     if profile.accommodation_type is not None:
         user.accommodation_type = profile.accommodation_type
-        
+
     if user.role == 'S' and (
-        profile.matric_no is not None or profile.profile_picture is not None
+            profile.matric_no is not None or profile.profile_picture is not None
     ):
         student = db.query(models.Student).filter(models.Student.student_id == user.user_id).first()
         if student:
@@ -341,15 +223,15 @@ def check_user_profile(supabase_id: str, db: Session = Depends(get_db)):
         user = db.query(models.User).filter(models.User.user_id == int(supabase_id)).first()
     else:
         user = db.query(models.User).filter(models.User.supabase_id == supabase_id).first()
-    
+
     if user:
         active = user.is_active is not False
         if user.role == 'P':
             therapist = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == user.user_id).first()
             return {
-                "exists": True, 
+                "exists": True,
                 "is_active": active,
-                "user_id": user.user_id, 
+                "user_id": user.user_id,
                 "role": user.role,
                 "username": user.username,
                 "email": user.email,
@@ -365,9 +247,9 @@ def check_user_profile(supabase_id: str, db: Session = Depends(get_db)):
         else:
             student = db.query(models.Student).filter(models.Student.student_id == user.user_id).first()
             return {
-                "exists": True, 
+                "exists": True,
                 "is_active": active,
-                "user_id": user.user_id, 
+                "user_id": user.user_id,
                 "role": user.role,
                 "username": user.username,
                 "email": user.email,
@@ -411,7 +293,7 @@ def get_all_users(db: Session = Depends(get_db)):
 def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
     from datetime import datetime, timedelta
     notifications = []
-    
+
     # 1. Chat Notifications
     active_sessions = db.query(models.LiveChatSession).filter(
         models.LiveChatSession.student_id == user_id,
@@ -420,9 +302,9 @@ def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
     for session in active_sessions:
         last_log = db.query(models.ChatLog).filter(models.ChatLog.session_id == session.session_id).order_by(models.ChatLog.timestamp.desc()).first()
         if (
-            last_log
-            and last_log.sender_id is not None
-            and last_log.sender_id != user_id
+                last_log
+                and last_log.sender_id is not None
+                and last_log.sender_id != user_id
         ):
             notifications.append({
                 "notification_id": f"chat:{session.session_id}:{last_log.chat_id}",
@@ -461,7 +343,7 @@ def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
         appt_date = appt.schedule_time.date()
         today_date = now.date()
         tomorrow_date = today_date + timedelta(days=1)
-        
+
         if appt_date == today_date:
             title = "Appointment Today"
             msg = f"You have an appointment today at {appt.schedule_time.strftime('%I:%M %p')}."
@@ -474,7 +356,7 @@ def get_user_notifications(user_id: int, db: Session = Depends(get_db)):
             title = "Upcoming Appointment"
             msg = f"You have an appointment on {appt.schedule_time.strftime('%b %d, %Y at %I:%M %p')}."
             notif_id = f"appointment:{appt.appointment_id}:generic"
-            
+
         notifications.append({
             "notification_id": notif_id,
             "type": "appointment",
@@ -563,9 +445,9 @@ class NotificationReadRequest(BaseModel):
 
 @app.post("/users/{user_id}/notifications/read")
 def mark_notification_read(
-    user_id: int,
-    request: NotificationReadRequest,
-    db: Session = Depends(get_db)
+        user_id: int,
+        request: NotificationReadRequest,
+        db: Session = Depends(get_db)
 ):
     if not request.notification_id or len(request.notification_id) > 150:
         raise HTTPException(status_code=400, detail="Invalid notification ID")
@@ -616,7 +498,7 @@ def get_physio_notifications(physio_id: int, db: Session = Depends(get_db)):
             models.ChatReadReceipt.session_id == session.session_id
         ).first()
         if last_incoming and (
-            receipt is None or receipt.last_read_chat_id < last_incoming.chat_id
+                receipt is None or receipt.last_read_chat_id < last_incoming.chat_id
         ):
             student = db.query(models.User).filter(
                 models.User.user_id == session.student_id
@@ -728,13 +610,13 @@ def get_all_categories(db: Session = Depends(get_db)):
 def get_all_equipment(db: Session = Depends(get_db)):
     equipment = db.query(models.Equipment).all()
     eq_cats = db.query(models.Equipment_Category).all()
-    
+
     eq_cat_map = {}
     for ec in eq_cats:
         if ec.equipment_id not in eq_cat_map:
             eq_cat_map[ec.equipment_id] = []
         eq_cat_map[ec.equipment_id].append(ec.category_id)
-        
+
     result = []
     for eq in equipment:
         result.append({
@@ -745,7 +627,7 @@ def get_all_equipment(db: Session = Depends(get_db)):
             "image": eq.image,
             "category_ids": eq_cat_map.get(eq.equipment_id, [])
         })
-        
+
     return {"equipment": result}
 
 @app.get("/rental_reasons")
@@ -796,7 +678,7 @@ def create_admin_physiotherapist(data: PhysiotherapistCreate, db: Session = Depe
     existing = db.query(models.User).filter(models.User.email == data.email).first()
     if existing:
         raise HTTPException(status_code=400, detail="User with this email already exists")
-        
+
     new_user = models.User(
         supabase_id=None,
         username=data.username,
@@ -810,14 +692,14 @@ def create_admin_physiotherapist(data: PhysiotherapistCreate, db: Session = Depe
     db.add(new_user)
     db.commit()
     db.refresh(new_user)
-    
+
     new_therapist = models.Physiotherapist(
         therapist_id=new_user.user_id,
         specialization=data.specialization
     )
     db.add(new_therapist)
     db.commit()
-    
+
     return {"message": "Physiotherapist pre-registered successfully", "user_id": new_user.user_id}
 
 @app.put("/admin/physiotherapists/{user_id}")
@@ -827,7 +709,7 @@ def update_admin_physiotherapist(user_id: int, data: PhysiotherapistUpdate, db: 
         raise HTTPException(status_code=404, detail="Physiotherapist not found")
     if user.role != 'P':
         raise HTTPException(status_code=400, detail="User is not a physiotherapist")
-        
+
     if data.username is not None:
         user.username = data.username
     if data.identity_number is not None:
@@ -838,7 +720,7 @@ def update_admin_physiotherapist(user_id: int, data: PhysiotherapistUpdate, db: 
         user.gender = data.gender
     if data.address is not None:
         user.address = data.address
-        
+
     therapist = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == user_id).first()
     if therapist:
         if data.specialization is not None:
@@ -850,7 +732,7 @@ def update_admin_physiotherapist(user_id: int, data: PhysiotherapistUpdate, db: 
                 specialization=data.specialization
             )
             db.add(new_therapist)
-            
+
     db.commit()
     return {"message": "Physiotherapist updated successfully"}
 
@@ -861,7 +743,7 @@ def deactivate_admin_physiotherapist(user_id: int, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="Physiotherapist not found")
     if user.role != 'P':
         raise HTTPException(status_code=400, detail="User is not a physiotherapist")
-        
+
     user.is_active = False
     physio_heartbeats.pop(user_id, None)
     db.commit()
@@ -890,7 +772,7 @@ def get_admin_rentals(db: Session = Depends(get_db)):
         ).first()
         equipment = db.query(models.Equipment).filter(models.Equipment.equipment_id == r.equipment_id).first()
         reason = db.query(models.RentalReason).filter(models.RentalReason.rental_reason_id == r.rental_reason_id).first()
-        
+
         result.append({
             "rental_record_id": r.rental_record_id,
             "student_id": r.student_id,
@@ -918,7 +800,7 @@ class RentalStatusUpdate(BaseModel):
     return_status: Optional[str] = None
     proof_of_collection: Optional[str] = None
     proof_of_status: Optional[str] = None
-    
+
 @app.put("/admin/rentals/{rental_record_id}/status")
 def update_rental_status(rental_record_id: int, update_data: RentalStatusUpdate, db: Session = Depends(get_db)):
     admin = db.query(models.Admin).filter(
@@ -943,12 +825,12 @@ def update_rental_status(rental_record_id: int, update_data: RentalStatusUpdate,
             raise HTTPException(status_code=400, detail="Return condition is required")
         if not update_data.proof_of_status:
             raise HTTPException(status_code=400, detail="Return photo is required")
-        
+
         # Increment stock by 1 when returned (unless lost)
         equipment = db.query(models.Equipment).filter(models.Equipment.equipment_id == record.equipment_id).first()
         if equipment and update_data.return_status != "Lost":
             equipment.stock += 1
-            
+
         record.return_date = datetime.utcnow()
     else:
         raise HTTPException(
@@ -964,7 +846,7 @@ def update_rental_status(rental_record_id: int, update_data: RentalStatusUpdate,
         record.proof_of_collection = update_data.proof_of_collection
     if update_data.proof_of_status:
         record.proof_of_status = update_data.proof_of_status
-        
+
     db.commit()
     return {"message": "Rental status updated successfully"}
 
@@ -994,7 +876,7 @@ def update_equipment(equipment_id: int, eq: EquipmentCreate, db: Session = Depen
     equipment = db.query(models.Equipment).filter(models.Equipment.equipment_id == equipment_id).first()
     if not equipment:
         raise HTTPException(status_code=404, detail="Equipment not found")
-        
+
     equipment.name = eq.name
     equipment.description = eq.description
     equipment.stock = eq.stock
@@ -1002,7 +884,7 @@ def update_equipment(equipment_id: int, eq: EquipmentCreate, db: Session = Depen
         equipment.image = eq.image
     if eq.admin_id is not None:
         equipment.admin_id = eq.admin_id
-        
+
     db.commit()
     return {"message": "Equipment updated successfully"}
 
@@ -1011,7 +893,7 @@ def delete_equipment(equipment_id: int, db: Session = Depends(get_db)):
     equipment = db.query(models.Equipment).filter(models.Equipment.equipment_id == equipment_id).first()
     if not equipment:
         raise HTTPException(status_code=404, detail="Equipment not found")
-        
+
     db.delete(equipment)
     db.commit()
     return {"message": "Equipment deleted successfully"}
@@ -1079,14 +961,14 @@ def get_prescribed_exercises(student_id: int, db: Session = Depends(get_db)):
         models.Appointment.student_id == student_id,
         models.Appointment.prescription != None
     ).order_by(models.Appointment.schedule_time.desc()).first()
-    
+
     if not active_appointment:
         return {"exercises": []}
-        
+
     prescribed = db.query(models.PrescribedExercise).filter(
         models.PrescribedExercise.appointment_id == active_appointment.appointment_id
     ).all()
-    
+
     result = []
     today = (datetime.utcnow() + timedelta(hours=8)).date()
     for pe in prescribed:
@@ -1111,12 +993,12 @@ def get_prescribed_exercises(student_id: int, db: Session = Depends(get_db)):
         ex = db.query(models.Exercise).filter(models.Exercise.exercise_id == pe.exercise_id).first()
         if ex:
             disciplines = db.query(models.Discipline.description).join(
-                models.ExerciseDiscipline, 
+                models.ExerciseDiscipline,
                 models.Discipline.discipline_id == models.ExerciseDiscipline.discipline_id
             ).filter(models.ExerciseDiscipline.exercise_id == ex.exercise_id).all()
-            
+
             discipline_list = [d[0] for d in disciplines]
-            
+
             result.append({
                 "exercise_id": ex.exercise_id,
                 "name": ex.name,
@@ -1174,18 +1056,18 @@ def get_scheduled_exercises(student_id: int, db: Session = Depends(get_db)):
         models.SessionLog.student_id == student_id,
         models.SessionLog.status == "Pending"
     ).order_by(models.SessionLog.completion_date.asc()).all()
-    
+
     result = []
     for se in scheduled:
         ex = db.query(models.Exercise).filter(models.Exercise.exercise_id == se.exercise_id).first()
         if ex:
             disciplines = db.query(models.Discipline.description).join(
-                models.ExerciseDiscipline, 
+                models.ExerciseDiscipline,
                 models.Discipline.discipline_id == models.ExerciseDiscipline.discipline_id
             ).filter(models.ExerciseDiscipline.exercise_id == ex.exercise_id).all()
-            
+
             discipline_list = [d[0] for d in disciplines]
-            
+
             result.append({
                 "schedule_id": se.schedule_id,
                 "exercise_id": ex.exercise_id,
@@ -1253,7 +1135,7 @@ def update_scheduled_exercise_status(schedule_id: int, request: UpdateScheduledE
     se = db.query(models.SessionLog).filter(models.SessionLog.schedule_id == schedule_id).first()
     if not se:
         raise HTTPException(status_code=404, detail="Scheduled exercise not found")
-        
+
     se.status = request.status
     db.commit()
     return {"message": "Status updated successfully"}
@@ -1279,24 +1161,24 @@ def generate_frames():
         success, img = cap.read()
         if not success:
             break
-            
+
         img = cv2.flip(img, 1)
 
         # Feed the image into the AI to find the pose and draw the skeleton
         img = detector.find_pose(img, draw=True)
-        
+
         # Extract all the landmark coordinates
         lm_list = detector.get_position(img)
-        
+
         # Calculate the Right Arm (Elbow) Angle
         if len(lm_list) != 0:
             shoulder = lm_list[12][1:3]
             elbow = lm_list[14][1:3]
             wrist = lm_list[16][1:3]
-            
+
             angle = calculate_angle(shoulder, elbow, wrist)
-            
-            cv2.putText(img, f"{int(angle)} deg", (elbow[0] + 15, elbow[1] - 15), 
+
+            cv2.putText(img, f"{int(angle)} deg", (elbow[0] + 15, elbow[1] - 15),
                         cv2.FONT_HERSHEY_SIMPLEX, 1, (0, 0, 255), 3)
 
         ret, buffer = cv2.imencode('.jpg', img)
@@ -1313,11 +1195,11 @@ class StartChatReq(BaseModel):
     message: str
 
 def validate_appointment_time(
-    db: Session,
-    therapist_id: int,
-    schedule_time_dt: datetime,
-    student_id: int | None = None,
-    exclude_appt_id: int | None = None,
+        db: Session,
+        therapist_id: int,
+        schedule_time_dt: datetime,
+        student_id: int | None = None,
+        exclude_appt_id: int | None = None,
 ):
     # 1. Check weekend (Saturday = 5, Sunday = 6)
     if schedule_time_dt.weekday() in [5, 6]:
@@ -1325,21 +1207,21 @@ def validate_appointment_time(
             status_code=400,
             detail="Appointments can only be booked on weekdays (Monday to Friday)."
         )
-        
+
     # 2. Check office hours (9:00 AM to 6:00 PM)
     if schedule_time_dt.hour < 9 or schedule_time_dt.hour >= 18:
         raise HTTPException(
             status_code=400,
             detail="Appointments can only be booked during office hours (9:00 AM to 6:00 PM)."
         )
-        
+
     # 3. Check lunch break (2:00 PM to 3:00 PM)
     if schedule_time_dt.hour == 14:
         raise HTTPException(
             status_code=400,
             detail="Appointments cannot be booked during the lunch break (2:00 PM to 3:00 PM)."
         )
-        
+
     # 4. Check overlapping appointments
     query = db.query(models.Appointment).filter(
         models.Appointment.therapist_id == therapist_id,
@@ -1348,7 +1230,7 @@ def validate_appointment_time(
     )
     if exclude_appt_id:
         query = query.filter(models.Appointment.appointment_id != exclude_appt_id)
-        
+
     existing_appt = query.first()
     if existing_appt:
         raise HTTPException(
@@ -1362,7 +1244,7 @@ def validate_appointment_time(
         <= schedule_time_dt.date(),
         models.PhysiotherapistUnavailablePeriod.end_date
         >= schedule_time_dt.date(),
-    ).first()
+        ).first()
     if unavailable:
         raise HTTPException(
             status_code=400,
@@ -1376,7 +1258,7 @@ def validate_appointment_time(
             models.Appointment.student_id == student_id,
             models.Appointment.schedule_time == schedule_time_dt,
             models.Appointment.status == "Scheduled",
-        )
+            )
         if exclude_appt_id:
             student_query = student_query.filter(
                 models.Appointment.appointment_id != exclude_appt_id
@@ -1396,7 +1278,7 @@ def assign_physio(db: Session, session_id: int, discipline: str):
         matching_physios = db.query(models.Physiotherapist).join(
             models.User,
             models.User.user_id == models.Physiotherapist.therapist_id,
-        ).filter(
+            ).filter(
             models.User.is_active.is_(True),
             (models.Physiotherapist.specialization.ilike("%Orthopaedic%")) |
             (models.Physiotherapist.specialization.ilike("%Orthopedic%")) |
@@ -1406,21 +1288,21 @@ def assign_physio(db: Session, session_id: int, discipline: str):
         matching_physios = db.query(models.Physiotherapist).join(
             models.User,
             models.User.user_id == models.Physiotherapist.therapist_id,
-        ).filter(
+            ).filter(
             models.User.is_active.is_(True),
             models.Physiotherapist.specialization.ilike(f"%{discipline}%")
         ).all()
-    
+
     # If no matching physiotherapists are found, search among all physiotherapists
     if not matching_physios:
         matching_physios = db.query(models.Physiotherapist).join(
             models.User,
             models.User.user_id == models.Physiotherapist.therapist_id,
-        ).filter(models.User.is_active.is_(True)).all()
-        
+            ).filter(models.User.is_active.is_(True)).all()
+
     if not matching_physios:
         return
-        
+
     # Check if any matching physiotherapist is online (active heartbeat within the last 15 seconds)
     now = datetime.utcnow()
     online_physios = []
@@ -1433,7 +1315,7 @@ def assign_physio(db: Session, session_id: int, discipline: str):
                 models.LiveChatSession.session_status == "Active"
             ).count()
             online_physios.append((p, active_chats_count))
-            
+
     # If we have online physiotherapists, assign to the one with the lowest active chat load
     if online_physios:
         online_physios.sort(key=lambda item: item[1])
@@ -1449,7 +1331,7 @@ def assign_physio(db: Session, session_id: int, discipline: str):
             physio_loads.append((p, active_chats_count))
         physio_loads.sort(key=lambda item: item[1])
         assigned_physio = physio_loads[0][0]
-        
+
     # Update the live chat session with the selected therapist_id
     session = db.query(models.LiveChatSession).filter(models.LiveChatSession.session_id == session_id).first()
     if session:
@@ -1462,7 +1344,7 @@ def check_posture_integration(db: Session, student_id: int, auto_reply: str) -> 
         models.SessionLog.student_id == student_id,
         models.SessionLog.status == "Completed"
     ).order_by(models.SessionLog.completion_date.desc()).first()
-    
+
     if latest_session and latest_session.accuracy_score is not None and latest_session.accuracy_score < 70:
         auto_reply += "\n\n(AI Posture Alert: We noticed your recent exercise accuracy was low. This movement issue may be contributing to your current symptoms. Your therapist has been notified.)"
     return auto_reply
@@ -1471,7 +1353,7 @@ def check_posture_integration(db: Session, student_id: int, auto_reply: str) -> 
 def start_chat(req: StartChatReq, db: Session = Depends(get_db)):
     # 1. Triage the message
     updated_state, auto_reply, session_status = chatbot_instance.process_message(req.message, None)
-    
+
     if session_status == "Active":
         auto_reply = check_posture_integration(db, req.user_id, auto_reply)
 
@@ -1486,7 +1368,7 @@ def start_chat(req: StartChatReq, db: Session = Depends(get_db)):
     db.add(new_session)
     db.commit()
     db.refresh(new_session)
-    
+
     # 3. Create the user's message log
     user_log = models.ChatLog(
         session_id=new_session.session_id,
@@ -1494,7 +1376,7 @@ def start_chat(req: StartChatReq, db: Session = Depends(get_db)):
         content=req.message
     )
     db.add(user_log)
-    
+
     # 4. Create the system's auto-reply log
     system_log = models.ChatLog(
         session_id=new_session.session_id,
@@ -1503,11 +1385,11 @@ def start_chat(req: StartChatReq, db: Session = Depends(get_db)):
     )
     db.add(system_log)
     db.commit()
-    
+
     # Phase 4: Assign physio
     if session_status == "Active" and updated_state.get("discipline"):
         assign_physio(db, new_session.session_id, updated_state.get("discipline"))
-    
+
     return {
         "session_id": new_session.session_id,
         "discipline": updated_state.get("discipline"),
@@ -1541,14 +1423,14 @@ def send_message(req: SendMessageReq, db: Session = Depends(get_db)):
         )
         db.add(user_log)
         db.commit()
-        
+
         # Phase 1 & 2: Stateful Multi-turn triage
         session = db.query(models.LiveChatSession).filter(models.LiveChatSession.session_id == req.session_id).first()
         if session and session.session_status == "Triage":
             import copy
             triage_data_copy = copy.deepcopy(session.triage_data) if session.triage_data else None
             updated_state, auto_reply, new_status = chatbot_instance.process_message(req.message, triage_data_copy)
-            
+
             if new_status == "Active":
                 auto_reply = check_posture_integration(db, req.user_id, auto_reply)
 
@@ -1559,7 +1441,7 @@ def send_message(req: SendMessageReq, db: Session = Depends(get_db)):
                 updated_state,
                 session.subject,
             )
-            
+
             system_log = models.ChatLog(
                 session_id=req.session_id,
                 sender_id=None,
@@ -1567,7 +1449,7 @@ def send_message(req: SendMessageReq, db: Session = Depends(get_db)):
             )
             db.add(system_log)
             db.commit()
-            
+
             # Phase 4: Assign physio
             if new_status == "Active" and session.discipline:
                 assign_physio(db, session.session_id, session.discipline)
@@ -1606,7 +1488,7 @@ def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
     ).order_by(
         models.LiveChatSession.created_at.desc()
     ).all()
-    
+
     result = []
     for chat in chats:
         last_incoming = db.query(models.ChatLog).filter(
@@ -1622,11 +1504,11 @@ def get_physio_chats(physio_id: int, db: Session = Depends(get_db)):
             chat.session_status == "Active"
             and last_incoming
             and (
-                receipt is None
-                or receipt.last_read_chat_id < last_incoming.chat_id
+                    receipt is None
+                    or receipt.last_read_chat_id < last_incoming.chat_id
             )
         )
-            
+
         result.append({
             "session_id": chat.session_id,
             "subject": chat.subject,
@@ -1655,15 +1537,15 @@ class RespondTeleconferenceReq(BaseModel):
 
 @app.post("/physio/chats/{session_id}/teleconference")
 def start_chat_teleconference(
-    session_id: int,
-    req: StartTeleconferenceReq,
-    db: Session = Depends(get_db),
+        session_id: int,
+        req: StartTeleconferenceReq,
+        db: Session = Depends(get_db),
 ):
     session = db.query(models.LiveChatSession).filter(
         models.LiveChatSession.session_id == session_id,
         models.LiveChatSession.therapist_id == req.physio_id,
         models.LiveChatSession.session_status == "Active",
-    ).first()
+        ).first()
     if not session:
         raise HTTPException(status_code=403, detail="Active chat is not assigned to this physiotherapist")
 
@@ -1681,15 +1563,15 @@ def start_chat_teleconference(
 
 @app.post("/chats/{session_id}/teleconference/respond")
 def respond_chat_teleconference(
-    session_id: int,
-    req: RespondTeleconferenceReq,
-    db: Session = Depends(get_db),
+        session_id: int,
+        req: RespondTeleconferenceReq,
+        db: Session = Depends(get_db),
 ):
     session = db.query(models.LiveChatSession).filter(
         models.LiveChatSession.session_id == session_id,
         models.LiveChatSession.student_id == req.user_id,
         models.LiveChatSession.session_status == "Active",
-    ).first()
+        ).first()
     if not session or not session.teleconference_room:
         raise HTTPException(status_code=404, detail="Video consultation invitation not found")
 
@@ -1713,9 +1595,9 @@ def respond_chat_teleconference(
 
 @app.post("/physio/chats/{session_id}/read")
 def mark_physio_chat_read(
-    session_id: int,
-    physio_id: int,
-    db: Session = Depends(get_db)
+        session_id: int,
+        physio_id: int,
+        db: Session = Depends(get_db)
 ):
     session = db.query(models.LiveChatSession).filter(
         models.LiveChatSession.session_id == session_id,
@@ -1917,19 +1799,19 @@ def build_recovery_trends(appt_sessions, appt_exercises):
         accuracy_change = None if metric_type != "accuracy" else (
             latest["accuracy_score"] - first["accuracy_score"]
             if first["accuracy_score"] is not None
-            and latest["accuracy_score"] is not None else None
+               and latest["accuracy_score"] is not None else None
         )
         # Rep-based exercises are compared by the time needed to finish them.
         # Positive means the latest attempt was completed faster.
         time_change = None if metric_type != "completion_time" else (
             first["duration_seconds"] - latest["duration_seconds"]
             if first["duration_seconds"] is not None
-            and latest["duration_seconds"] is not None else None
+               and latest["duration_seconds"] is not None else None
         )
         pain_reduction = None if metric_type != "pain" else (
             first["pain_after"] - latest["pain_after"]
             if first["pain_after"] is not None
-            and latest["pain_after"] is not None else None
+               and latest["pain_after"] is not None else None
         )
         comparable_changes = [
             change for change in (accuracy_change, time_change, pain_reduction)
@@ -1962,9 +1844,9 @@ def build_recovery_trends(appt_sessions, appt_exercises):
 
 @app.get("/physio/{physio_id}/patients/{student_id}/progress")
 def get_physio_patient_progress(
-    physio_id: int,
-    student_id: int,
-    db: Session = Depends(get_db)
+        physio_id: int,
+        student_id: int,
+        db: Session = Depends(get_db)
 ):
     relationship = db.query(models.Appointment).filter(
         models.Appointment.therapist_id == physio_id,
@@ -1996,7 +1878,7 @@ def get_physio_patient_progress(
     for root_id, appt_list in groups.items():
         chain = sorted(appt_list, key=lambda x: x.schedule_time)
         all_chains.append(chain)
-        
+
     chains = []
     for chain in all_chains:
         has_prescription = False
@@ -2014,7 +1896,7 @@ def get_physio_patient_progress(
 
     appointments_data = []
     exercise_assignments = {} # For all exercises
-    
+
     sessions = db.query(models.SessionLog).filter(
         models.SessionLog.student_id == student_id,
         models.SessionLog.status == "Completed"
@@ -2027,13 +1909,13 @@ def get_physio_patient_progress(
             models.Exercise.exercise_id.in_(session_exercise_ids)
         ).all()
     } if session_exercise_ids else {}
-    
+
     from datetime import datetime, timedelta
 
     for idx, chain in enumerate(chains):
         first_appt = chain[0]
         latest_appt = chain[-1]
-        
+
         chain_exercises = {}
         for appt in chain:
             prescribed_rows = db.query(models.PrescribedExercise, models.Exercise).join(
@@ -2054,10 +1936,10 @@ def get_physio_patient_progress(
                 }
                 chain_exercises[exercise.exercise_id] = ex_data
                 exercise_assignments[exercise.exercise_id] = ex_data
-                
+
         appt_exercises = list(chain_exercises.values())
         appt_assigned_exercise_ids = set(chain_exercises.keys())
-            
+
         triage_data = None
         subject = None
         for appt in chain:
@@ -2091,7 +1973,7 @@ def get_physio_patient_progress(
         total_seconds = sum(s.duration_seconds or 0 for s in appt_sessions)
         accuracy_values = [s.accuracy_score for s in appt_sessions if s.accuracy_score is not None]
         pain_changes = [s.pain_before - s.pain_after for s in appt_sessions if s.pain_before is not None and s.pain_after is not None]
-        
+
         session_days = sorted({(s.completion_date + timedelta(hours=8)).date() for s in appt_sessions if s.completion_date}, reverse=True)
         streak = 0
         if session_days:
@@ -2123,7 +2005,7 @@ def get_physio_patient_progress(
                 "session_count": len(day_sessions),
                 "duration_seconds": sum(s.duration_seconds or 0 for s in day_sessions)
             })
-            
+
         appt_recent = []
         for s in appt_sessions[:20]:
             ex_info = next((e for e in appt_exercises if e['exercise_id'] == s.exercise_id), {})
@@ -2172,9 +2054,9 @@ def get_physio_patient_progress(
         if assignment is None:
             return "Self-selected"
         if (
-            session.planned_sets is not None
-            and assignment["assigned_sets"] is not None
-            and session.planned_sets != assignment["assigned_sets"]
+                session.planned_sets is not None
+                and assignment["assigned_sets"] is not None
+                and session.planned_sets != assignment["assigned_sets"]
         ):
             return "Self-selected"
         return "Assigned"
@@ -2248,7 +2130,7 @@ def get_physio_patient_progress(
         exercise_sessions = [
             session for session in self_selected_sessions
             if session.exercise_id == exercise_id
-            and (session.purpose.strip() if session.purpose else "General rehabilitation") == purpose
+               and (session.purpose.strip() if session.purpose else "General rehabilitation") == purpose
         ]
         exercise_accuracy = [
             session.accuracy_score for session in exercise_sessions
@@ -2352,9 +2234,9 @@ def get_physio_patient_progress(
     }
 
 def mark_missed_appointments(
-    db: Session,
-    therapist_id: int | None = None,
-    student_id: int | None = None,
+        db: Session,
+        therapist_id: int | None = None,
+        student_id: int | None = None,
 ):
     """Mark appointments still untouched one hour after their start time."""
     malaysia_now = datetime.now(ZoneInfo("Asia/Kuala_Lumpur")).replace(tzinfo=None)
@@ -2362,7 +2244,7 @@ def mark_missed_appointments(
     query = db.query(models.Appointment).filter(
         models.Appointment.status == "Scheduled",
         models.Appointment.schedule_time < cutoff,
-    )
+        )
     if therapist_id is not None:
         query = query.filter(models.Appointment.therapist_id == therapist_id)
     if student_id is not None:
@@ -2388,7 +2270,7 @@ def get_physio_appointments(physio_id: int, db: Session = Depends(get_db)):
     ).filter(
         models.Appointment.therapist_id == physio_id
     ).order_by(models.Appointment.schedule_time).all()
-    
+
     result = []
     for appt, username, matric_no in appointments:
         meeting_room = ensure_meeting_room(appt)
@@ -2443,14 +2325,14 @@ def record_session(appointment_id: int, req: RecordSessionReq, db: Session = Dep
     appointment = db.query(models.Appointment).filter(models.Appointment.appointment_id == appointment_id).first()
     if not appointment:
         raise HTTPException(status_code=404, detail="Appointment not found")
-        
+
     appointment.prescription = req.prescription
     if req.evaluation is not None:
         appointment.evaluation = req.evaluation
     appointment.status = "Completed"
-    
+
     db.query(models.PrescribedExercise).filter(models.PrescribedExercise.appointment_id == appointment_id).delete()
-    
+
     for ex in req.exercises:
         tracking_mode = ex.assigned_tracking_mode.strip().lower()
         if tracking_mode not in {"duration", "reps"}:
@@ -2472,7 +2354,7 @@ def record_session(appointment_id: int, req: RecordSessionReq, db: Session = Dep
             evaluation=ex.evaluation
         )
         db.add(pe)
-        
+
     if req.next_appointment_time:
         time_str = req.next_appointment_time
         if time_str.endswith("Z"):
@@ -2481,14 +2363,14 @@ def record_session(appointment_id: int, req: RecordSessionReq, db: Session = Dep
             next_time = datetime.fromisoformat(time_str).replace(tzinfo=None)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid next appointment time format: {e}")
-        
+
         validate_appointment_time(
             db,
             appointment.therapist_id,
             next_time,
             student_id=appointment.student_id,
         )
-        
+
         next_appt = models.Appointment(
             student_id=appointment.student_id,
             therapist_id=appointment.therapist_id,
@@ -2498,21 +2380,21 @@ def record_session(appointment_id: int, req: RecordSessionReq, db: Session = Dep
         )
         ensure_meeting_room(next_appt)
         db.add(next_appt)
-        
+
     db.commit()
     return {"message": "Session recorded successfully"}
 
 
 @app.post("/physio/chats/{session_id}/prescribe")
 def record_teleconsultation(
-    session_id: int,
-    req: TeleconsultationReq,
-    db: Session = Depends(get_db),
+        session_id: int,
+        req: TeleconsultationReq,
+        db: Session = Depends(get_db),
 ):
     chat = db.query(models.LiveChatSession).filter(
         models.LiveChatSession.session_id == session_id,
         models.LiveChatSession.therapist_id == req.physio_id,
-    ).first()
+        ).first()
     if not chat:
         raise HTTPException(status_code=404, detail="Assigned chat not found")
 
@@ -2578,14 +2460,14 @@ def record_teleconsultation(
             next_time = datetime.fromisoformat(time_str).replace(tzinfo=None)
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid next appointment time format: {e}")
-        
+
         validate_appointment_time(
             db,
             appointment.therapist_id,
             next_time,
             student_id=appointment.student_id,
         )
-        
+
         next_appt = models.Appointment(
             student_id=appointment.student_id,
             therapist_id=appointment.therapist_id,
@@ -2625,13 +2507,13 @@ def get_physio_rentals(physio_id: int, db: Session = Depends(get_db)):
     ).outerjoin(
         models.RentalReason, models.RentalRecord.rental_reason_id == models.RentalReason.rental_reason_id
     ).order_by(models.RentalRecord.collection_date.desc()).all()
-    
+
     result = []
     for r, username, matric_no, eq_name, reason_desc in rentals:
         final_reason = reason_desc if reason_desc else "No reason provided"
         if r.custom_reason:
             final_reason = f"{final_reason}: {r.custom_reason}"
-            
+
         result.append({
             "rental_record_id": r.rental_record_id,
             "student_id": r.student_id,
@@ -2660,12 +2542,12 @@ def approve_rental(rental_id: int, physio_id: int, db: Session = Depends(get_db)
         raise HTTPException(status_code=404, detail="Rental not found")
     if rental.status != "Pending":
         raise HTTPException(status_code=400, detail="Only pending rentals can be approved")
-    
+
     # Check equipment stock
     equipment = db.query(models.Equipment).filter(models.Equipment.equipment_id == rental.equipment_id).first()
     if not equipment or equipment.stock < 1:
         raise HTTPException(status_code=400, detail="Equipment out of stock")
-    
+
     rental.status = "Approved"
     equipment.stock -= 1
     db.commit()
@@ -2683,7 +2565,7 @@ def reject_rental(rental_id: int, physio_id: int, db: Session = Depends(get_db))
         raise HTTPException(status_code=404, detail="Rental not found")
     if rental.status != "Pending":
         raise HTTPException(status_code=400, detail="Only pending rentals can be rejected")
-    
+
     rental.status = "Rejected"
     db.commit()
     return {"status": "success", "message": "Rental rejected"}
@@ -2722,40 +2604,40 @@ def get_available_physios(student_id: int, db: Session = Depends(get_db)):
         models.Appointment.student_id == student_id,
         models.Appointment.prescription != None
     ).order_by(models.Appointment.schedule_time.desc()).first()
-    
+
     if presc:
         physio = db.query(models.User, models.Physiotherapist).join(
             models.Physiotherapist, models.User.user_id == models.Physiotherapist.therapist_id
         ).filter(
             models.User.user_id == presc.therapist_id,
             models.User.is_active.is_(True),
-        ).first()
+            ).first()
         if physio:
             u, p = physio
             return {"physios": [physio_payload(u, p, True)]}
-            
+
     # 2. Try to find via recent Live Chat session
     session = db.query(models.LiveChatSession).filter(
         models.LiveChatSession.student_id == student_id,
         models.LiveChatSession.therapist_id.isnot(None)
     ).order_by(models.LiveChatSession.created_at.desc()).first()
-    
+
     if session:
         physio = db.query(models.User, models.Physiotherapist).join(
             models.Physiotherapist, models.User.user_id == models.Physiotherapist.therapist_id
         ).filter(
             models.User.user_id == session.therapist_id,
             models.User.is_active.is_(True),
-        ).first()
+            ).first()
         if physio:
             u, p = physio
             return {"physios": [physio_payload(u, p, True)]}
-            
+
     # 3. Fallback: Return all physios
     all_physios = db.query(models.User, models.Physiotherapist).join(
         models.Physiotherapist, models.User.user_id == models.Physiotherapist.therapist_id
     ).filter(models.User.is_active.is_(True)).all()
-    
+
     result = []
     for u, p in all_physios:
         result.append(physio_payload(u, p, False))
@@ -2773,7 +2655,7 @@ def get_student_appointments(student_id: int, db: Session = Depends(get_db)):
     ).filter(
         models.Appointment.student_id == student_id
     ).order_by(models.Appointment.schedule_time.desc()).all()
-    
+
     result = []
     for appt, physio_name, spec in appointments:
         meeting_room = ensure_meeting_room(appt)
@@ -2782,7 +2664,7 @@ def get_student_appointments(student_id: int, db: Session = Depends(get_db)):
             reason = db.query(models.CancellationReason).filter(models.CancellationReason.reason_id == appt.reason_id).first()
             if reason:
                 reason_desc = reason.description
-                
+
         parent_appt_time = None
         parent_injury = None
         if appt.parent_appointment_id:
@@ -2861,7 +2743,7 @@ def book_appointment(req: BookAppointmentReq, db: Session = Depends(get_db)):
         schedule_time_dt,
         student_id=req.student_id,
     )
-    
+
     appt = models.Appointment(
         student_id=req.student_id,
         therapist_id=req.therapist_id,
@@ -2879,15 +2761,15 @@ def cancel_appointment(appointment_id: int, req: CancelAppointmentReq, db: Sessi
     appt = db.query(models.Appointment).filter(models.Appointment.appointment_id == appointment_id).first()
     if not appt:
         raise HTTPException(status_code=404, detail="Appointment not found")
-        
+
     appt.status = "Cancelled"
     appt.reason_id = req.reason_id
-    
+
     # If other reason is provided, we might want to store it in evaluation or a separate field.
     # We will just append it to evaluation for now since there's no other_reason field in Appointment.
     if req.other_reason:
         appt.evaluation = f"Cancellation Note: {req.other_reason}"
-        
+
     db.commit()
     return {"status": "success"}
 
@@ -2898,9 +2780,9 @@ def get_physio_colleagues(therapist_id: int, db: Session = Depends(get_db)):
     current_physio = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == therapist_id).first()
     if not current_physio:
         raise HTTPException(status_code=404, detail="Physiotherapist not found")
-        
+
     spec = current_physio.specialization
-    
+
     # Find all other physiotherapists with the same specialization
     colleagues = db.query(models.User, models.Physiotherapist).join(
         models.Physiotherapist, models.User.user_id == models.Physiotherapist.therapist_id
@@ -2908,8 +2790,8 @@ def get_physio_colleagues(therapist_id: int, db: Session = Depends(get_db)):
         models.Physiotherapist.specialization == spec,
         models.Physiotherapist.therapist_id != therapist_id,
         models.User.is_active.is_(True),
-    ).all()
-    
+        ).all()
+
     result = []
     for u, p in colleagues:
         result.append({
@@ -2924,12 +2806,12 @@ def transfer_appointment(appointment_id: int, req: TransferAppointmentReq, db: S
     appt = db.query(models.Appointment).filter(models.Appointment.appointment_id == appointment_id).first()
     if not appt:
         raise HTTPException(status_code=404, detail="Appointment not found")
-        
+
     # verify new therapist exists
     new_therapist = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == req.new_therapist_id).first()
     if not new_therapist:
         raise HTTPException(status_code=404, detail="New Physiotherapist not found")
-        
+
     appt.therapist_id = req.new_therapist_id
     db.commit()
     return {"status": "success"}
@@ -2939,7 +2821,7 @@ def apply_leave(physio_id: int, req: ApplyLeaveReq, db: Session = Depends(get_db
     physio = db.query(models.Physiotherapist).filter(models.Physiotherapist.therapist_id == physio_id).first()
     if not physio:
         raise HTTPException(status_code=404, detail="Physiotherapist not found")
-        
+
     try:
         # Leave is a calendar date, not an instant in UTC. Parsing only the
         # YYYY-MM-DD portion prevents Malaysia midnight becoming the day before.
@@ -2952,7 +2834,7 @@ def apply_leave(physio_id: int, req: ApplyLeaveReq, db: Session = Depends(get_db
 
     start_dt = datetime.combine(start_date, time.min)
     end_exclusive = datetime.combine(end_date + timedelta(days=1), time.min)
-    
+
     physio.leave_start_date = start_dt
     physio.leave_end_date = datetime.combine(end_date, time.min)
 
@@ -2960,14 +2842,14 @@ def apply_leave(physio_id: int, req: ApplyLeaveReq, db: Session = Depends(get_db
         models.PhysiotherapistUnavailablePeriod.therapist_id == physio_id,
         models.PhysiotherapistUnavailablePeriod.start_date == start_date,
         models.PhysiotherapistUnavailablePeriod.end_date == end_date,
-    ).first()
+        ).first()
     overlapping_period = db.query(
         models.PhysiotherapistUnavailablePeriod
     ).filter(
         models.PhysiotherapistUnavailablePeriod.therapist_id == physio_id,
         models.PhysiotherapistUnavailablePeriod.start_date <= end_date,
         models.PhysiotherapistUnavailablePeriod.end_date >= start_date,
-    ).first()
+        ).first()
     if overlapping_period and not existing_period:
         raise HTTPException(
             status_code=409,
@@ -2979,17 +2861,17 @@ def apply_leave(physio_id: int, req: ApplyLeaveReq, db: Session = Depends(get_db
             start_date=start_date,
             end_date=end_date,
         ))
-    
+
     appointments = db.query(models.Appointment).filter(
         models.Appointment.therapist_id == physio_id,
         models.Appointment.status == "Scheduled",
         models.Appointment.schedule_time >= start_dt,
         models.Appointment.schedule_time < end_exclusive
     ).all()
-    
+
     for appt in appointments:
         appt.therapist_id = req.cover_colleague_id
-        
+
     db.commit()
     return {"status": "success", "transferred_count": len(appointments)}
 
@@ -3044,7 +2926,7 @@ def get_student_rentals(student_id: int, db: Session = Depends(get_db)):
     ).filter(
         models.RentalRecord.student_id == student_id
     ).order_by(models.RentalRecord.collection_date.desc()).all()
-    
+
     result = []
     for r, eq_name, eq_image, reason_desc in rentals:
         result.append({
@@ -3101,7 +2983,7 @@ def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
             existing_log.status = "Completed"
             db.commit()
             return {"status": "success", "session_id": existing_log.schedule_id}
-            
+
     new_log = models.SessionLog(
         student_id=req.student_id,
         exercise_id=req.exercise_id,
@@ -3125,8 +3007,8 @@ def log_session(req: SessionLogRequest, db: Session = Depends(get_db)):
 
 @app.get("/students/{student_id}/progress")
 def get_student_progress(
-    student_id: int,
-    db: Session = Depends(get_db)
+        student_id: int,
+        db: Session = Depends(get_db)
 ):
     student = db.query(models.User).filter(models.User.user_id == student_id).first()
     if not student:
@@ -3150,7 +3032,7 @@ def get_student_progress(
     for root_id, appt_list in groups.items():
         chain = sorted(appt_list, key=lambda x: x.schedule_time)
         all_chains.append(chain)
-        
+
     chains = []
     for chain in all_chains:
         has_prescription = False
@@ -3168,7 +3050,7 @@ def get_student_progress(
 
     appointments_data = []
     exercise_assignments = {} # For all exercises
-    
+
     sessions = db.query(models.SessionLog).filter(
         models.SessionLog.student_id == student_id,
         models.SessionLog.status == "Completed"
@@ -3181,13 +3063,13 @@ def get_student_progress(
             models.Exercise.exercise_id.in_(session_exercise_ids)
         ).all()
     } if session_exercise_ids else {}
-    
+
     from datetime import datetime, timedelta
 
     for idx, chain in enumerate(chains):
         first_appt = chain[0]
         latest_appt = chain[-1]
-        
+
         chain_exercises = {}
         for appt in chain:
             prescribed_rows = db.query(models.PrescribedExercise, models.Exercise).join(
@@ -3208,10 +3090,10 @@ def get_student_progress(
                 }
                 chain_exercises[exercise.exercise_id] = ex_data
                 exercise_assignments[exercise.exercise_id] = ex_data
-                
+
         appt_exercises = list(chain_exercises.values())
         appt_assigned_exercise_ids = set(chain_exercises.keys())
-            
+
         triage_data = None
         subject = None
         for appt in chain:
@@ -3245,7 +3127,7 @@ def get_student_progress(
         total_seconds = sum(s.duration_seconds or 0 for s in appt_sessions)
         accuracy_values = [s.accuracy_score for s in appt_sessions if s.accuracy_score is not None]
         pain_changes = [s.pain_before - s.pain_after for s in appt_sessions if s.pain_before is not None and s.pain_after is not None]
-        
+
         session_days = sorted({(s.completion_date + timedelta(hours=8)).date() for s in appt_sessions if s.completion_date}, reverse=True)
         streak = 0
         if session_days:
@@ -3277,7 +3159,7 @@ def get_student_progress(
                 "session_count": len(day_sessions),
                 "duration_seconds": sum(s.duration_seconds or 0 for s in day_sessions)
             })
-            
+
         appt_recent = []
         for s in appt_sessions[:20]:
             ex_info = next((e for e in appt_exercises if e['exercise_id'] == s.exercise_id), {})
@@ -3325,9 +3207,9 @@ def get_student_progress(
         if assignment is None:
             return "Self-selected"
         if (
-            session.planned_sets is not None
-            and assignment["assigned_sets"] is not None
-            and session.planned_sets != assignment["assigned_sets"]
+                session.planned_sets is not None
+                and assignment["assigned_sets"] is not None
+                and session.planned_sets != assignment["assigned_sets"]
         ):
             return "Self-selected"
         return "Assigned"
@@ -3401,7 +3283,7 @@ def get_student_progress(
         exercise_sessions = [
             session for session in self_selected_sessions
             if session.exercise_id == exercise_id
-            and (session.purpose.strip() if session.purpose else "General rehabilitation") == purpose
+               and (session.purpose.strip() if session.purpose else "General rehabilitation") == purpose
         ]
         exercise_accuracy = [
             session.accuracy_score for session in exercise_sessions
