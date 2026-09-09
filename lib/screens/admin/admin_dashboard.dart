@@ -1,11 +1,11 @@
+import 'package:rehab_ai/services/cloud_request.dart';
+import 'package:rehab_ai/widgets/cloud_error_state.dart';
 import 'package:flutter/material.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:typed_data';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:rehab_ai/screens/auth/login_page.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import 'package:image_picker/image_picker.dart';
@@ -13,7 +13,6 @@ import 'dart:async';
 import 'package:rehab_ai/theme/rehab_theme.dart';
 import 'package:rehab_ai/widgets/portal_backdrop.dart';
 import 'package:rehab_ai/config/api_config.dart';
-
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -31,6 +30,11 @@ class _AdminDashboardState extends State<AdminDashboard> {
   List<dynamic> _equipment = [];
   List<dynamic> _physiotherapists = [];
   bool _isLoading = false;
+  bool _initializing = true;
+  String? _initError;
+  final Map<int, String> _loadErrors = {};
+  final Set<int> _loadingSections = {};
+  final Set<int> _backgroundSections = {};
   final ImagePicker _picker = ImagePicker();
   TextEditingController? _rentalSearchController = TextEditingController();
   String? _rentalSearch = '';
@@ -55,78 +59,91 @@ class _AdminDashboardState extends State<AdminDashboard> {
   }
 
   Future<void> _initDashboard() async {
-    final user = _supabase.auth.currentUser;
-    if (user == null) return;
-
-    final apiUrl = ApiConfig.baseUrl;
-    final userRes = await http.get(
-      Uri.parse('$apiUrl/users/profile/${user.id}'),
-    );
-
-    if (userRes.statusCode == 200) {
-      final userData = jsonDecode(userRes.body);
-      if (userData['exists'] == true) {
-        setState(() {
-          _myUserId = userData['user_id'];
-        });
-        _fetchRentals();
-        _fetchEquipment();
-        _fetchPhysiotherapists();
-      }
+    if (!mounted || (_initializing && _myUserId != null)) return;
+    setState(() {
+      _initializing = true;
+      _initError = null;
+    });
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) throw const CloudRequestException(401);
+      final response = await cloudGet(
+        Uri.parse('${ApiConfig.baseUrl}/users/profile/${user.id}'),
+      );
+      final profile = jsonDecode(response.body);
+      if (profile['exists'] != true) throw StateError('Profile unavailable');
+      if (!mounted) return;
+      setState(() => _myUserId = profile['user_id']);
+      await Future.wait([
+        _fetchRentals(),
+        _fetchEquipment(),
+        _fetchPhysiotherapists(),
+      ]);
+    } catch (error) {
+      if (mounted) setState(() => _initError = cloudErrorMessage(error));
+    } finally {
+      if (mounted) setState(() => _initializing = false);
     }
   }
 
-  Future<void> _fetchRentals({bool silent = false}) async {
-    if (!silent) setState(() => _isLoading = true);
+  Future<void> _fetchRentals({bool silent = false}) =>
+      _fetchSection(0, silent: silent);
+  Future<void> _fetchEquipment() => _fetchSection(1);
+  Future<void> _fetchPhysiotherapists() => _fetchSection(2);
+
+  Future<void> _fetchSection(int section, {bool silent = false}) async {
+    if (!mounted || _loadingSections.contains(section)) return;
+    setState(() {
+      _loadingSections.add(section);
+      if (silent) _backgroundSections.add(section);
+    });
     try {
-      final apiUrl = ApiConfig.baseUrl;
-      final res = await http.get(Uri.parse('$apiUrl/admin/rentals'));
-      if (res.statusCode == 200) {
-        if (mounted) {
-          setState(() {
-            _rentals = jsonDecode(res.body)['rentals'] ?? [];
-          });
-        }
-      }
-    } catch (e) {
-      debugPrint("Error fetching rentals: $e");
+      final paths = ['/admin/rentals', '/equipment', '/admin/physiotherapists'];
+      final keys = ['rentals', 'equipment', 'physiotherapists'];
+      final response = await cloudGet(
+        Uri.parse('${ApiConfig.baseUrl}${paths[section]}'),
+      );
+      final data = jsonDecode(response.body)[keys[section]] as List<dynamic>;
+      if (!mounted) return;
+      setState(() {
+        if (section == 0) _rentals = data;
+        if (section == 1) _equipment = data;
+        if (section == 2) _physiotherapists = data;
+        _loadErrors.remove(section);
+      });
+    } catch (error) {
+      if (mounted)
+        setState(() => _loadErrors[section] = cloudErrorMessage(error));
     } finally {
-      if (!silent && mounted) setState(() => _isLoading = false);
+      if (mounted)
+        setState(() {
+          _loadingSections.remove(section);
+          _backgroundSections.remove(section);
+        });
     }
   }
 
-  Future<void> _fetchEquipment() async {
-    setState(() => _isLoading = true);
-    try {
-      final apiUrl = ApiConfig.baseUrl;
-      final res = await http.get(Uri.parse('$apiUrl/equipment'));
-      if (res.statusCode == 200) {
-        setState(() {
-          _equipment = jsonDecode(res.body)['equipment'] ?? [];
-        });
-      }
-    } catch (e) {
-      debugPrint("Error fetching equipment: $e");
-    } finally {
-      setState(() => _isLoading = false);
+  Widget _buildSection() {
+    if (_initializing) return const Center(child: CircularProgressIndicator());
+    if (_initError != null) {
+      return CloudErrorState(message: _initError!, onRetry: _initDashboard);
     }
-  }
-
-  Future<void> _fetchPhysiotherapists() async {
-    setState(() => _isLoading = true);
-    try {
-      final apiUrl = ApiConfig.baseUrl;
-      final res = await http.get(Uri.parse('$apiUrl/admin/physiotherapists'));
-      if (res.statusCode == 200) {
-        setState(() {
-          _physiotherapists = jsonDecode(res.body)['physiotherapists'] ?? [];
-        });
-      }
-    } catch (e) {
-      debugPrint("Error fetching physiotherapists: $e");
-    } finally {
-      setState(() => _isLoading = false);
+    if (_loadingSections.contains(_selectedIndex) &&
+        !_backgroundSections.contains(_selectedIndex)) {
+      return const Center(child: CircularProgressIndicator());
     }
+    final error = _loadErrors[_selectedIndex];
+    if (error != null) {
+      return CloudErrorState(
+        message: error,
+        onRetry: () => _fetchSection(_selectedIndex),
+      );
+    }
+    return switch (_selectedIndex) {
+      0 => _buildActiveRentals(),
+      1 => _buildInventory(),
+      _ => _buildPhysiotherapists(),
+    };
   }
 
   Future<void> _updateRentalStatus(
@@ -1128,9 +1145,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                                         },
                                         child: const Text(
                                           'Activate',
-                                          style: TextStyle(
-                                            color: Colors.green,
-                                          ),
+                                          style: TextStyle(color: Colors.green),
                                         ),
                                       ),
                                     ],
@@ -1436,7 +1451,13 @@ class _AdminDashboardState extends State<AdminDashboard> {
                   ),
                   const Spacer(),
                   if (!compactNavigation)
-                    const PortalSystemStatus(label: 'Operations network online')
+                    PortalSystemStatus(
+                      label: _initError != null || _loadErrors.isNotEmpty
+                          ? 'Data unavailable'
+                          : _initializing
+                          ? 'Loading cloud data'
+                          : 'Admin dashboard',
+                    )
                   else
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 12),
@@ -1540,14 +1561,23 @@ class _AdminDashboardState extends State<AdminDashboard> {
                           PortalMetric(
                             icon: Icons.local_shipping_outlined,
                             value:
-                                '${_rentals.where((r) => r['status'] == 'Approved' || r['status'] == 'Active').length}',
+                                _initError != null ||
+                                    _loadErrors.containsKey(0) ||
+                                    _initializing
+                                ? '--'
+                                : '${_rentals.where((r) => r['status'] == 'Approved' || r['status'] == 'Active').length}',
                             label: 'ACTIVE RENTALS',
                             accent: RehabColors.purple,
                           ),
                           const SizedBox(width: 8),
                           PortalMetric(
                             icon: Icons.inventory_2_outlined,
-                            value: '${_equipment.length}',
+                            value:
+                                _initError != null ||
+                                    _loadErrors.containsKey(1) ||
+                                    _initializing
+                                ? '--'
+                                : '${_equipment.length}',
                             label: 'ASSET TYPES',
                             accent: RehabColors.cyan,
                           ),
@@ -1555,11 +1585,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         const SizedBox(width: 10),
                         IconButton.filledTonal(
                           tooltip: 'Refresh data',
-                          onPressed: () {
-                            _fetchRentals();
-                            _fetchEquipment();
-                            _fetchPhysiotherapists();
-                          },
+                          onPressed: _initializing ? null : _initDashboard,
                           icon: const Icon(Icons.refresh_rounded),
                         ),
                         const SizedBox(width: 10),
@@ -1605,11 +1631,7 @@ class _AdminDashboardState extends State<AdminDashboard> {
                         borderRadius: BorderRadius.circular(24),
                         child: ColoredBox(
                           color: Colors.white,
-                          child: _selectedIndex == 0
-                              ? _buildActiveRentals()
-                              : _selectedIndex == 1
-                              ? _buildInventory()
-                              : _buildPhysiotherapists(),
+                          child: _buildSection(),
                         ),
                       ),
                     ),

@@ -1,11 +1,11 @@
+import 'package:rehab_ai/services/cloud_request.dart';
+import 'package:rehab_ai/widgets/cloud_error_state.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:rehab_ai/screens/auth/login_page.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/screens/physiotherapist/record_session_dialog.dart';
 import 'package:rehab_ai/screens/physiotherapist/physio_progress_tab.dart';
@@ -41,6 +41,10 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
   bool _notificationsInitialized = false;
   bool _notificationFetchInProgress = false;
   int _pageRefreshVersion = 0;
+  String? _initError;
+  String? _notificationError;
+  bool _initializing = false;
+  bool _checkingAccount = false;
 
   @override
   void initState() {
@@ -49,48 +53,65 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
   }
 
   Future<void> _initDashboard() async {
-    final user = _supabase.auth.currentUser;
-    if (user == null) return;
+    if (_initializing || !mounted) return;
+    setState(() {
+      _initializing = true;
+      _initError = null;
+    });
+    try {
+      final user = _supabase.auth.currentUser;
+      if (user == null) throw const CloudRequestException(401);
 
-    final apiUrl = ApiConfig.baseUrl;
-    final userRes = await http.get(
-      Uri.parse('$apiUrl/users/profile/${user.id}'),
-    );
+      final apiUrl = ApiConfig.baseUrl;
+      final userRes = await cloudGet(
+        Uri.parse('$apiUrl/users/profile/${user.id}'),
+      );
 
-    if (userRes.statusCode == 200) {
-      final userData = jsonDecode(userRes.body);
-      if (userData['exists'] == true) {
-        if (userData['is_active'] == false) {
-          await _signOutDeactivatedAccount();
-          return;
+      if (userRes.statusCode == 200) {
+        final userData = jsonDecode(userRes.body);
+        if (userData['exists'] != true) throw StateError('Profile unavailable');
+        if (userData['exists'] == true) {
+          if (!mounted) return;
+          if (userData['is_active'] == false) {
+            await _signOutDeactivatedAccount();
+            return;
+          }
+          setState(() {
+            _myUserId = userData['user_id'];
+            _myUsername = userData['username'];
+          });
+          await _resolveProfilePicture(userData['profile_picture']?.toString());
+          if (!mounted) return;
+          _fetchAssignedSessions();
+          if (_globalNotificationSub == null) _setupGlobalNotifications();
+          _fetchPhysioNotifications();
+          _notificationTimer?.cancel();
+          _accountStatusTimer?.cancel();
+          _notificationTimer = Timer.periodic(
+            const Duration(seconds: 1),
+            (_) => _fetchPhysioNotifications(),
+          );
+          _accountStatusTimer = Timer.periodic(
+            const Duration(seconds: 5),
+            (_) => _checkAccountStatus(),
+          );
         }
-        setState(() {
-          _myUserId = userData['user_id'];
-          _myUsername = userData['username'];
-        });
-        await _resolveProfilePicture(userData['profile_picture']?.toString());
-        _fetchAssignedSessions();
-        _setupGlobalNotifications();
-        _fetchPhysioNotifications();
-        _notificationTimer = Timer.periodic(
-          const Duration(seconds: 1),
-          (_) => _fetchPhysioNotifications(),
-        );
-        _accountStatusTimer = Timer.periodic(
-          const Duration(seconds: 5),
-          (_) => _checkAccountStatus(),
-        );
       }
+    } catch (error) {
+      if (mounted) setState(() => _initError = cloudErrorMessage(error));
+    } finally {
+      if (mounted) setState(() => _initializing = false);
     }
   }
 
   Future<void> _checkAccountStatus() async {
-    if (_signingOutDeactivatedAccount) return;
+    if (_signingOutDeactivatedAccount || _checkingAccount) return;
     final user = _supabase.auth.currentUser;
     if (user == null) return;
+    _checkingAccount = true;
     try {
       final apiUrl = ApiConfig.baseUrl;
-      final response = await http.get(
+      final response = await cloudGet(
         Uri.parse('$apiUrl/users/profile/${user.id}'),
       );
       if (response.statusCode != 200) return;
@@ -100,6 +121,8 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
       }
     } catch (error) {
       debugPrint('Account status check failed: $error');
+    } finally {
+      _checkingAccount = false;
     }
   }
 
@@ -133,7 +156,8 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
           ? value
           : await _supabase.storage
                 .from('profile_picture')
-                .createSignedUrl(value, 60 * 60);
+                .createSignedUrl(value, 60 * 60)
+                .timeout(const Duration(seconds: 15));
       if (mounted) setState(() => _myProfilePicUrl = url);
     } catch (error) {
       debugPrint('Unable to load profile picture: $error');
@@ -144,9 +168,10 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
   Future<void> _fetchAssignedSessions() async {
     try {
       final apiUrl = ApiConfig.baseUrl;
-      final res = await http.get(Uri.parse('$apiUrl/physio/chats/$_myUserId'));
+      final res = await cloudGet(Uri.parse('$apiUrl/physio/chats/$_myUserId'));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
+        if (!mounted) return;
         setState(() {
           _assignedSessionIds = (data['chats'] as List)
               .map((c) => c['session_id'] as int)
@@ -248,7 +273,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
     _notificationFetchInProgress = true;
     try {
       final apiUrl = ApiConfig.baseUrl;
-      final response = await http.get(
+      final response = await cloudGet(
         Uri.parse('$apiUrl/physio/$_myUserId/notifications'),
       );
       if (response.statusCode == 403) {
@@ -281,6 +306,7 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
         );
         setState(() {
           _notifications = fetched;
+          _notificationError = null;
           _unreadChats = unreadChatIds;
           _knownNotificationIds = fetchedIds;
           _notificationsInitialized = true;
@@ -304,6 +330,8 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
       }
     } catch (error) {
       debugPrint('Unable to fetch physiotherapist notifications: $error');
+      if (mounted)
+        setState(() => _notificationError = cloudErrorMessage(error));
     } finally {
       _notificationFetchInProgress = false;
     }
@@ -441,7 +469,11 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
                     ),
                   ),
                   if (!compactNavigation)
-                    const PortalSystemStatus(label: 'Clinical network online')
+                    PortalSystemStatus(
+                      label: _initError != null || _notificationError != null
+                          ? 'Data unavailable'
+                          : 'Clinical dashboard',
+                    )
                   else
                     const Padding(
                       padding: EdgeInsets.symmetric(vertical: 12),
@@ -760,6 +792,33 @@ class _PhysioDashboardState extends State<PhysioDashboard> {
   }
 
   Widget _buildMainContent() {
+    return Column(
+      children: [
+        if (_notificationError != null && _initError == null)
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Row(
+              children: [
+                const Icon(Icons.cloud_off),
+                const SizedBox(width: 8),
+                Expanded(child: Text('Notifications: $_notificationError')),
+                TextButton(
+                  onPressed: () =>
+                      _fetchPhysioNotifications(showSnackBar: false),
+                  child: const Text('Retry'),
+                ),
+              ],
+            ),
+          ),
+        Expanded(child: _buildTabContent()),
+      ],
+    );
+  }
+
+  Widget _buildTabContent() {
+    if (_initializing) return const Center(child: CircularProgressIndicator());
+    if (_initError != null)
+      return CloudErrorState(message: _initError!, onRetry: _initDashboard);
     if (_myUserId == null) {
       return const Center(child: CircularProgressIndicator());
     }
@@ -831,8 +890,10 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
   final _supabase = Supabase.instance.client;
   List<dynamic> _chats = [];
   bool _isLoading = true;
+  String? _loadError;
   Map<String, dynamic>? _selectedChat;
   Timer? _refreshTimer;
+  bool _chatFetchInProgress = false;
 
   @override
   void initState() {
@@ -845,17 +906,25 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
   }
 
   Future<void> _fetchChats({bool isBackground = false}) async {
-    if (!isBackground) setState(() => _isLoading = true);
+    if (_chatFetchInProgress || !mounted) return;
+    _chatFetchInProgress = true;
+    if (!isBackground)
+      setState(() {
+        _isLoading = true;
+        _loadError = null;
+      });
     try {
       final apiUrl = ApiConfig.baseUrl;
-      final res = await http.get(
+      final res = await cloudGet(
         Uri.parse('$apiUrl/physio/chats/${widget.myUserId}'),
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
         if (mounted) {
+          if (!mounted) return;
           setState(() {
             _chats = data['chats'] ?? [];
+            _loadError = null;
             // Update selected chat if it was modified
             if (_selectedChat != null) {
               final updated = _chats
@@ -867,8 +936,10 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
         }
       }
     } catch (e) {
+      if (mounted) setState(() => _loadError = cloudErrorMessage(e));
       debugPrint("Error fetching chats: $e");
     } finally {
+      _chatFetchInProgress = false;
       if (!isBackground && mounted) setState(() => _isLoading = false);
     }
   }
@@ -938,6 +1009,11 @@ class _PhysioLiveChatTabState extends State<PhysioLiveChatTab> {
               Expanded(
                 child: _isLoading
                     ? const Center(child: CircularProgressIndicator())
+                    : _loadError != null
+                    ? CloudErrorState(
+                        message: _loadError!,
+                        onRetry: _fetchChats,
+                      )
                     : _chats.isEmpty
                     ? const Center(
                         child: Text(
@@ -1119,6 +1195,7 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
   List<dynamic> _messages = [];
   RealtimeChannel? _subscription;
   bool _isLoading = true;
+  String? _loadError;
 
   void _scrollToBottom() {
     Future.delayed(const Duration(milliseconds: 100), () {
@@ -1146,41 +1223,57 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
     }
   }
 
-  Future<void> _loadMessagesAndSubscribe() async {
-    setState(() => _isLoading = true);
-    if (_subscription != null) await _supabase.removeChannel(_subscription!);
+  int _historyRequest = 0;
+  bool _sending = false;
 
+  Future<void> _loadMessagesAndSubscribe() async {
+    final request = ++_historyRequest;
+    final sessionId = widget.sessionId;
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     try {
+      if (_subscription != null) {
+        final channel = _subscription!;
+        _subscription = null;
+        await _supabase.removeChannel(channel);
+      }
       final res = await _supabase
           .from('Chat_Log')
           .select()
-          .eq('session_id', widget.sessionId)
-          .order('timestamp', ascending: true);
+          .eq('session_id', sessionId)
+          .order('timestamp', ascending: true)
+          .timeout(const Duration(seconds: 15));
+      if (!mounted || request != _historyRequest) return;
       setState(() => _messages = List<dynamic>.from(res));
       _scrollToBottom();
-    } catch (e) {
-      debugPrint("Error loading messages: $e");
+      _subscription = _supabase
+          .channel('public:Chat_Log:session_$sessionId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'Chat_Log',
+            filter: PostgresChangeFilter(
+              type: PostgresChangeFilterType.eq,
+              column: 'session_id',
+              value: sessionId,
+            ),
+            callback: (payload) {
+              if (!mounted || request != _historyRequest) return;
+              setState(() => _messages.add(payload.newRecord));
+              _scrollToBottom();
+            },
+          )
+          .subscribe();
+    } catch (error) {
+      if (mounted && request == _historyRequest) {
+        setState(() => _loadError = cloudErrorMessage(error));
+      }
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted && request == _historyRequest)
+        setState(() => _isLoading = false);
     }
-
-    _subscription = _supabase
-        .channel('public:Chat_Log:session_${widget.sessionId}')
-        .onPostgresChanges(
-          event: PostgresChangeEvent.insert,
-          schema: 'public',
-          table: 'Chat_Log',
-          filter: PostgresChangeFilter(
-            type: PostgresChangeFilterType.eq,
-            column: 'session_id',
-            value: widget.sessionId,
-          ),
-          callback: (payload) {
-            setState(() => _messages.add(payload.newRecord));
-            _scrollToBottom();
-          },
-        )
-        .subscribe();
   }
 
   Future<void> _startTeleconference() async {
@@ -1227,24 +1320,41 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
   }
 
   Future<void> _sendMessage() async {
-    if (widget.isClosed) return;
+    if (widget.isClosed || _sending || _isLoading || _loadError != null) return;
     final text = _messageController.text.trim();
     if (text.isEmpty) return;
     _messageController.clear();
+    setState(() => _sending = true);
     try {
       final apiUrl = ApiConfig.baseUrl;
-      await http.post(
-        Uri.parse('$apiUrl/chat/send'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          "session_id": widget.sessionId,
-          "user_id": widget.myUserId,
-          "message": text,
-        }),
-      );
+      final response = await http
+          .post(
+            Uri.parse('$apiUrl/chat/send'),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              "session_id": widget.sessionId,
+              "user_id": widget.myUserId,
+              "message": text,
+            }),
+          )
+          .timeout(const Duration(seconds: 30));
+      if (response.statusCode < 200 || response.statusCode >= 300)
+        throw CloudRequestException(response.statusCode);
       _scrollToBottom();
     } catch (e) {
       debugPrint("Error sending message: $e");
+      if (mounted) {
+        if (_messageController.text.isEmpty) _messageController.text = text;
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'Message delivery could not be confirmed. Check your connection and chat before sending again.',
+            ),
+          ),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
     }
   }
 
@@ -1391,6 +1501,11 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
         Expanded(
           child: _isLoading
               ? const Center(child: CircularProgressIndicator())
+              : _loadError != null
+              ? CloudErrorState(
+                  message: _loadError!,
+                  onRetry: _loadMessagesAndSubscribe,
+                )
               : ListView.builder(
                   controller: _scrollController,
                   padding: const EdgeInsets.all(16),
@@ -1492,7 +1607,9 @@ class _PhysioChatInterfaceState extends State<PhysioChatInterface> {
                 ),
                 const SizedBox(width: 8),
                 FloatingActionButton(
-                  onPressed: _sendMessage,
+                  onPressed: _sending || _isLoading || _loadError != null
+                      ? null
+                      : _sendMessage,
                   backgroundColor: Colors.blue[800],
                   elevation: 0,
                   child: const Icon(Icons.send, color: Colors.white),
@@ -1530,6 +1647,7 @@ class PhysioPatientsTab extends StatefulWidget {
 class _PhysioPatientsTabState extends State<PhysioPatientsTab> {
   List<dynamic> _patients = [];
   bool _isLoading = true;
+  String? _loadError;
 
   @override
   void initState() {
@@ -1538,25 +1656,33 @@ class _PhysioPatientsTabState extends State<PhysioPatientsTab> {
   }
 
   Future<void> _fetchPatients() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     try {
       final apiUrl = ApiConfig.baseUrl;
-      final res = await http.get(
+      final res = await cloudGet(
         Uri.parse('$apiUrl/physio/patients/${widget.myUserId}'),
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
+        if (!mounted) return;
         setState(() => _patients = data['patients'] ?? []);
       }
     } catch (e) {
+      if (mounted) setState(() => _loadError = cloudErrorMessage(e));
       debugPrint("Error fetching patients: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    if (!_isLoading && _loadError != null) {
+      return CloudErrorState(message: _loadError!, onRetry: _fetchPatients);
+    }
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_patients.isEmpty)
       return const Center(child: Text("No patients assigned."));
@@ -1665,6 +1791,7 @@ class PhysioAppointmentsTab extends StatefulWidget {
 class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
   List<dynamic> _appointments = [];
   bool _isLoading = true;
+  String? _loadError;
   final TextEditingController _searchController = TextEditingController();
   String _searchTerm = '';
 
@@ -1704,20 +1831,25 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
   }
 
   Future<void> _fetchAppointments() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     try {
       final apiUrl = ApiConfig.baseUrl;
-      final res = await http.get(
+      final res = await cloudGet(
         Uri.parse('$apiUrl/physio/appointments/${widget.myUserId}'),
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
+        if (!mounted) return;
         setState(() => _appointments = data['appointments'] ?? []);
       }
     } catch (e) {
+      if (mounted) setState(() => _loadError = cloudErrorMessage(e));
       debugPrint("Error fetching appointments: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -1755,7 +1887,7 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
 
     try {
       final apiUrl = ApiConfig.baseUrl;
-      final res = await http.get(
+      final res = await cloudGet(
         Uri.parse('$apiUrl/physiotherapists/colleagues/${widget.myUserId}'),
       );
 
@@ -1867,6 +1999,10 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
     } catch (e) {
       if (mounted) Navigator.pop(context); // Pop loading dialog on error
       debugPrint("Error fetching colleagues: $e");
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(cloudErrorMessage(e))));
     }
   }
 
@@ -1878,7 +2014,7 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
 
     final apiUrl = ApiConfig.baseUrl;
     try {
-      final leaveResponse = await http.get(
+      final leaveResponse = await cloudGet(
         Uri.parse('$apiUrl/physio/leave/${widget.myUserId}'),
       );
       if (leaveResponse.statusCode == 200) {
@@ -1911,6 +2047,11 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
       }
     } catch (e) {
       debugPrint('Unable to load previous unavailable dates: $e');
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(cloudErrorMessage(e))));
+      return;
     }
 
     if (!mounted) return;
@@ -1957,7 +2098,7 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
     );
 
     try {
-      final res = await http.get(
+      final res = await cloudGet(
         Uri.parse('$apiUrl/physiotherapists/colleagues/${widget.myUserId}'),
       );
 
@@ -2075,6 +2216,10 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
     } catch (e) {
       if (mounted) Navigator.pop(context);
       debugPrint("Error: $e");
+      if (mounted)
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(cloudErrorMessage(e))));
     }
   }
 
@@ -2404,6 +2549,9 @@ class _PhysioAppointmentsTabState extends State<PhysioAppointmentsTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isLoading && _loadError != null) {
+      return CloudErrorState(message: _loadError!, onRetry: _fetchAppointments);
+    }
     if (_isLoading) return const Center(child: CircularProgressIndicator());
 
     return Padding(
@@ -2705,6 +2853,7 @@ class PhysioRentalsTab extends StatefulWidget {
 class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
   List<dynamic> _rentals = [];
   bool _isLoading = true;
+  String? _loadError;
 
   @override
   void initState() {
@@ -2713,20 +2862,25 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
   }
 
   Future<void> _fetchRentals() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     try {
       final apiUrl = ApiConfig.baseUrl;
-      final res = await http.get(
+      final res = await cloudGet(
         Uri.parse('$apiUrl/physio/rentals/${widget.myUserId}'),
       );
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
+        if (!mounted) return;
         setState(() => _rentals = data['rentals'] ?? []);
       }
     } catch (e) {
+      if (mounted) setState(() => _loadError = cloudErrorMessage(e));
       debugPrint("Error fetching rentals: $e");
     } finally {
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -2765,6 +2919,9 @@ class _PhysioRentalsTabState extends State<PhysioRentalsTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isLoading && _loadError != null) {
+      return CloudErrorState(message: _loadError!, onRetry: _fetchRentals);
+    }
     if (_isLoading) return const Center(child: CircularProgressIndicator());
     if (_rentals.isEmpty)
       return const Center(child: Text("No equipment rentals found."));
@@ -2999,6 +3156,7 @@ class PhysioProfileTab extends StatefulWidget {
 class _PhysioProfileTabState extends State<PhysioProfileTab> {
   static const _profilePictureBucket = 'profile_picture';
   bool _isLoading = true;
+  String? _loadError;
   bool _isUploadingPicture = false;
   Map<String, dynamic>? _profileData;
   String? _resolvedProfilePictureUrl;
@@ -3015,20 +3173,25 @@ class _PhysioProfileTabState extends State<PhysioProfileTab> {
   String get _apiUrl => ApiConfig.baseUrl;
 
   Future<void> _fetchProfile() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     try {
       final user = Supabase.instance.client.auth.currentUser;
       if (user == null) {
-        setState(() => _isLoading = false);
+        if (mounted) setState(() => _isLoading = false);
         return;
       }
 
-      final response = await http.get(
+      final response = await cloudGet(
         Uri.parse('$_apiUrl/users/profile/${user.id}'),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['exists'] == true) {
+          if (!mounted) return;
           setState(() {
             _profileData = data;
           });
@@ -3036,6 +3199,7 @@ class _PhysioProfileTabState extends State<PhysioProfileTab> {
         }
       }
     } catch (e) {
+      if (mounted) setState(() => _loadError = cloudErrorMessage(e));
       debugPrint("Error fetching profile: $e");
     } finally {
       if (mounted) {
@@ -3055,7 +3219,8 @@ class _PhysioProfileTabState extends State<PhysioProfileTab> {
           ? value
           : await Supabase.instance.client.storage
                 .from(_profilePictureBucket)
-                .createSignedUrl(value, 60 * 60);
+                .createSignedUrl(value, 60 * 60)
+                .timeout(const Duration(seconds: 15));
       if (mounted) setState(() => _resolvedProfilePictureUrl = url);
     } catch (error) {
       debugPrint('Unable to load profile picture: $error');
@@ -3157,6 +3322,9 @@ class _PhysioProfileTabState extends State<PhysioProfileTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isLoading && _loadError != null) {
+      return CloudErrorState(message: _loadError!, onRetry: _fetchProfile);
+    }
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
     }

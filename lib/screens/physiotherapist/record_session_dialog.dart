@@ -1,8 +1,8 @@
+import 'package:rehab_ai/services/cloud_request.dart';
+import 'package:rehab_ai/widgets/cloud_error_state.dart';
 import 'dart:convert';
 import 'package:flutter/material.dart';
-import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:rehab_ai/config/api_config.dart';
 
@@ -29,6 +29,7 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
   List<dynamic> _availableExercises = [];
   final List<Map<String, dynamic>> _selectedExercises = [];
   bool _isLoading = true;
+  String? _loadError;
   bool _isSubmitting = false;
   bool _scheduleNextAppointment = false;
   DateTime? _nextAppointmentDate;
@@ -41,11 +42,16 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
   }
 
   Future<void> _fetchExercises() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     try {
       final apiUrl = ApiConfig.baseUrl;
-      final res = await http.get(Uri.parse('$apiUrl/exercises'));
+      final res = await cloudGet(Uri.parse('$apiUrl/exercises'));
       if (res.statusCode == 200) {
         final data = jsonDecode(res.body);
+        if (!mounted) return;
         setState(() {
           _availableExercises = data['exercises'] ?? [];
           _isLoading = false;
@@ -53,7 +59,9 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
       }
     } catch (e) {
       debugPrint("Error fetching exercises: $e");
-      setState(() => _isLoading = false);
+      if (mounted) setState(() => _loadError = cloudErrorMessage(e));
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -75,7 +83,9 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
   Future<void> _submitSession() async {
     if (_prescriptionController.text.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Please enter a rehab prescription/diagnosis.')),
+        const SnackBar(
+          content: Text('Please enter a rehab prescription/diagnosis.'),
+        ),
       );
       return;
     }
@@ -101,7 +111,9 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
       if (_nextAppointmentDate == null || _nextAppointmentTime == null) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('Please select a date and time for the follow-up appointment.'),
+            content: Text(
+              'Please select a date and time for the follow-up appointment.',
+            ),
           ),
         );
         return;
@@ -116,7 +128,9 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
       if (nextDt.isBefore(DateTime.now())) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
-            content: Text('The follow-up appointment date and time must be in the future.'),
+            content: Text(
+              'The follow-up appointment date and time must be in the future.',
+            ),
           ),
         );
         return;
@@ -126,7 +140,7 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
     setState(() => _isSubmitting = true);
     try {
       final apiUrl = ApiConfig.baseUrl;
-      
+
       final payload = {
         "prescription": _prescriptionController.text,
         "evaluation": _evaluationController.text.isNotEmpty
@@ -134,7 +148,9 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
             : null,
         "exercises": _selectedExercises,
         if (widget.chatSessionId != null) "physio_id": widget.physioId,
-        if (_scheduleNextAppointment && _nextAppointmentDate != null && _nextAppointmentTime != null)
+        if (_scheduleNextAppointment &&
+            _nextAppointmentDate != null &&
+            _nextAppointmentTime != null)
           "next_appointment_time": DateTime(
             _nextAppointmentDate!.year,
             _nextAppointmentDate!.month,
@@ -189,6 +205,24 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
 
   @override
   Widget build(BuildContext context) {
+    if (!_isLoading && _loadError != null) {
+      return AlertDialog(
+        content: SizedBox(
+          width: 400,
+          height: 260,
+          child: CloudErrorState(
+            message: _loadError!,
+            onRetry: _fetchExercises,
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Close'),
+          ),
+        ],
+      );
+    }
     if (_isLoading) {
       return const AlertDialog(
         content: SizedBox(
@@ -272,7 +306,10 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                             children: [
                               Row(
                                 children: [
-                                  Icon(Icons.calendar_today_outlined, color: Colors.blue.shade800),
+                                  Icon(
+                                    Icons.calendar_today_outlined,
+                                    color: Colors.blue.shade800,
+                                  ),
                                   const SizedBox(width: 8),
                                   Text(
                                     "Schedule Follow-up",
@@ -304,9 +341,15 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                                     onPressed: () async {
                                       final picked = await showDatePicker(
                                         context: context,
-                                        initialDate: _nextAppointmentDate ?? DateTime.now().add(const Duration(days: 7)),
+                                        initialDate:
+                                            _nextAppointmentDate ??
+                                            DateTime.now().add(
+                                              const Duration(days: 7),
+                                            ),
                                         firstDate: DateTime.now(),
-                                        lastDate: DateTime.now().add(const Duration(days: 365)),
+                                        lastDate: DateTime.now().add(
+                                          const Duration(days: 365),
+                                        ),
                                         builder: (context, child) {
                                           return Theme(
                                             data: Theme.of(context).copyWith(
@@ -321,7 +364,9 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                                         },
                                       );
                                       if (picked != null) {
-                                        setState(() => _nextAppointmentDate = picked);
+                                        setState(
+                                          () => _nextAppointmentDate = picked,
+                                        );
                                       }
                                     },
                                     icon: const Icon(Icons.date_range),
@@ -331,8 +376,12 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                                           : "${_nextAppointmentDate!.year}-${_nextAppointmentDate!.month.toString().padLeft(2, '0')}-${_nextAppointmentDate!.day.toString().padLeft(2, '0')}",
                                     ),
                                     style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
-                                      side: BorderSide(color: Colors.blue.shade200),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                      side: BorderSide(
+                                        color: Colors.blue.shade200,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -342,7 +391,12 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                                     onPressed: () async {
                                       final picked = await showTimePicker(
                                         context: context,
-                                        initialTime: _nextAppointmentTime ?? const TimeOfDay(hour: 10, minute: 0),
+                                        initialTime:
+                                            _nextAppointmentTime ??
+                                            const TimeOfDay(
+                                              hour: 10,
+                                              minute: 0,
+                                            ),
                                         builder: (context, child) {
                                           return Theme(
                                             data: Theme.of(context).copyWith(
@@ -357,18 +411,26 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                                         },
                                       );
                                       if (picked != null) {
-                                        setState(() => _nextAppointmentTime = picked);
+                                        setState(
+                                          () => _nextAppointmentTime = picked,
+                                        );
                                       }
                                     },
                                     icon: const Icon(Icons.access_time),
                                     label: Text(
                                       _nextAppointmentTime == null
                                           ? "Select Time"
-                                          : _nextAppointmentTime!.format(context),
+                                          : _nextAppointmentTime!.format(
+                                              context,
+                                            ),
                                     ),
                                     style: OutlinedButton.styleFrom(
-                                      padding: const EdgeInsets.symmetric(vertical: 16),
-                                      side: BorderSide(color: Colors.blue.shade200),
+                                      padding: const EdgeInsets.symmetric(
+                                        vertical: 16,
+                                      ),
+                                      side: BorderSide(
+                                        color: Colors.blue.shade200,
+                                      ),
                                     ),
                                   ),
                                 ),
@@ -434,11 +496,15 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                                             decoration: const InputDecoration(
                                               labelText: 'Search Exercise...',
                                               isDense: true,
-                                              prefixIcon: Icon(Icons.search, size: 18),
+                                              prefixIcon: Icon(
+                                                Icons.search,
+                                                size: 18,
+                                              ),
                                             ),
                                             onChanged: (val) {
                                               setState(() {
-                                                _selectedExercises[index]['search_query'] = val;
+                                                _selectedExercises[index]['search_query'] =
+                                                    val;
                                               });
                                             },
                                           ),
@@ -450,19 +516,33 @@ class _RecordSessionDialogState extends State<RecordSessionDialog> {
                                               isDense: true,
                                             ),
                                             initialValue: ex['exercise_id'],
-                                            items: _availableExercises.where((a) {
-                                              final query = (ex['search_query']?.toString() ?? '').toLowerCase();
-                                              final isSelected = a['exercise_id'] == ex['exercise_id'];
-                                              final name = (a['name'] ?? '').toString().toLowerCase();
-                                              return isSelected || name.contains(query);
-                                            }).map<DropdownMenuItem<int>>((a) {
-                                              return DropdownMenuItem<int>(
-                                                value: a['exercise_id'],
-                                                child: Text(
-                                                  a['name'] ?? 'Unknown',
-                                                ),
-                                              );
-                                            }).toList(),
+                                            items: _availableExercises
+                                                .where((a) {
+                                                  final query =
+                                                      (ex['search_query']
+                                                                  ?.toString() ??
+                                                              '')
+                                                          .toLowerCase();
+                                                  final isSelected =
+                                                      a['exercise_id'] ==
+                                                      ex['exercise_id'];
+                                                  final name = (a['name'] ?? '')
+                                                      .toString()
+                                                      .toLowerCase();
+                                                  return isSelected ||
+                                                      name.contains(query);
+                                                })
+                                                .map<DropdownMenuItem<int>>((
+                                                  a,
+                                                ) {
+                                                  return DropdownMenuItem<int>(
+                                                    value: a['exercise_id'],
+                                                    child: Text(
+                                                      a['name'] ?? 'Unknown',
+                                                    ),
+                                                  );
+                                                })
+                                                .toList(),
                                             onChanged: (val) {
                                               setState(() {
                                                 _selectedExercises[index]['exercise_id'] =

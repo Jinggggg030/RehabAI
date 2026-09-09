@@ -1,10 +1,9 @@
+import 'package:rehab_ai/services/cloud_request.dart';
+import 'package:rehab_ai/widgets/cloud_error_state.dart';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:intl/intl.dart';
 import 'package:rehab_ai/screens/physiotherapist/student_profile_dialog.dart';
@@ -31,6 +30,7 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
   bool _loadingProgress = false;
   String _searchTerm = '';
   String? _error;
+  String? _patientsError;
   int? _selectedAppointmentId;
 
   @override
@@ -50,10 +50,11 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
   Future<void> _fetchPatients() async {
     setState(() {
       _loadingPatients = true;
+      _patientsError = null;
       _error = null;
     });
     try {
-      final response = await http.get(
+      final response = await cloudGet(
         Uri.parse('$_apiUrl/physio/patients/${widget.physioId}'),
       );
       if (response.statusCode != 200) {
@@ -81,7 +82,7 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
       if (!mounted) return;
       setState(() {
         _loadingPatients = false;
-        _error = 'Unable to load assigned patients.';
+        _patientsError = cloudErrorMessage(error);
       });
       debugPrint('Physio patient progress error: $error');
     }
@@ -95,7 +96,7 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
       _error = null;
     });
     try {
-      final response = await http.get(
+      final response = await cloudGet(
         Uri.parse(
           '$_apiUrl/physio/${widget.physioId}/patients/'
           '${patient['student_id']}/progress',
@@ -119,10 +120,11 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
         _loadingProgress = false;
       });
     } catch (error) {
-      if (!mounted) return;
+      if (!mounted || _selectedPatient?['student_id'] != patient['student_id'])
+        return;
       setState(() {
         _loadingProgress = false;
-        _error = 'Unable to load progress for this patient.';
+        _error = cloudErrorMessage(error);
       });
       debugPrint('Patient analysis error: $error');
     }
@@ -139,6 +141,10 @@ class _PhysioProgressTabState extends State<PhysioProgressTab> {
 
   @override
   Widget build(BuildContext context) {
+    if (_loadingPatients)
+      return const Center(child: CircularProgressIndicator());
+    if (_patientsError != null)
+      return CloudErrorState(message: _patientsError!, onRetry: _fetchPatients);
     final compact = MediaQuery.sizeOf(context).width < 1400;
     return Row(
       children: [

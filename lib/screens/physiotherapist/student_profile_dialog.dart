@@ -1,10 +1,9 @@
+import 'package:rehab_ai/services/cloud_request.dart';
+import 'package:rehab_ai/widgets/cloud_error_state.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:http/http.dart' as http;
 import 'dart:convert';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:rehab_ai/config/api_config.dart';
 
 class StudentProfileDialog extends StatefulWidget {
@@ -18,6 +17,7 @@ class StudentProfileDialog extends StatefulWidget {
 
 class _StudentProfileDialogState extends State<StudentProfileDialog> {
   bool _isLoading = true;
+  String? _loadError;
   Map<String, dynamic>? _profileData;
   String? _resolvedProfilePictureUrl;
 
@@ -32,14 +32,19 @@ class _StudentProfileDialogState extends State<StudentProfileDialog> {
   String get _apiUrl => ApiConfig.baseUrl;
 
   Future<void> _fetchProfile() async {
+    setState(() {
+      _isLoading = true;
+      _loadError = null;
+    });
     try {
-      final response = await http.get(
+      final response = await cloudGet(
         Uri.parse('$_apiUrl/users/profile/${widget.studentId}'),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['exists'] == true) {
+          if (!mounted) return;
           setState(() {
             _profileData = data;
           });
@@ -48,6 +53,7 @@ class _StudentProfileDialogState extends State<StudentProfileDialog> {
       }
     } catch (e) {
       debugPrint("Error fetching student profile: $e");
+      if (mounted) setState(() => _loadError = cloudErrorMessage(e));
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -87,10 +93,7 @@ class _StudentProfileDialogState extends State<StudentProfileDialog> {
           const SizedBox(height: 2),
           Text(
             value.isEmpty ? 'Not provided' : value,
-            style: const TextStyle(
-              fontSize: 15,
-              color: Colors.black87,
-            ),
+            style: const TextStyle(fontSize: 15, color: Colors.black87),
           ),
           const Divider(color: Colors.black12, height: 16),
         ],
@@ -111,66 +114,83 @@ class _StudentProfileDialogState extends State<StudentProfileDialog> {
                 height: 200,
                 child: Center(child: CircularProgressIndicator()),
               )
+            : _loadError != null
+            ? SizedBox(
+                height: 260,
+                child: CloudErrorState(
+                  message: _loadError!,
+                  onRetry: _fetchProfile,
+                ),
+              )
             : _profileData == null
-                ? SizedBox(
-                    height: 200,
-                    child: Center(
-                      child: Text(
-                        'Student profile not found.',
-                        style: GoogleFonts.readexPro(color: Colors.black54),
-                      ),
-                    ),
-                  )
-                : SingleChildScrollView(
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
+            ? SizedBox(
+                height: 200,
+                child: Center(
+                  child: Text(
+                    'Student profile not found.',
+                    style: GoogleFonts.readexPro(color: Colors.black54),
+                  ),
+                ),
+              )
+            : SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(
-                              'Student Profile',
-                              style: GoogleFonts.readexPro(
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.blue.shade800,
-                              ),
-                            ),
-                            IconButton(
-                              onPressed: () => Navigator.pop(context),
-                              icon: const Icon(Icons.close, color: Colors.black54),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 20),
-                        Center(
-                          child: CircleAvatar(
-                            radius: 46,
-                            backgroundColor: Colors.blue.shade50,
-                            backgroundImage: _resolvedProfilePictureUrl != null
-                                ? NetworkImage(_resolvedProfilePictureUrl!)
-                                : null,
-                            child: _resolvedProfilePictureUrl == null
-                                ? Icon(
-                                    Icons.person,
-                                    size: 50,
-                                    color: Colors.blue.shade300,
-                                  )
-                                : null,
+                        Text(
+                          'Student Profile',
+                          style: GoogleFonts.readexPro(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.blue.shade800,
                           ),
                         ),
-                        const SizedBox(height: 24),
-                        _buildInfoRow('Name', _profileData?['username'] ?? ''),
-                        _buildInfoRow('Matric Number', _profileData?['matric_no'] ?? ''),
-                        _buildInfoRow('Email', _profileData?['email'] ?? ''),
-                        _buildInfoRow('Gender', _profileData?['gender'] ?? ''),
-                        _buildInfoRow('Contact Number', _profileData?['contact_number'] ?? ''),
-                        _buildInfoRow('Identity Number', _profileData?['identity_number'] ?? ''),
-                        _buildInfoRow('Address', _profileData?['address'] ?? ''),
+                        IconButton(
+                          onPressed: () => Navigator.pop(context),
+                          icon: const Icon(Icons.close, color: Colors.black54),
+                        ),
                       ],
                     ),
-                  ),
+                    const SizedBox(height: 20),
+                    Center(
+                      child: CircleAvatar(
+                        radius: 46,
+                        backgroundColor: Colors.blue.shade50,
+                        backgroundImage: _resolvedProfilePictureUrl != null
+                            ? NetworkImage(_resolvedProfilePictureUrl!)
+                            : null,
+                        child: _resolvedProfilePictureUrl == null
+                            ? Icon(
+                                Icons.person,
+                                size: 50,
+                                color: Colors.blue.shade300,
+                              )
+                            : null,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+                    _buildInfoRow('Name', _profileData?['username'] ?? ''),
+                    _buildInfoRow(
+                      'Matric Number',
+                      _profileData?['matric_no'] ?? '',
+                    ),
+                    _buildInfoRow('Email', _profileData?['email'] ?? ''),
+                    _buildInfoRow('Gender', _profileData?['gender'] ?? ''),
+                    _buildInfoRow(
+                      'Contact Number',
+                      _profileData?['contact_number'] ?? '',
+                    ),
+                    _buildInfoRow(
+                      'Identity Number',
+                      _profileData?['identity_number'] ?? '',
+                    ),
+                    _buildInfoRow('Address', _profileData?['address'] ?? ''),
+                  ],
+                ),
+              ),
       ),
     );
   }
